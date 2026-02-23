@@ -5,7 +5,9 @@ import { getAccessToken } from './gsi'
 
 function authHeaders(): HeadersInit {
   const token = getAccessToken()
-  if (!token) throw new Error('Not authenticated — please sign in')
+  if (!token) {
+    throw new Error('Not signed in \u2014 no access token. Please sign in again.')
+  }
   return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -13,10 +15,17 @@ function authHeaders(): HeadersInit {
 }
 
 async function sheetsFetch(url: string, init?: RequestInit) {
-  const res = await fetch(url, { ...init, headers: { ...authHeaders(), ...(init?.headers ?? {}) } })
+  const headers = authHeaders()
+  console.log('[sheets] fetching:', url.split('?')[0])
+  const res = await fetch(url, { ...init, headers: { ...headers, ...(init?.headers ?? {}) } })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`)
+    const body = await res.json().catch(() => ({}))
+    const msg  = (body as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`
+    console.error('[sheets] API error:', res.status, msg)
+    if (res.status === 401) throw new Error('Auth expired \u2014 please sign in again')
+    if (res.status === 403) throw new Error('Permission denied \u2014 make sure the Google Sheet is accessible to your account')
+    if (res.status === 404) throw new Error('Sheet not found \u2014 check SHEET_ID in constants/sheet.ts')
+    throw new Error(msg)
   }
   return res.json()
 }
@@ -24,7 +33,9 @@ async function sheetsFetch(url: string, init?: RequestInit) {
 export async function fetchRows(): Promise<BrainRow[]> {
   const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(DATA_RANGE)}?valueRenderOption=FORMATTED_VALUE`
   const data = await sheetsFetch(url)
-  return parseRows((data as { values?: string[][] }).values ?? [])
+  const values = (data as { values?: string[][] }).values ?? []
+  console.log('[sheets] raw rows received:', values.length)
+  return parseRows(values)
 }
 
 export async function updateRow(row: BrainRow): Promise<void> {
@@ -48,15 +59,14 @@ export async function appendRow(row: Omit<BrainRow, '_rowIndex' | '_dirty'>): Pr
 }
 
 export async function deleteRow(rowIndex: number): Promise<void> {
-  // Google Sheets API: delete a row by index (0-based for batchUpdate)
   const url = `${SHEETS_BASE}/${SHEET_ID}:batchUpdate`
   const body = {
     requests: [{
       deleteDimension: {
         range: {
-          sheetId: 0,  // assumes first sheet; adjust if needed
+          sheetId: 0,
           dimension: 'ROWS',
-          startIndex: rowIndex - 1,  // convert 1-based to 0-based
+          startIndex: rowIndex - 1,
           endIndex: rowIndex,
         }
       }

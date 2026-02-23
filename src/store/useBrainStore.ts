@@ -84,6 +84,9 @@ interface BrainStore {
   showNewRow:    boolean
   setShowNewRow: (v: boolean) => void
 
+  showAIPanel:    boolean
+  setShowAIPanel: (v: boolean) => void
+
   settings:       AppSettings
   updateSettings: (patch: Partial<AppSettings>) => void
   resetSettings:  () => void
@@ -145,6 +148,9 @@ export const useBrainStore = create<BrainStore>()(
 
       showNewRow:    false,
       setShowNewRow: (showNewRow) => set({ showNewRow }),
+
+      showAIPanel:    false,
+      setShowAIPanel: (showAIPanel) => set({ showAIPanel }),
 
       settings:       DEFAULT_SETTINGS,
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),

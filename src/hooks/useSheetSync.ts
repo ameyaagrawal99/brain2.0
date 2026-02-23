@@ -9,15 +9,23 @@ export function useSheetSync() {
 
   const refresh = useCallback(async () => {
     setSyncing(true)
-    const id = toast.loading('Syncing…')
+    const id = toast.loading('Loading entries\u2026')
     try {
+      console.log('[SheetSync] Fetching rows from Google Sheets...')
       const data = await fetchRows()
+      console.log('[SheetSync] Got', data.length, 'rows')
       setRows(data)
       setLastSyncedAt(new Date())
-      toast.success(`Loaded ${data.length} entries`, { id })
+      toast.success(
+        data.length > 0
+          ? `Loaded ${data.length} entries`
+          : 'Sheet is empty \u2014 add some entries!',
+        { id }
+      )
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      toast.error(`Sync failed: ${msg}`, { id })
+      console.error('[SheetSync] Fetch failed:', msg)
+      toast.error(`Failed to load: ${msg}`, { id, duration: 6000 })
     } finally {
       setSyncing(false)
     }
@@ -36,15 +44,16 @@ export function useSheetSync() {
     }
 
     setSyncing(true)
-    const id = toast.loading('Saving…')
+    const id = toast.loading('Saving\u2026')
     try {
       await updateRow(updated)
       const fresh = await fetchRows()
       setRows(fresh)
       setLastSyncedAt(new Date())
-      toast.success('Saved ✓', { id })
+      toast.success('Saved \u2713', { id })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[SheetSync] Save failed:', msg)
       toast.error(`Save failed: ${msg}`, { id })
     } finally {
       setSyncing(false)
@@ -71,15 +80,16 @@ export function useSheetSync() {
       messageId:   '',
     }
     setSyncing(true)
-    const id = toast.loading('Creating entry…')
+    const id = toast.loading('Creating entry\u2026')
     try {
       await appendRow(newRow)
       const fresh = await fetchRows()
       setRows(fresh)
       setLastSyncedAt(new Date())
-      toast.success('Entry created ✓', { id })
+      toast.success('Entry created \u2713', { id })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[SheetSync] Create failed:', msg)
       toast.error(`Create failed: ${msg}`, { id })
     } finally {
       setSyncing(false)
@@ -89,7 +99,7 @@ export function useSheetSync() {
   const removeRow = useCallback(async (rowIndex: number) => {
     deleteRowLocally(rowIndex)
     setSyncing(true)
-    const id = toast.loading('Deleting…')
+    const id = toast.loading('Deleting\u2026')
     try {
       await deleteRow(rowIndex)
       const fresh = await fetchRows()
@@ -98,6 +108,7 @@ export function useSheetSync() {
       toast.success('Entry deleted', { id })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[SheetSync] Delete failed:', msg)
       toast.error(`Delete failed: ${msg}`, { id })
       await refresh()
     } finally {

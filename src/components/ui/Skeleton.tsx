@@ -1,23 +1,25 @@
 import { cn } from '@/lib/utils'
 
-export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn('skeleton', className)} />
-}
-
 export function CardSkeleton() {
   return (
-    <div className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
+    <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Skeleton className="h-4 w-16 rounded" />
-        <Skeleton className="h-4 w-24 rounded" />
+        <div className="skeleton h-5 w-16 rounded-md" />
+        <div className="skeleton h-5 w-12 rounded-md ml-auto" />
       </div>
-      <Skeleton className="h-5 w-3/4 rounded" />
-      <Skeleton className="h-4 w-full rounded" />
-      <Skeleton className="h-4 w-2/3 rounded" />
-      <div className="flex gap-2 mt-1">
-        <Skeleton className="h-5 w-12 rounded-full" />
-        <Skeleton className="h-5 w-16 rounded-full" />
+      <div className="skeleton h-4 w-4/5 rounded" />
+      <div className="skeleton h-3.5 w-full rounded" />
+      <div className="skeleton h-3.5 w-3/4 rounded" />
+      <div className="skeleton h-3.5 w-5/6 rounded" />
+      <div className="flex items-center gap-2 pt-1">
+        <div className="skeleton h-4 w-12 rounded-full" />
+        <div className="skeleton h-4 w-10 rounded-full" />
+        <div className="skeleton h-3.5 w-16 rounded ml-auto" />
       </div>
     </div>
   )
+}
+
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn('skeleton', className)} />
 }
