@@ -1,0 +1,225 @@
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
+import { useAuth } from '@/hooks/useAuth'
+import { cn } from '@/lib/utils'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, LogOut, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import toast from 'react-hot-toast'
+
+export function SettingsPanel() {
+  const showSettings    = useBrainStore((s) => s.showSettings)
+  const setShowSettings = useBrainStore((s) => s.setShowSettings)
+  const settings        = useBrainStore((s) => s.settings)
+  const updateSettings  = useBrainStore((s) => s.updateSettings)
+  const resetSettings   = useBrainStore((s) => s.resetSettings)
+  const { signOut }     = useAuth()
+
+  const [showKey, setShowKey] = useState(false)
+
+  function toggle(key: keyof AppSettings) {
+    updateSettings({ [key]: !settings[key as keyof AppSettings] } as Partial<AppSettings>)
+  }
+
+  function handleSignOut() {
+    signOut()
+    setShowSettings(false)
+    toast.success('Signed out')
+  }
+
+  const themes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+    { value: 'light',  label: 'Light',  icon: Sun },
+    { value: 'dark',   label: 'Dark',   icon: Moon },
+    { value: 'system', label: 'System', icon: Monitor },
+  ]
+
+  const colors: { value: ThemeColor; label: string; css: string }[] = [
+    { value: 'indigo', label: 'Indigo', css: 'bg-indigo-500' },
+    { value: 'warm',   label: 'Warm',   css: 'bg-amber-600' },
+    { value: 'green',  label: 'Green',  css: 'bg-green-600' },
+    { value: 'rose',   label: 'Rose',   css: 'bg-rose-600' },
+  ]
+
+  const fonts: { value: FontMode; label: string; sample: string }[] = [
+    { value: 'sans',  label: 'Inter (sans)',  sample: 'Clean & modern' },
+    { value: 'serif', label: 'Lora (serif)',  sample: 'Warm & literary' },
+  ]
+
+  return (
+    <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Settings" size="md">
+      <div className="p-5 space-y-6">
+
+        {/* Theme Mode */}
+        <Section title="Appearance" icon={<Sun className="w-3.5 h-3.5" />}>
+          <div className="grid grid-cols-3 gap-2">
+            {themes.map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                onClick={() => updateSettings({ themeMode: value })}
+                className={cn(
+                  'flex flex-col items-center gap-1.5 py-3 rounded-lg border text-xs font-medium transition-colors',
+                  settings.themeMode === value
+                    ? 'border-brand bg-brand/8 text-brand'
+                    : 'border-border text-ink2 hover:bg-hover'
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        {/* Color */}
+        <Section title="Accent color" icon={<Palette className="w-3.5 h-3.5" />}>
+          <div className="flex gap-3">
+            {colors.map(({ value, label, css }) => (
+              <button
+                key={value}
+                onClick={() => updateSettings({ themeColor: value })}
+                className="flex flex-col items-center gap-1.5 group"
+                title={label}
+              >
+                <div className={cn(
+                  'w-7 h-7 rounded-full transition-all ring-offset-2 ring-offset-surface',
+                  css,
+                  settings.themeColor === value ? 'ring-2 ring-offset-2' : 'group-hover:scale-110',
+                )} />
+                <span className="text-[10px] text-ink3">{label}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        {/* Font */}
+        <Section title="Body font" icon={<Type className="w-3.5 h-3.5" />}>
+          <div className="grid grid-cols-2 gap-2">
+            {fonts.map(({ value, label, sample }) => (
+              <button
+                key={value}
+                onClick={() => updateSettings({ fontMode: value })}
+                className={cn(
+                  'flex flex-col gap-1 p-3 rounded-lg border text-left transition-colors',
+                  settings.fontMode === value
+                    ? 'border-brand bg-brand/8'
+                    : 'border-border hover:bg-hover'
+                )}
+              >
+                <span className={cn(
+                  'text-sm font-medium',
+                  value === 'serif' ? 'font-serif' : 'font-sans',
+                  settings.fontMode === value ? 'text-brand' : 'text-ink'
+                )}>
+                  {label}
+                </span>
+                <span className={cn(
+                  'text-xs text-ink3',
+                  value === 'serif' ? 'font-serif' : 'font-sans'
+                )}>
+                  {sample}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        {/* OpenAI Key */}
+        <Section title="OpenAI API key" icon={<span className="text-xs">🤖</span>}>
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={settings.openAiKey}
+              onChange={(e) => updateSettings({ openAiKey: e.target.value })}
+              className="w-full px-3 py-2.5 pr-10 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 font-mono"
+              placeholder="sk-..."
+            />
+            <button
+              onClick={() => setShowKey(!showKey)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink"
+            >
+              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <p className="text-xs text-ink3 mt-1.5">Stored locally in your browser. Used for AI features only.</p>
+        </Section>
+
+        {/* Notifications */}
+        <Section title="Notifications" icon={<Bell className="w-3.5 h-3.5" />}>
+          <div className="space-y-2">
+            <Toggle
+              label="Remind me of entries due soon"
+              checked={settings.notifyDueSoon}
+              onChange={() => toggle('notifyDueSoon')}
+            />
+            <Toggle
+              label="Notify when new entry is added"
+              checked={settings.notifyNewEntry}
+              onChange={() => toggle('notifyNewEntry')}
+            />
+          </div>
+        </Section>
+
+        {/* Demo mode */}
+        <Section title="Demo mode">
+          <Toggle
+            label="Show sample data (portfolio mode)"
+            checked={settings.demoMode}
+            onChange={() => toggle('demoMode')}
+          />
+        </Section>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2 border-t border-border">
+          <Button variant="ghost" size="sm" onClick={resetSettings}>
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset to defaults
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleSignOut}>
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function Section({
+  title, icon, children,
+}: {
+  title: string; icon?: React.ReactNode; children: React.ReactNode
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-3">
+        {icon && <span className="text-ink3">{icon}</span>}
+        <h3 className="text-xs font-semibold text-ink2 uppercase tracking-wider">{title}</h3>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function Toggle({
+  label, checked, onChange,
+}: {
+  label: string; checked: boolean; onChange: () => void
+}) {
+  return (
+    <button
+      onClick={onChange}
+      className="w-full flex items-center justify-between py-2 px-3 rounded-lg hover:bg-hover transition-colors text-left"
+    >
+      <span className="text-sm text-ink">{label}</span>
+      <div className={cn(
+        'w-9 h-5 rounded-full transition-colors relative flex-shrink-0',
+        checked ? 'bg-brand' : 'bg-border2',
+      )}>
+        <div className={cn(
+          'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0.5'
+        )} />
+      </div>
+    </button>
+  )
+}
