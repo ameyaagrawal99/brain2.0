@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { MarkdownToolbar } from '@/components/ui/MarkdownToolbar'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
 import { parseTags, formatDate, formatRelative, isImageUrl } from '@/lib/utils'
+import { renderMarkdown } from '@/lib/markdown'
 import { cn } from '@/lib/utils'
 import { EditableFields } from '@/types/sheet'
-import { Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare, ExternalLink, Calendar, Hash, Image } from 'lucide-react'
+import {
+  Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare,
+  ExternalLink, Calendar, Hash, Image, Undo2, Redo2,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 
 function isFormula(v: string): boolean {
@@ -28,20 +33,45 @@ export function DetailModal() {
   const closeModal     = useBrainStore((s) => s.closeModal)
   const settings       = useBrainStore((s) => s.settings)
   const customCats     = useBrainStore((s) => s.customCategories)
+  const entryHistory   = useBrainStore((s) => s.entryHistory)
+  const entryFuture    = useBrainStore((s) => s.entryFuture)
 
-  const { saveRow, removeRow } = useSheetSync()
+  const { saveRow, removeRow, undoRow, redoRow } = useSheetSync()
   const { run: runAI, loading: aiLoading, error: aiError } = useAI()
 
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing]       = useState(false)
   const [showDelete, setShowDelete] = useState(false)
-  const [showAI, setShowAI] = useState(false)
+  const [showAI, setShowAI]         = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
-  const [fields, setFields] = useState<Partial<EditableFields>>({})
+  const [fields, setFields]         = useState<Partial<EditableFields>>({})
+
+  const row        = selectedRow
+  const histSteps  = row ? (entryHistory[row._rowIndex]?.length  ?? 0) : 0
+  const futSteps   = row ? (entryFuture[row._rowIndex]?.length   ?? 0) : 0
+
+  // Keyboard shortcuts: Cmd+Z / Cmd+Shift+Z only when modal is open
+  useEffect(() => {
+    if (!row) return
+    const handler = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC')
+      const mod   = isMac ? e.metaKey : e.ctrlKey
+      if (!mod) return
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undoRow(row._rowIndex)
+      }
+      if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+        e.preventDefault()
+        redoRow(row._rowIndex)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [row, undoRow, redoRow])
 
   if (!selectedRow) return null
-  const row    = selectedRow
-  const merged = { ...row, ...fields }
-  const tags   = parseTags(cleanVal(merged.tags))
+  const merged   = { ...selectedRow, ...fields }
+  const tags     = parseTags(cleanVal(merged.tags))
 
   const original    = cleanVal(merged.original)
   const rewritten   = cleanVal(merged.rewritten)
@@ -59,7 +89,8 @@ export function DetailModal() {
   }
 
   async function handleSave() {
-    await saveRow(row._rowIndex, fields)
+    if (!row) return
+    await saveRow(row._rowIndex, fields, 'Edit')
     setEditing(false)
     setFields({})
   }
@@ -70,6 +101,7 @@ export function DetailModal() {
   }
 
   async function handleDelete() {
+    if (!row) return
     closeModal()
     await removeRow(row._rowIndex)
   }
@@ -104,7 +136,7 @@ export function DetailModal() {
       <Modal open={!!selectedRow} onClose={closeModal} size="xl">
         <div className="flex flex-col h-full overflow-hidden">
 
-          {/* Header */}
+          {/* ── Header ── */}
           <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
             <div className="flex-1 min-w-0 pr-2">
               {editing ? (
@@ -143,6 +175,36 @@ export function DetailModal() {
             </div>
 
             <div className="flex items-center gap-1 shrink-0">
+              {/* Undo / Redo */}
+              <button
+                onClick={() => undoRow(selectedRow._rowIndex)}
+                disabled={histSteps === 0}
+                title={histSteps > 0 ? `Undo (${histSteps} step${histSteps > 1 ? 's' : ''}) — ⌘Z` : 'Nothing to undo'}
+                className={cn(
+                  'w-7 h-7 flex items-center justify-center rounded-lg transition-colors',
+                  histSteps > 0
+                    ? 'text-ink2 hover:bg-hover hover:text-ink'
+                    : 'text-ink3 opacity-40 cursor-not-allowed',
+                )}
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => redoRow(selectedRow._rowIndex)}
+                disabled={futSteps === 0}
+                title={futSteps > 0 ? `Redo (${futSteps} step${futSteps > 1 ? 's' : ''}) — ⌘⇧Z` : 'Nothing to redo'}
+                className={cn(
+                  'w-7 h-7 flex items-center justify-center rounded-lg transition-colors',
+                  futSteps > 0
+                    ? 'text-ink2 hover:bg-hover hover:text-ink'
+                    : 'text-ink3 opacity-40 cursor-not-allowed',
+                )}
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="w-px h-4 bg-border mx-0.5" />
+
               <Button size="sm" variant="ghost" onClick={() => setShowAI(!showAI)}
                 className={cn(showAI && 'text-brand bg-brand/8')}>
                 <Wand2 className="w-3.5 h-3.5" />
@@ -165,7 +227,7 @@ export function DetailModal() {
             </div>
           </div>
 
-          {/* AI panel bar */}
+          {/* ── AI bar ── */}
           {showAI && (
             <div className="px-5 py-3 bg-brand/5 border-b border-brand/10 flex flex-wrap gap-2 items-center shrink-0">
               <span className="text-xs font-medium text-brand">AI:</span>
@@ -187,7 +249,7 @@ export function DetailModal() {
             </div>
           )}
 
-          {/* Delete confirm */}
+          {/* ── Delete confirm ── */}
           {showDelete && (
             <div className="px-5 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 flex items-center justify-between gap-3 shrink-0">
               <span className="text-sm text-ink">Delete this entry? Cannot be undone.</span>
@@ -198,7 +260,7 @@ export function DetailModal() {
             </div>
           )}
 
-          {/* Scrollable content */}
+          {/* ── Scrollable content ── */}
           <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
 
             {/* Media */}
@@ -235,23 +297,39 @@ export function DetailModal() {
               </Section>
             )}
 
-            {/* Original note */}
+            {/* Original note — rich text */}
             <Section title="Original note">
               {editing ? (
-                <Textarea value={merged.original} onChange={(v) => patchField('original', v)} rows={5} placeholder="Your original note..." />
+                <MarkdownToolbar
+                  value={merged.original || ''}
+                  onChange={(v) => patchField('original', v)}
+                  rows={5}
+                  placeholder="Your original note... (supports **bold**, *italic*, - lists)"
+                />
               ) : original ? (
-                <div className="prose-journal text-sm leading-relaxed text-ink whitespace-pre-wrap break-words">{original}</div>
+                <div
+                  className="md-body prose-journal text-sm text-ink"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(original) }}
+                />
               ) : (
                 <p className="text-sm text-ink3 italic">No content</p>
               )}
             </Section>
 
-            {/* Rewritten */}
+            {/* Rewritten — rich text */}
             <Section title="Rewritten" badge="AI">
               {editing ? (
-                <Textarea value={merged.rewritten} onChange={(v) => patchField('rewritten', v)} rows={5} placeholder="AI-polished version..." />
+                <MarkdownToolbar
+                  value={merged.rewritten || ''}
+                  onChange={(v) => patchField('rewritten', v)}
+                  rows={5}
+                  placeholder="AI-polished version... (supports **bold**, *italic*, - lists)"
+                />
               ) : rewritten ? (
-                <div className="prose-journal text-sm leading-relaxed text-ink whitespace-pre-wrap break-words">{rewritten}</div>
+                <div
+                  className="md-body prose-journal text-sm text-ink"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(rewritten) }}
+                />
               ) : (
                 <p className="text-sm text-ink3 italic">
                   {settings.openAiKey ? 'Click AI → Rewrite to generate' : 'Add OpenAI key in Settings to enable AI'}
@@ -334,6 +412,9 @@ export function DetailModal() {
               {merged.createdAt && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Created {formatDate(merged.createdAt)}</span>}
               {merged.updatedAt && !isFormula(merged.updatedAt) && <span>Updated {formatRelative(merged.updatedAt)}</span>}
               {merged.messageId && !isFormula(merged.messageId) && <span>ID: {merged.messageId}</span>}
+              {histSteps > 0 && (
+                <span className="text-brand/70">{histSteps} unsaved undo step{histSteps > 1 ? 's' : ''}</span>
+              )}
             </div>
           </div>
         </div>

@@ -43,3 +43,9 @@ export type SortKey =
   | 'num-desc'
 
 export type ViewMode = 'card' | 'table' | 'board'
+
+export interface HistoryEntry {
+  fields:  Partial<EditableFields>
+  savedAt: string   // ISO timestamp
+  label:   string   // e.g. "Edit" | "AI: Rewrite" | "AI: Enhance all"
+}

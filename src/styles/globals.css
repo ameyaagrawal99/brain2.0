@@ -137,6 +137,20 @@ body.font-serif-body { font-family: var(--font-serif) !important; }
   overflow-wrap: break-word;
 }
 
+/* MARKDOWN RENDERED BODY */
+.md-body h2 { font-size: 1rem; font-weight: 600; color: rgb(var(--color-text)); margin: 0.75em 0 0.25em; line-height: 1.4; }
+.md-body h3 { font-size: 0.875rem; font-weight: 600; color: rgb(var(--color-text)); margin: 0.5em 0 0.2em; line-height: 1.4; }
+.md-body ul  { list-style: disc;    padding-left: 1.25em; margin: 0.25em 0; }
+.md-body ol  { list-style: decimal; padding-left: 1.25em; margin: 0.25em 0; }
+.md-body li  { margin: 0.15em 0; }
+.md-body strong { font-weight: 600; }
+.md-body em     { font-style: italic; }
+.md-body code   { font-family: var(--font-mono); font-size: 0.8em; background: rgb(var(--color-surface2)); padding: 1px 4px; border-radius: 3px; }
+.md-body blockquote { border-left: 3px solid rgb(var(--color-brand) / 0.4); padding-left: 0.75em; margin: 0.5em 0; color: rgb(var(--color-text2)); font-style: italic; }
+.md-body hr  { border: none; border-top: 1px solid rgb(var(--color-border)); margin: 0.75em 0; }
+.md-body p   { margin: 0; line-height: 1.65; }
+.md-body br  { display: block; content: ''; margin: 0.2em 0; }
+
 /* SEARCH HIGHLIGHT */
 mark {
   background: rgb(var(--color-brand) / 0.18);

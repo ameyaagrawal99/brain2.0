@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { BrainRow, EditableFields, SortKey, ViewMode } from '@/types/sheet'
+import { BrainRow, EditableFields, HistoryEntry, SortKey, ViewMode } from '@/types/sheet'
 
 export type ThemeMode  = 'light' | 'dark' | 'system'
 export type ThemeColor = 'indigo' | 'warm' | 'green' | 'rose'
@@ -24,6 +24,20 @@ const DEFAULT_SETTINGS: AppSettings = {
   demoMode:       false,
   notifyDueSoon:  true,
   notifyNewEntry: false,
+}
+
+export interface AIInstructions {
+  quick:  string
+  bulk:   string
+  digest: string
+  chat:   string
+}
+
+const DEFAULT_AI_INSTRUCTIONS: AIInstructions = {
+  quick:  '',
+  bulk:   '',
+  digest: '',
+  chat:   '',
 }
 
 interface AuthState {
@@ -51,6 +65,8 @@ const DEFAULT_FILTERS: FilterState = {
   sortBy:       'date-desc',
   showToday:    false,
 }
+
+const MAX_HISTORY = 20
 
 interface BrainStore {
   authState:    AuthState
@@ -106,11 +122,28 @@ interface BrainStore {
   addCustomTag:           (tag: string) => void
   removeCustomCategory:   (cat: string) => void
   removeCustomTag:        (tag: string) => void
+
+  // Per-entry undo/redo history (in-memory, lost on refresh)
+  entryHistory:  Record<number, HistoryEntry[]>
+  entryFuture:   Record<number, HistoryEntry[]>
+  pushHistory:   (rowIndex: number, fields: Partial<EditableFields>, label: string) => void
+  popHistory:    (rowIndex: number) => HistoryEntry | undefined
+  pushFuture:    (rowIndex: number, entry: HistoryEntry) => void
+  popFuture:     (rowIndex: number) => HistoryEntry | undefined
+  clearFuture:   (rowIndex: number) => void
+
+  // Tracks rowIndices touched in the last bulk AI run (for bulk undo)
+  lastBulkRows:    number[]
+  setLastBulkRows: (indices: number[]) => void
+
+  // Per-action AI custom instructions (persisted to localStorage)
+  aiInstructions:       AIInstructions
+  updateAiInstructions: (patch: Partial<AIInstructions>) => void
 }
 
 export const useBrainStore = create<BrainStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       authState: { isAuthenticated: false, token: null, error: null },
       setAuthState: (authState) => set({ authState }),
 
@@ -193,13 +226,59 @@ export const useBrainStore = create<BrainStore>()(
         set((s) => ({ customCategories: s.customCategories.filter((c) => c !== cat) })),
       removeCustomTag: (tag) =>
         set((s) => ({ customTags: s.customTags.filter((t) => t !== tag) })),
+
+      // ── Undo / Redo ────────────────────────────────────────────────────
+      entryHistory: {},
+      entryFuture:  {},
+
+      pushHistory: (rowIndex, fields, label) =>
+        set((s) => {
+          const prev = s.entryHistory[rowIndex] ?? []
+          const next = [{ fields, label, savedAt: new Date().toISOString() }, ...prev].slice(0, MAX_HISTORY)
+          return { entryHistory: { ...s.entryHistory, [rowIndex]: next } }
+        }),
+
+      popHistory: (rowIndex) => {
+        const stack = get().entryHistory[rowIndex] ?? []
+        if (!stack.length) return undefined
+        const [top, ...rest] = stack
+        set((s) => ({ entryHistory: { ...s.entryHistory, [rowIndex]: rest } }))
+        return top
+      },
+
+      pushFuture: (rowIndex, entry) =>
+        set((s) => {
+          const prev = s.entryFuture[rowIndex] ?? []
+          return { entryFuture: { ...s.entryFuture, [rowIndex]: [entry, ...prev].slice(0, MAX_HISTORY) } }
+        }),
+
+      popFuture: (rowIndex) => {
+        const stack = get().entryFuture[rowIndex] ?? []
+        if (!stack.length) return undefined
+        const [top, ...rest] = stack
+        set((s) => ({ entryFuture: { ...s.entryFuture, [rowIndex]: rest } }))
+        return top
+      },
+
+      clearFuture: (rowIndex) =>
+        set((s) => ({ entryFuture: { ...s.entryFuture, [rowIndex]: [] } })),
+
+      // ── Bulk run tracking ──────────────────────────────────────────────
+      lastBulkRows:    [],
+      setLastBulkRows: (lastBulkRows) => set({ lastBulkRows }),
+
+      // ── AI Instructions ────────────────────────────────────────────────
+      aiInstructions:       DEFAULT_AI_INSTRUCTIONS,
+      updateAiInstructions: (patch) =>
+        set((s) => ({ aiInstructions: { ...s.aiInstructions, ...patch } })),
     }),
     {
       name: 'brain2-store',
       partialize: (state) => ({
-        settings: state.settings,
-        viewMode: state.viewMode,
-        filters:  { ...DEFAULT_FILTERS, sortBy: state.filters.sortBy },
+        settings:       state.settings,
+        viewMode:       state.viewMode,
+        filters:        { ...DEFAULT_FILTERS, sortBy: state.filters.sortBy },
+        aiInstructions: state.aiInstructions,
       }),
     }
   )

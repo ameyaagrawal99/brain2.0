@@ -6,6 +6,7 @@ import { appendRow } from '@/lib/sheets'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
 import { Button } from '@/components/ui/Button'
+import { MarkdownToolbar } from '@/components/ui/MarkdownToolbar'
 import { cn } from '@/lib/utils'
 
 const DEFAULT_CATEGORIES = ['Journal', 'Work', 'Learning', 'Health', 'Finance', 'Ideas', 'Personal', 'Other']
@@ -209,7 +210,7 @@ export function NewRowModal() {
             />
           </div>
 
-          {/* Original content */}
+          {/* Original content — MarkdownToolbar */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className={labelCls}>Content / Note</label>
@@ -224,12 +225,11 @@ export function NewRowModal() {
                 </button>
               )}
             </div>
-            <textarea
-              className={cn(inputCls, 'resize-none')}
-              rows={4}
+            <MarkdownToolbar
               value={form.original}
-              onChange={(e) => set('original', e.target.value)}
-              placeholder="Paste your raw idea, note, or thought..."
+              onChange={(v) => set('original', v)}
+              rows={4}
+              placeholder="Paste your raw idea, note, or thought... (supports **bold**, *italic*, ## headings, - lists)"
             />
           </div>
 
