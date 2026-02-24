@@ -59,15 +59,13 @@ export function Header() {
         </div>
 
         {/* AI Panel button */}
-        {settings.openAiKey && (
-          <button
-            onClick={() => setShowAIPanel(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover hover:text-brand transition-colors"
-            title="AI features"
-          >
-            <Wand2 className="w-4 h-4" />
-          </button>
-        )}
+        <button
+          onClick={() => setShowAIPanel(true)}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover hover:text-brand transition-colors"
+          title="AI features"
+        >
+          <Wand2 className="w-4 h-4" />
+        </button>
 
         {/* Dark mode */}
         <button

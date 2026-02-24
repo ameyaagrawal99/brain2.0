@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Wand2, Zap, Brain, Tag, CheckSquare, FileText, Sparkles } from 'lucide-react'
+import { X, Wand2, Zap, Brain, Tag, CheckSquare, FileText, Sparkles, Key } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
@@ -131,6 +131,28 @@ export function AIPanel() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5">
+
+          {/* NO API KEY BANNER */}
+          {!settings.openAiKey && (
+            <div className="mb-5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 flex gap-3">
+              <Key className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">OpenAI key not configured</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                  Add your OpenAI API key in Settings to unlock all AI features — rewriting, tagging, bulk enhancement, weekly digest, and chat with your notes.
+                </p>
+                <button
+                  onClick={() => { setShowAIPanel(false); useBrainStore.getState().setShowSettings(true) }}
+                  className="text-xs font-medium text-amber-700 dark:text-amber-400 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-200"
+                >
+                  Open Settings →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* FEATURE CONTENT — wrapped to show dimmed when no key */}
+          <div className={cn(!settings.openAiKey && 'opacity-50 pointer-events-none select-none')}>
 
           {/* QUICK AI */}
           {mode === 'quick' && (
@@ -288,6 +310,8 @@ export function AIPanel() {
               </div>
             </div>
           )}
+
+          </div>{/* end feature content wrapper */}
         </div>
       </div>
     </div>
