@@ -8,7 +8,9 @@ export function useFilters() {
   const filters = useBrainStore((s) => s.filters)
 
   const filteredRows = useMemo<BrainRow[]>(() => {
+    const today = new Date().toISOString().slice(0, 10)
     const q = filters.search.toLowerCase()
+
     let result = rows.filter((r) => {
       if (q) {
         const hay = [r.title, r.original, r.rewritten, r.actionItems, r.tags, r.category, r.subCategory]
@@ -29,6 +31,11 @@ export function useFilters() {
         for (const t of filters.selectedTags) {
           if (!rowTags.includes(t)) return false
         }
+      }
+      if (filters.showToday) {
+        const createdToday = r.createdAt?.startsWith(today)
+        const dueToday     = r.dueDate?.trim() === today
+        if (!createdToday && !dueToday) return false
       }
       return true
     })
@@ -63,7 +70,7 @@ export function useFilters() {
 
   const hasActiveFilters = !!(
     filters.search || filters.category || filters.subCategory ||
-    filters.status || filters.selectedTags.length > 0
+    filters.status || filters.selectedTags.length > 0 || filters.showToday
   )
 
   return { filteredRows, categories, subCategories, topTags, hasActiveFilters }

@@ -23,3 +23,12 @@ export const COL = {
   TAGS:         13,
   MESSAGE_ID:   14,
 } as const
+
+// Config sheet for persisting custom categories, tags, and app metadata
+export const CONFIG_SHEET_NAME = 'Config'
+export const CONFIG_RANGE      = `${CONFIG_SHEET_NAME}!A:C`
+
+export const CONFIG_TYPES = {
+  CATEGORY: 'category',
+  TAG:      'tag',
+} as const

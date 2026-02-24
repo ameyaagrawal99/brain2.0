@@ -2,8 +2,9 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
 import { useAuth } from '@/hooks/useAuth'
+import { appendConfigCategory, appendConfigTag, deleteConfigItem } from '@/lib/sheetsConfig'
 import { cn } from '@/lib/utils'
-import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, LogOut, RotateCcw } from 'lucide-react'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, LogOut, RotateCcw, Plus, X, Tag, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 
@@ -13,9 +14,19 @@ export function SettingsPanel() {
   const settings        = useBrainStore((s) => s.settings)
   const updateSettings  = useBrainStore((s) => s.updateSettings)
   const resetSettings   = useBrainStore((s) => s.resetSettings)
+  const customCats      = useBrainStore((s) => s.customCategories)
+  const customTags      = useBrainStore((s) => s.customTags)
+  const addCustomCategory    = useBrainStore((s) => s.addCustomCategory)
+  const addCustomTag         = useBrainStore((s) => s.addCustomTag)
+  const removeCustomCategory = useBrainStore((s) => s.removeCustomCategory)
+  const removeCustomTag      = useBrainStore((s) => s.removeCustomTag)
   const { signOut }     = useAuth()
 
   const [showKey, setShowKey] = useState(false)
+  const [newCat,  setNewCat]  = useState('')
+  const [newTag,  setNewTag]  = useState('')
+  const [savingCat, setSavingCat] = useState(false)
+  const [savingTag, setSavingTag] = useState(false)
 
   function toggle(key: keyof AppSettings) {
     updateSettings({ [key]: !settings[key as keyof AppSettings] } as Partial<AppSettings>)
@@ -25,6 +36,58 @@ export function SettingsPanel() {
     signOut()
     setShowSettings(false)
     toast.success('Signed out')
+  }
+
+  async function handleAddCategory() {
+    const val = newCat.trim()
+    if (!val) return
+    setSavingCat(true)
+    try {
+      await appendConfigCategory(val)
+      addCustomCategory(val)
+      setNewCat('')
+      toast.success(`Category "${val}" added`)
+    } catch {
+      toast.error('Failed to save category')
+    } finally {
+      setSavingCat(false)
+    }
+  }
+
+  async function handleRemoveCategory(cat: string) {
+    try {
+      await deleteConfigItem('category', cat)
+      removeCustomCategory(cat)
+      toast.success(`Category removed`)
+    } catch {
+      toast.error('Failed to remove category')
+    }
+  }
+
+  async function handleAddTag() {
+    const val = newTag.trim().replace(/^#/, '').toLowerCase()
+    if (!val) return
+    setSavingTag(true)
+    try {
+      await appendConfigTag(val)
+      addCustomTag(val)
+      setNewTag('')
+      toast.success(`Tag "${val}" added`)
+    } catch {
+      toast.error('Failed to save tag')
+    } finally {
+      setSavingTag(false)
+    }
+  }
+
+  async function handleRemoveTag(tag: string) {
+    try {
+      await deleteConfigItem('tag', tag)
+      removeCustomTag(tag)
+      toast.success(`Tag removed`)
+    } catch {
+      toast.error('Failed to remove tag')
+    }
   }
 
   const themes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -45,9 +108,11 @@ export function SettingsPanel() {
     { value: 'serif', label: 'Lora (serif)',  sample: 'Warm & literary' },
   ]
 
+  const inputCls = 'flex-1 min-w-0 px-2.5 py-1.5 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/40'
+
   return (
     <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Settings" size="md">
-      <div className="p-5 space-y-6">
+      <div className="p-5 space-y-6 max-h-[80vh] overflow-y-auto">
 
         {/* Theme Mode */}
         <Section title="Appearance" icon={<Sun className="w-3.5 h-3.5" />}>
@@ -142,6 +207,65 @@ export function SettingsPanel() {
           </div>
           <p className="text-xs text-ink3 mt-1.5">Stored locally in your browser. Used for AI features only.</p>
         </Section>
+
+        {/* Custom Categories & Tags — only in live mode */}
+        {!settings.demoMode && (
+          <Section title="Custom categories" icon={<FolderOpen className="w-3.5 h-3.5" />}>
+            <div className="flex gap-2 mb-2">
+              <input
+                className={inputCls}
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                placeholder="e.g. Research"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+              />
+              <Button size="sm" variant="primary" onClick={handleAddCategory} loading={savingCat}>
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            {customCats.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {customCats.map((cat) => (
+                  <span key={cat} className="flex items-center gap-1 text-xs bg-surface2 border border-border rounded-lg px-2 py-1">
+                    {cat}
+                    <button onClick={() => handleRemoveCategory(cat)} className="text-ink3 hover:text-red-500">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {!settings.demoMode && (
+          <Section title="Custom tags" icon={<Tag className="w-3.5 h-3.5" />}>
+            <div className="flex gap-2 mb-2">
+              <input
+                className={inputCls}
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="e.g. deepwork"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+              />
+              <Button size="sm" variant="primary" onClick={handleAddTag} loading={savingTag}>
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            {customTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {customTags.map((tag) => (
+                  <span key={tag} className="flex items-center gap-1 text-xs bg-surface2 border border-border rounded-lg px-2 py-1">
+                    #{tag}
+                    <button onClick={() => handleRemoveTag(tag)} className="text-ink3 hover:text-red-500">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
 
         {/* Notifications */}
         <Section title="Notifications" icon={<Bell className="w-3.5 h-3.5" />}>

@@ -3,10 +3,10 @@ import { parseRows, rowToValues } from './parseRows'
 import { BrainRow } from '@/types/sheet'
 import { getAccessToken } from './gsi'
 
-function authHeaders(): HeadersInit {
+export function authHeaders(): HeadersInit {
   const token = getAccessToken()
   if (!token) {
-    throw new Error('Not signed in \u2014 no access token. Please sign in again.')
+    throw new Error('Not signed in — no access token. Please sign in again.')
   }
   return {
     Authorization: `Bearer ${token}`,
@@ -14,7 +14,7 @@ function authHeaders(): HeadersInit {
   }
 }
 
-async function sheetsFetch(url: string, init?: RequestInit) {
+export async function sheetsFetch(url: string, init?: RequestInit) {
   const headers = authHeaders()
   console.log('[sheets] fetching:', url.split('?')[0])
   const res = await fetch(url, { ...init, headers: { ...headers, ...(init?.headers ?? {}) } })
@@ -22,9 +22,9 @@ async function sheetsFetch(url: string, init?: RequestInit) {
     const body = await res.json().catch(() => ({}))
     const msg  = (body as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`
     console.error('[sheets] API error:', res.status, msg)
-    if (res.status === 401) throw new Error('Auth expired \u2014 please sign in again')
-    if (res.status === 403) throw new Error('Permission denied \u2014 make sure the Google Sheet is accessible to your account')
-    if (res.status === 404) throw new Error('Sheet not found \u2014 check SHEET_ID in constants/sheet.ts')
+    if (res.status === 401) throw new Error('Auth expired — please sign in again')
+    if (res.status === 403) throw new Error('Permission denied — make sure the Google Sheet is accessible to your account')
+    if (res.status === 404) throw new Error('Sheet not found — check SHEET_ID in constants/sheet.ts')
     throw new Error(msg)
   }
   return res.json()

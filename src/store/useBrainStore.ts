@@ -39,6 +39,7 @@ interface FilterState {
   status:       string
   selectedTags: string[]
   sortBy:       SortKey
+  showToday:    boolean
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -48,6 +49,7 @@ const DEFAULT_FILTERS: FilterState = {
   status:       '',
   selectedTags: [],
   sortBy:       'date-desc',
+  showToday:    false,
 }
 
 interface BrainStore {
@@ -68,14 +70,15 @@ interface BrainStore {
   viewMode:    ViewMode
   setViewMode: (m: ViewMode) => void
 
-  filters:       FilterState
-  setSearch:     (q: string) => void
-  setCategory:   (c: string) => void
-  setSubCategory:(s: string) => void
-  setStatus:     (s: string) => void
-  toggleTag:     (t: string) => void
-  setSortBy:     (k: SortKey) => void
-  clearFilters:  () => void
+  filters:        FilterState
+  setSearch:      (q: string) => void
+  setCategory:    (c: string) => void
+  setSubCategory: (s: string) => void
+  setStatus:      (s: string) => void
+  toggleTag:      (t: string) => void
+  setSortBy:      (k: SortKey) => void
+  setShowToday:   (v: boolean) => void
+  clearFilters:   () => void
 
   selectedRow: BrainRow | null
   openModal:   (row: BrainRow) => void
@@ -93,6 +96,16 @@ interface BrainStore {
 
   showSettings:    boolean
   setShowSettings: (v: boolean) => void
+
+  // Custom categories and tags persisted to Config Google Sheet tab
+  customCategories:       string[]
+  customTags:             string[]
+  setCustomCategories:    (cats: string[]) => void
+  setCustomTags:          (tags: string[]) => void
+  addCustomCategory:      (cat: string) => void
+  addCustomTag:           (tag: string) => void
+  removeCustomCategory:   (cat: string) => void
+  removeCustomTag:        (tag: string) => void
 }
 
 export const useBrainStore = create<BrainStore>()(
@@ -140,6 +153,7 @@ export const useBrainStore = create<BrainStore>()(
           return { filters: { ...s.filters, selectedTags: tags } }
         }),
       setSortBy:    (sortBy) => set((s) => ({ filters: { ...s.filters, sortBy } })),
+      setShowToday: (showToday) => set((s) => ({ filters: { ...s.filters, showToday } })),
       clearFilters: ()       => set({ filters: DEFAULT_FILTERS }),
 
       selectedRow: null,
@@ -158,6 +172,27 @@ export const useBrainStore = create<BrainStore>()(
 
       showSettings:    false,
       setShowSettings: (showSettings) => set({ showSettings }),
+
+      customCategories: [],
+      customTags:       [],
+      setCustomCategories: (customCategories) => set({ customCategories }),
+      setCustomTags:       (customTags)       => set({ customTags }),
+      addCustomCategory: (cat) =>
+        set((s) => ({
+          customCategories: s.customCategories.includes(cat)
+            ? s.customCategories
+            : [...s.customCategories, cat],
+        })),
+      addCustomTag: (tag) =>
+        set((s) => ({
+          customTags: s.customTags.includes(tag)
+            ? s.customTags
+            : [...s.customTags, tag],
+        })),
+      removeCustomCategory: (cat) =>
+        set((s) => ({ customCategories: s.customCategories.filter((c) => c !== cat) })),
+      removeCustomTag: (tag) =>
+        set((s) => ({ customTags: s.customTags.filter((t) => t !== tag) })),
     }),
     {
       name: 'brain2-store',

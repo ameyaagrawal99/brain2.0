@@ -137,19 +137,30 @@ body.font-serif-body { font-family: var(--font-serif) !important; }
   overflow-wrap: break-word;
 }
 
+/* SEARCH HIGHLIGHT */
+mark {
+  background: rgb(var(--color-brand) / 0.18);
+  color: rgb(var(--color-text));
+  border-radius: 2px;
+  padding: 0 1px;
+  font-style: normal;
+}
+
 /* ANIMATIONS */
-@keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
-@keyframes slideUp { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
-@keyframes scaleIn { from { opacity: 0; transform: scale(0.97) } to { opacity: 1; transform: scale(1) } }
-@keyframes spin    { to { transform: rotate(360deg) } }
+@keyframes fadeIn      { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp     { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes slideInRight{ from { opacity: 0; transform: translateX(40px) } to { opacity: 1; transform: translateX(0) } }
+@keyframes scaleIn     { from { opacity: 0; transform: scale(0.97) } to { opacity: 1; transform: scale(1) } }
+@keyframes spin        { to { transform: rotate(360deg) } }
 @keyframes shimmer {
   0%   { background-position: -1000px 0 }
   100% { background-position:  1000px 0 }
 }
 
-.animate-fadeIn  { animation: fadeIn  0.18s ease-out both; }
-.animate-slideUp { animation: slideUp 0.22s ease-out both; }
-.animate-scaleIn { animation: scaleIn 0.18s ease-out both; }
+.animate-fadeIn       { animation: fadeIn       0.18s ease-out both; }
+.animate-slideUp      { animation: slideUp      0.22s ease-out both; }
+.animate-slideInRight { animation: slideInRight 0.25s ease-out both; }
+.animate-scaleIn      { animation: scaleIn      0.18s ease-out both; }
 
 .stagger > *:nth-child(1) { animation: slideUp 0.22s ease-out 0ms   both; }
 .stagger > *:nth-child(2) { animation: slideUp 0.22s ease-out 30ms  both; }
@@ -227,5 +238,6 @@ select { -webkit-appearance: none; appearance: none; }
 
 /* MOBILE SAFE AREAS */
 @supports (padding: max(0px)) {
+  .safe-top    { padding-top:    max(0px,  env(safe-area-inset-top)); }
   .safe-bottom { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }

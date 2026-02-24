@@ -42,4 +42,4 @@ export type SortKey =
   | 'num-asc'
   | 'num-desc'
 
-export type ViewMode = 'card' | 'table'
+export type ViewMode = 'card' | 'table' | 'board'

@@ -1,4 +1,4 @@
-import { Search, X, ChevronDown } from 'lucide-react'
+import { Search, X, ChevronDown, CalendarDays } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useFilters } from '@/hooks/useFilters'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -13,6 +13,7 @@ export function FilterBar() {
   const setStatus      = useBrainStore((s) => s.setStatus)
   const toggleTag      = useBrainStore((s) => s.toggleTag)
   const setSortBy      = useBrainStore((s) => s.setSortBy)
+  const setShowToday   = useBrainStore((s) => s.setShowToday)
   const clearFilters   = useBrainStore((s) => s.clearFilters)
 
   const { categories, subCategories, topTags, hasActiveFilters, filteredRows } = useFilters()
@@ -37,7 +38,7 @@ export function FilterBar() {
   ] as const
 
   return (
-    <div className="border-b border-border bg-surface/90 backdrop-blur-sm sticky top-14 z-20">
+    <div className="border-b border-border bg-surface/90 backdrop-blur-sm sticky top-12 sm:top-14 z-20">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 space-y-2">
 
         {/* Row 1: Search + dropdowns */}
@@ -62,6 +63,20 @@ export function FilterBar() {
               </button>
             )}
           </div>
+
+          {/* Today quick filter */}
+          <button
+            onClick={() => setShowToday(!filters.showToday)}
+            className={cn(
+              'flex items-center gap-1.5 h-8 px-2.5 rounded-lg border text-xs font-medium transition-colors shrink-0',
+              filters.showToday
+                ? 'bg-brand text-white border-brand'
+                : 'bg-surface2 border-border text-ink2 hover:bg-hover'
+            )}
+          >
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span className="hidden sm:block">Today</span>
+          </button>
 
           {/* Filters */}
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -113,7 +128,7 @@ export function FilterBar() {
           </div>
         </div>
 
-        {/* Row 2: Tag pills — scrollable on mobile */}
+        {/* Row 2: Tag pills */}
         {topTags.length > 0 && (
           <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
             {topTags.slice(0, 20).map((tag) => (

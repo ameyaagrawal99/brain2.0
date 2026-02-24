@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useAuth } from '@/hooks/useAuth'
@@ -11,16 +10,6 @@ export default function App() {
   useTheme()
 
   const isAuthenticated = useBrainStore((s) => s.authState.isAuthenticated)
-  const selectedRow     = useBrainStore((s) => s.selectedRow)
-  const showNewRow      = useBrainStore((s) => s.showNewRow)
-  const showSettings    = useBrainStore((s) => s.showSettings)
-
-  // Lock body scroll when any modal is open
-  useEffect(() => {
-    const locked = !!(selectedRow || showNewRow || showSettings)
-    document.body.style.overflow = locked ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
-  }, [selectedRow, showNewRow, showSettings])
 
   return (
     <>
