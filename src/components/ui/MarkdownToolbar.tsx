@@ -136,12 +136,12 @@ export function MarkdownToolbar({
 
   return (
     <div className={cn('group flex flex-col gap-0', className)}>
-      {/* Toolbar — always visible when focused, subtly present when not */}
+      {/* Toolbar — always fully visible in edit mode */}
       <div
         className={cn(
           'flex flex-wrap gap-0.5 px-1.5 py-1 bg-surface border border-border border-b-0',
-          'rounded-t-lg transition-opacity duration-150',
-          focused ? 'opacity-100' : 'opacity-40 group-hover:opacity-70',
+          'rounded-t-lg',
+          focused ? 'border-brand/40' : '',
         )}
       >
         {TOOLBAR_BUTTONS.map(({ format, icon: Icon, title }) => (

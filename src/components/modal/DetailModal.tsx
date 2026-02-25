@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { MarkdownToolbar } from '@/components/ui/MarkdownToolbar'
+import { InstructionsBox } from '@/components/ui/InstructionsBox'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
@@ -11,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { EditableFields } from '@/types/sheet'
 import {
   Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare,
-  ExternalLink, Calendar, Hash, Image, Undo2, Redo2,
+  ExternalLink, Calendar, Hash, Image, Undo2, Redo2, Copy,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -29,12 +30,14 @@ const DEFAULT_CATEGORIES = ['', 'Journal', 'Work', 'Learning', 'Health', 'Financ
 const STATUS_OPTIONS      = ['', 'Pending', 'In Progress', 'In Review', 'Done', 'Blocked']
 
 export function DetailModal() {
-  const selectedRow    = useBrainStore((s) => s.selectedRow)
-  const closeModal     = useBrainStore((s) => s.closeModal)
-  const settings       = useBrainStore((s) => s.settings)
-  const customCats     = useBrainStore((s) => s.customCategories)
-  const entryHistory   = useBrainStore((s) => s.entryHistory)
-  const entryFuture    = useBrainStore((s) => s.entryFuture)
+  const selectedRow          = useBrainStore((s) => s.selectedRow)
+  const closeModal           = useBrainStore((s) => s.closeModal)
+  const settings             = useBrainStore((s) => s.settings)
+  const customCats           = useBrainStore((s) => s.customCategories)
+  const entryHistory         = useBrainStore((s) => s.entryHistory)
+  const entryFuture          = useBrainStore((s) => s.entryFuture)
+  const aiInstructions       = useBrainStore((s) => s.aiInstructions)
+  const updateAiInstructions = useBrainStore((s) => s.updateAiInstructions)
 
   const { saveRow, removeRow, undoRow, redoRow } = useSheetSync()
   const { run: runAI, loading: aiLoading, error: aiError } = useAI()
@@ -109,7 +112,9 @@ export function DetailModal() {
   async function runAIAction(action: 'rewrite' | 'tags' | 'actions' | 'all') {
     const text = original || rewritten || merged.title
     if (!text) { toast.error('No text to process'); return }
-    const result = await runAI(action, text)
+    const result = await runAI(action, text, {
+      systemInstruction: aiInstructions.quick || undefined,
+    })
     if (result.rewritten)   patchField('rewritten',   result.rewritten)
     if (result.tags)        patchField('tags',         result.tags)
     if (result.category)    patchField('category',     result.category)
@@ -229,23 +234,32 @@ export function DetailModal() {
 
           {/* ── AI bar ── */}
           {showAI && (
-            <div className="px-5 py-3 bg-brand/5 border-b border-brand/10 flex flex-wrap gap-2 items-center shrink-0">
-              <span className="text-xs font-medium text-brand">AI:</span>
+            <div className="px-5 py-3 bg-brand/5 border-b border-brand/10 space-y-2.5 shrink-0">
               {settings.openAiKey ? (
-                [
-                  { a: 'rewrite' as const, l: 'Rewrite' },
-                  { a: 'tags'    as const, l: 'Tags' },
-                  { a: 'actions' as const, l: 'Actions' },
-                  { a: 'all'     as const, l: 'Enhance all' },
-                ].map(({ a, l }) => (
-                  <Button key={a} size="sm" variant="outline" onClick={() => runAIAction(a)} loading={aiLoading}>
-                    <Wand2 className="w-3 h-3" />{l}
-                  </Button>
-                ))
+                <>
+                  <InstructionsBox
+                    value={aiInstructions.quick}
+                    onChange={(v) => updateAiInstructions({ quick: v })}
+                    placeholder="e.g. Be concise. Use bullet points. Focus on action items."
+                  />
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-xs font-medium text-brand">AI:</span>
+                    {([
+                      { a: 'rewrite' as const, l: 'Rewrite' },
+                      { a: 'tags'    as const, l: 'Tags' },
+                      { a: 'actions' as const, l: 'Actions' },
+                      { a: 'all'     as const, l: 'Enhance all' },
+                    ] as const).map(({ a, l }) => (
+                      <Button key={a} size="sm" variant="outline" onClick={() => runAIAction(a)} loading={aiLoading}>
+                        <Wand2 className="w-3 h-3" />{l}
+                      </Button>
+                    ))}
+                    {aiError && <span className="text-xs text-red-500 ml-1">{aiError}</span>}
+                  </div>
+                </>
               ) : (
                 <span className="text-xs text-ink3">Add OpenAI key in Settings to enable AI features.</span>
               )}
-              {aiError && <span className="text-xs text-red-500 ml-1">{aiError}</span>}
             </div>
           )}
 
@@ -298,7 +312,10 @@ export function DetailModal() {
             )}
 
             {/* Original note — rich text */}
-            <Section title="Original note">
+            <Section
+              title="Original note"
+              wordCount={original ? original.trim().split(/\s+/).filter(Boolean).length : 0}
+            >
               {editing ? (
                 <MarkdownToolbar
                   value={merged.original || ''}
@@ -317,7 +334,15 @@ export function DetailModal() {
             </Section>
 
             {/* Rewritten — rich text */}
-            <Section title="Rewritten" badge="AI">
+            <Section
+              title="Rewritten"
+              badge="AI"
+              wordCount={rewritten ? rewritten.trim().split(/\s+/).filter(Boolean).length : 0}
+              onCopy={rewritten ? () => {
+                navigator.clipboard.writeText(rewritten)
+                toast.success('Copied to clipboard')
+              } : undefined}
+            >
               {editing ? (
                 <MarkdownToolbar
                   value={merged.rewritten || ''}
@@ -452,8 +477,9 @@ function SectionLabel({ children, icon }: { children: React.ReactNode; icon?: Re
   )
 }
 
-function Section({ title, badge, icon, children }: {
-  title: string; badge?: string; icon?: React.ReactNode; children: React.ReactNode
+function Section({ title, badge, icon, wordCount, onCopy, children }: {
+  title: string; badge?: string; icon?: React.ReactNode
+  wordCount?: number; onCopy?: () => void; children: React.ReactNode
 }) {
   return (
     <div>
@@ -462,6 +488,19 @@ function Section({ title, badge, icon, children }: {
         <span className="text-[11px] font-semibold text-ink3 uppercase tracking-wider">{title}</span>
         {badge && (
           <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold">{badge}</span>
+        )}
+        {wordCount != null && wordCount > 0 && (
+          <span className="text-[10px] text-ink3 ml-0.5">{wordCount}w</span>
+        )}
+        {onCopy && (
+          <button
+            type="button"
+            onClick={onCopy}
+            title="Copy to clipboard"
+            className="ml-auto w-6 h-6 flex items-center justify-center rounded text-ink3 hover:text-ink hover:bg-hover transition-colors"
+          >
+            <Copy className="w-3 h-3" />
+          </button>
         )}
       </div>
       {children}

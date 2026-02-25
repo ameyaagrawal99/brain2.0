@@ -1,8 +1,9 @@
 import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
-import { parseTags, formatDate, formatRelative, categoryColor, getStatusDot, isImageUrl, highlight } from '@/lib/utils'
+import { parseTags, formatDate, formatRelative, categoryColor, categoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { CheckSquare, ExternalLink, Calendar, Tag } from 'lucide-react'
+import { stripMarkdown } from '@/lib/markdown'
 
 function isFormula(v: string): boolean {
   if (!v) return false
@@ -19,12 +20,14 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
   const openModal    = useBrainStore((s) => s.openModal)
   const searchQuery  = useBrainStore((s) => s.filters.search)
   const catClass     = categoryColor(row.category)
+  const catBorder    = categoryBorderColor(row.category)
+  const statusTint   = statusBgTint(row.taskStatus)
   const statusDot    = getStatusDot(row.taskStatus)
 
   const preview = (() => {
     const raw = row.rewritten || row.original || ''
     if (isFormula(raw)) return ''
-    return raw.slice(0, 200)
+    return stripMarkdown(raw).slice(0, 200)
   })()
 
   const firstAction = (() => {
@@ -44,7 +47,11 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
 
   return (
     <div
-      className="brain-card bg-surface border border-border rounded-xl overflow-hidden cursor-pointer hover:border-brand/30 transition-all"
+      className={cn(
+        'brain-card bg-surface border border-border border-l-[3px] rounded-xl overflow-hidden cursor-pointer hover:border-brand/30 transition-all',
+        catBorder,
+        statusTint,
+      )}
       onClick={() => openModal(row)}
     >
       {/* Cover image */}

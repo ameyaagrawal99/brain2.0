@@ -6,6 +6,17 @@ import { cn } from '@/lib/utils'
 import { BookOpen, Search } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { CardSkeleton } from '@/components/ui/Skeleton'
+import { stripMarkdown } from '@/lib/markdown'
+
+function isFormula(v: string): boolean {
+  if (!v) return false
+  const s = v.trim()
+  return s.startsWith('=AI(') || s.startsWith('=IF(') || s.startsWith('=IFERROR(') || s.startsWith('=ARRAYFORMULA(')
+}
+
+function cleanVal(v: string): string {
+  return isFormula(v) ? '' : (v || '')
+}
 
 const STATUS_COLORS: Record<string, string> = {
   done:     'bg-green-100 text-green-700',
@@ -76,7 +87,10 @@ export function TableView() {
         <tbody>
           {filteredRows.map((row, i) => {
             const tags = parseTags(row.tags).slice(0, 2)
-            const preview = (row.rewritten || row.original || '').slice(0, 120)
+            const rawPreview = cleanVal(row.rewritten) || cleanVal(row.original) || ''
+            const preview = stripMarkdown(rawPreview).slice(0, 120)
+            const category   = cleanVal(row.category)
+            const taskStatus = cleanVal(row.taskStatus)
             return (
               <tr
                 key={row._rowIndex}
@@ -92,16 +106,16 @@ export function TableView() {
                   <div className="truncate font-medium text-ink text-xs">{row.title || 'Untitled'}</div>
                 </td>
                 <td className="py-2.5 px-3">
-                  {row.category && (
+                  {category && (
                     <span className="inline-flex px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-brand/8 text-brand truncate max-w-[80px]">
-                      {row.category}
+                      {category}
                     </span>
                   )}
                 </td>
                 <td className="py-2.5 px-3">
-                  {row.taskStatus && (
-                    <span className={cn('inline-flex px-1.5 py-0.5 rounded-md text-[10px] font-medium truncate max-w-[80px]', getStatusColor(row.taskStatus))}>
-                      {row.taskStatus}
+                  {taskStatus && (
+                    <span className={cn('inline-flex px-1.5 py-0.5 rounded-md text-[10px] font-medium truncate max-w-[80px]', getStatusColor(taskStatus))}>
+                      {taskStatus}
                     </span>
                   )}
                 </td>

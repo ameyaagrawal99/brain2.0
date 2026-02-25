@@ -78,6 +78,28 @@ export function categoryColor(category: string): string {
   return map[category.toLowerCase()] ?? 'bg-surface2 text-ink2'
 }
 
+/** Returns a left-border Tailwind color class for category-colored cards */
+export function categoryBorderColor(category: string): string {
+  const map: Record<string, string> = {
+    journal:  'border-l-violet-400 dark:border-l-violet-500',
+    work:     'border-l-blue-400   dark:border-l-blue-500',
+    learning: 'border-l-green-400  dark:border-l-green-500',
+    health:   'border-l-rose-400   dark:border-l-rose-500',
+    finance:  'border-l-amber-400  dark:border-l-amber-500',
+    ideas:    'border-l-orange-400 dark:border-l-orange-500',
+    personal: 'border-l-pink-400   dark:border-l-pink-500',
+  }
+  return map[category?.toLowerCase()] ?? 'border-l-transparent'
+}
+
+/** Returns a subtle background tint class based on task status */
+export function statusBgTint(status: string): string {
+  const s = status?.toLowerCase() ?? ''
+  if (s.includes('blocked')) return 'bg-red-50/40 dark:bg-red-900/10'
+  if (s.includes('done') || s.includes('complete')) return 'bg-green-50/40 dark:bg-green-900/10'
+  return ''
+}
+
 /** Returns true if url is likely an image (by extension or known image host) */
 export function isImageUrl(url: string): boolean {
   if (!url?.trim()) return false
