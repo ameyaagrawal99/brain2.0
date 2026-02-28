@@ -6,6 +6,7 @@ interface AIResult {
   tags?:        string
   category?:    string
   actionItems?: string
+  title?:       string
 }
 
 export interface AIRunOptions {
@@ -21,7 +22,7 @@ export function useAI() {
   const [error,   setError]   = useState<string | null>(null)
 
   const run = useCallback(async (
-    action: 'rewrite' | 'tags' | 'categorize' | 'actions' | 'all',
+    action: 'rewrite' | 'tags' | 'categorize' | 'actions' | 'all' | 'title',
     text:   string,
     options: AIRunOptions = {},
   ): Promise<AIResult> => {
@@ -49,7 +50,8 @@ export function useAI() {
       tags:       `Extract 3-7 concise tags from this note. Output only a comma-separated list of lowercase tags, no explanation.\n\n${text}`,
       categorize: `Suggest one category and one sub-category for this journal note. Output as: "Category: X, SubCategory: Y". No explanation.\n\n${text}`,
       actions:    `Extract action items from this note. Output as a numbered list, one per line. If none, say "No action items."\n\n${text}`,
-      all:        `Analyze this journal note and return a JSON object with keys: rewritten (polished version), tags (comma-separated), category, subCategory, actionItems (numbered list). Output only valid JSON.\n\n${text}`,
+      title:      `Generate a concise, descriptive title for this journal note (5-10 words maximum). The title should capture the key topic or event. Output only the title text, no quotes, no explanation.\n\n${text}`,
+      all:        `Analyze this journal note and return a JSON object with keys: title (concise 5-10 word title), rewritten (polished version), tags (comma-separated), category, subCategory, actionItems (numbered list). Output only valid JSON.\n\n${text}`,
     }
 
     // Build messages array — system instruction prepended if provided
@@ -82,6 +84,7 @@ export function useAI() {
           const jsonMatch = content.match(/\{[\s\S]*\}/)
           const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
           return {
+            title:       parsed.title,
             rewritten:   parsed.rewritten,
             tags:        parsed.tags,
             category:    parsed.category,
@@ -93,6 +96,7 @@ export function useAI() {
       }
 
       if (action === 'rewrite')    return { rewritten: content.trim() }
+      if (action === 'title')      return { title: content.trim() }
       if (action === 'tags')       return { tags: content.trim() }
       if (action === 'categorize') {
         const catMatch = content.match(/Category:\s*([^,\n]+)/i)

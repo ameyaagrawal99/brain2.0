@@ -1,6 +1,9 @@
 import { SHEET_ID, SHEETS_BASE, CONFIG_SHEET_NAME, CONFIG_RANGE, CONFIG_TYPES } from '@/constants/sheet'
 import { sheetsFetch } from './sheets'
 
+// Re-export for external callers
+export { CONFIG_SHEET_NAME }
+
 /** Ensure the Config sheet tab exists. Creates it if missing. */
 export async function ensureConfigSheet(): Promise<void> {
   try {
@@ -38,8 +41,8 @@ export async function ensureConfigSheet(): Promise<void> {
   }
 }
 
-/** Fetch all custom categories and tags from the Config sheet. */
-export async function fetchConfig(): Promise<{ categories: string[]; tags: string[] }> {
+/** Fetch all custom categories, tags, and category colors from the Config sheet. */
+export async function fetchConfig(): Promise<{ categories: string[]; tags: string[]; colors: Record<string, string> }> {
   try {
     const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
     const data = await sheetsFetch(url)
@@ -52,10 +55,14 @@ export async function fetchConfig(): Promise<{ categories: string[]; tags: strin
     const tags = rows
       .filter(r => (r[0] ?? '').toLowerCase() === CONFIG_TYPES.TAG && r[1]?.trim())
       .map(r => r[1].trim())
-    return { categories, tags }
+    const colors: Record<string, string> = {}
+    rows
+      .filter(r => (r[0] ?? '').toLowerCase() === CONFIG_TYPES.COLOR && r[1]?.trim() && r[2]?.trim())
+      .forEach(r => { colors[r[1].trim().toLowerCase()] = r[2].trim() })
+    return { categories, tags, colors }
   } catch (err) {
     console.warn('[sheetsConfig] fetchConfig failed (non-fatal):', err)
-    return { categories: [], tags: [] }
+    return { categories: [], tags: [], colors: {} }
   }
 }
 
@@ -69,15 +76,60 @@ export async function appendConfigTag(value: string): Promise<void> {
   await appendConfigItem(CONFIG_TYPES.TAG, value)
 }
 
-async function appendConfigItem(type: string, value: string): Promise<void> {
+async function appendConfigItem(type: string, value: string, meta = ''): Promise<void> {
   const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`
   await sheetsFetch(url, {
     method: 'POST',
     body: JSON.stringify({
       majorDimension: 'ROWS',
-      values: [[type, value, '']],
+      values: [[type, value, meta]],
     }),
   })
+}
+
+/**
+ * Save (upsert) a category color entry in the Config sheet.
+ * If an existing color row for the category exists, updates it in place.
+ * Otherwise appends a new row.
+ */
+export async function saveColorConfig(category: string, colorName: string): Promise<void> {
+  try {
+    const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
+    const data = await sheetsFetch(url)
+    const values = (data as { values?: string[][] }).values ?? []
+    const catLower = category.toLowerCase()
+
+    const rowIdx = values.findIndex(
+      (r, i) => i > 0 && (r[0] ?? '').toLowerCase() === CONFIG_TYPES.COLOR && r[1]?.trim().toLowerCase() === catLower
+    )
+
+    if (rowIdx > 0) {
+      // Update existing row (rowIdx is 0-based array index → sheet row = rowIdx + 1)
+      const sheetRow = rowIdx + 1
+      const range = `${CONFIG_SHEET_NAME}!A${sheetRow}:C${sheetRow}`
+      await sheetsFetch(
+        `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            range,
+            majorDimension: 'ROWS',
+            values: [[CONFIG_TYPES.COLOR, catLower, colorName]],
+          }),
+        }
+      )
+    } else {
+      await appendConfigItem(CONFIG_TYPES.COLOR, catLower, colorName)
+    }
+  } catch (err) {
+    console.warn('[sheetsConfig] saveColorConfig failed:', err)
+    throw err
+  }
+}
+
+/** Delete a category color entry from the Config sheet. */
+export async function deleteColorConfig(category: string): Promise<void> {
+  await deleteConfigItem('color', category.toLowerCase())
 }
 
 /**
@@ -85,7 +137,7 @@ async function appendConfigItem(type: string, value: string): Promise<void> {
  * Finds the row index then uses batchUpdate deleteDimension.
  * This is a best-effort approach — fetches fresh config, finds matching row, deletes it.
  */
-export async function deleteConfigItem(type: 'category' | 'tag', value: string): Promise<void> {
+export async function deleteConfigItem(type: 'category' | 'tag' | 'color', value: string): Promise<void> {
   try {
     const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
     const data = await sheetsFetch(url)

@@ -32,7 +32,12 @@ export function useFilters() {
           if (!rowTags.includes(t)) return false
         }
       }
-      if (filters.showToday) {
+      if (filters.dateFrom || filters.dateTo) {
+        const rowDate = r.createdAt?.slice(0, 10) ?? ''
+        if (!rowDate) return false
+        if (filters.dateFrom && rowDate < filters.dateFrom) return false
+        if (filters.dateTo   && rowDate > filters.dateTo)   return false
+      } else if (filters.showToday) {
         const createdToday = r.createdAt?.startsWith(today)
         const dueToday     = r.dueDate?.trim() === today
         if (!createdToday && !dueToday) return false
@@ -70,7 +75,8 @@ export function useFilters() {
 
   const hasActiveFilters = !!(
     filters.search || filters.category || filters.subCategory ||
-    filters.status || filters.selectedTags.length > 0 || filters.showToday
+    filters.status || filters.selectedTags.length > 0 || filters.showToday ||
+    filters.dateFrom || filters.dateTo
   )
 
   return { filteredRows, categories, subCategories, topTags, hasActiveFilters }

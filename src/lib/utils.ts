@@ -65,31 +65,69 @@ export function getStatusDot(status: string): string {
   return 'bg-amber-400'
 }
 
+/** Predefined color palette for category color customization */
+export const COLOR_PALETTE: { name: string; label: string; dot: string; badge: string; border: string }[] = [
+  { name: 'violet', label: 'Violet', dot: '#7c3aed', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300', border: 'border-l-violet-400 dark:border-l-violet-500' },
+  { name: 'blue',   label: 'Blue',   dot: '#2563eb', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',         border: 'border-l-blue-400 dark:border-l-blue-500'   },
+  { name: 'green',  label: 'Green',  dot: '#16a34a', badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',     border: 'border-l-green-400 dark:border-l-green-500' },
+  { name: 'rose',   label: 'Rose',   dot: '#e11d48', badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',         border: 'border-l-rose-400 dark:border-l-rose-500'   },
+  { name: 'amber',  label: 'Amber',  dot: '#d97706', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',     border: 'border-l-amber-400 dark:border-l-amber-500' },
+  { name: 'orange', label: 'Orange', dot: '#ea580c', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', border: 'border-l-orange-400 dark:border-l-orange-500' },
+  { name: 'pink',   label: 'Pink',   dot: '#db2777', badge: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',         border: 'border-l-pink-400 dark:border-l-pink-500'   },
+  { name: 'teal',   label: 'Teal',   dot: '#0d9488', badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',         border: 'border-l-teal-400 dark:border-l-teal-500'   },
+  { name: 'cyan',   label: 'Cyan',   dot: '#0891b2', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',         border: 'border-l-cyan-400 dark:border-l-cyan-500'   },
+  { name: 'slate',  label: 'Gray',   dot: '#475569', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300',     border: 'border-l-slate-400 dark:border-l-slate-500' },
+  { name: 'lime',   label: 'Lime',   dot: '#65a30d', badge: 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300',         border: 'border-l-lime-400 dark:border-l-lime-500'   },
+  { name: 'indigo', label: 'Indigo', dot: '#4338ca', badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300', border: 'border-l-indigo-400 dark:border-l-indigo-500' },
+]
+
+const DEFAULT_CATEGORY_BADGE: Record<string, string> = {
+  journal:  'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+  work:     'bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-300',
+  learning: 'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-300',
+  health:   'bg-rose-100   text-rose-700   dark:bg-rose-900/30   dark:text-rose-300',
+  finance:  'bg-amber-100  text-amber-700  dark:bg-amber-900/30  dark:text-amber-300',
+  ideas:    'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+  personal: 'bg-pink-100   text-pink-700   dark:bg-pink-900/30   dark:text-pink-300',
+}
+
+const DEFAULT_CATEGORY_BORDER: Record<string, string> = {
+  journal:  'border-l-violet-400 dark:border-l-violet-500',
+  work:     'border-l-blue-400   dark:border-l-blue-500',
+  learning: 'border-l-green-400  dark:border-l-green-500',
+  health:   'border-l-rose-400   dark:border-l-rose-500',
+  finance:  'border-l-amber-400  dark:border-l-amber-500',
+  ideas:    'border-l-orange-400 dark:border-l-orange-500',
+  personal: 'border-l-pink-400   dark:border-l-pink-500',
+}
+
 export function categoryColor(category: string): string {
-  const map: Record<string, string> = {
-    journal:  'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
-    work:     'bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-300',
-    learning: 'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-300',
-    health:   'bg-rose-100   text-rose-700   dark:bg-rose-900/30   dark:text-rose-300',
-    finance:  'bg-amber-100  text-amber-700  dark:bg-amber-900/30  dark:text-amber-300',
-    ideas:    'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-    personal: 'bg-pink-100   text-pink-700   dark:bg-pink-900/30   dark:text-pink-300',
-  }
-  return map[category.toLowerCase()] ?? 'bg-surface2 text-ink2'
+  return DEFAULT_CATEGORY_BADGE[category?.toLowerCase()] ?? 'bg-surface2 text-ink2'
 }
 
 /** Returns a left-border Tailwind color class for category-colored cards */
 export function categoryBorderColor(category: string): string {
-  const map: Record<string, string> = {
-    journal:  'border-l-violet-400 dark:border-l-violet-500',
-    work:     'border-l-blue-400   dark:border-l-blue-500',
-    learning: 'border-l-green-400  dark:border-l-green-500',
-    health:   'border-l-rose-400   dark:border-l-rose-500',
-    finance:  'border-l-amber-400  dark:border-l-amber-500',
-    ideas:    'border-l-orange-400 dark:border-l-orange-500',
-    personal: 'border-l-pink-400   dark:border-l-pink-500',
+  return DEFAULT_CATEGORY_BORDER[category?.toLowerCase()] ?? 'border-l-transparent'
+}
+
+/** Returns the badge color class, using custom color override when set */
+export function dynamicCategoryColor(category: string, categoryColors: Record<string, string>): string {
+  const colorName = categoryColors[category?.toLowerCase()]
+  if (colorName) {
+    const palette = COLOR_PALETTE.find((p) => p.name === colorName)
+    if (palette) return palette.badge
   }
-  return map[category?.toLowerCase()] ?? 'border-l-transparent'
+  return categoryColor(category)
+}
+
+/** Returns the border color class, using custom color override when set */
+export function dynamicCategoryBorderColor(category: string, categoryColors: Record<string, string>): string {
+  const colorName = categoryColors[category?.toLowerCase()]
+  if (colorName) {
+    const palette = COLOR_PALETTE.find((p) => p.name === colorName)
+    if (palette) return palette.border
+  }
+  return categoryBorderColor(category)
 }
 
 /** Returns a subtle background tint class based on task status */

@@ -31,4 +31,5 @@ export const CONFIG_RANGE      = `${CONFIG_SHEET_NAME}!A:C`
 export const CONFIG_TYPES = {
   CATEGORY: 'category',
   TAG:      'tag',
+  COLOR:    'color',
 } as const
