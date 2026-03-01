@@ -28,17 +28,39 @@ export function useAuth() {
         clearTimeout(timeout)
         if (initialized.current) return
         initialized.current = true
-        initTokenClient(
+
+        // Guard: don't let a stale error/silent-failure callback sign the user out
+        // after they've already authenticated (race between silent re-auth and explicit sign-in).
+        const safeSignOut = () => {
+          if (!useBrainStore.getState().authState.isAuthenticated) {
+            setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
+          }
+        }
+
+        const didInit = initTokenClient(
           CLIENT_ID,
           (token) => setAuthState({ isAuthenticated: true, token, error: null, loading: false }),
-          (error) => setAuthState({ isAuthenticated: false, token: null, error, loading: false }),
-          // Silent failure: no active session — stop spinner and show login screen quietly.
-          ()      => setAuthState({ isAuthenticated: false, token: null, error: null, loading: false }),
+          (error) => {
+            // Only update auth state when not already signed in — a stale silent-request
+            // failure arriving after a successful explicit sign-in must not sign the user out.
+            if (!useBrainStore.getState().authState.isAuthenticated) {
+              setAuthState({ isAuthenticated: false, token: null, error, loading: false })
+            }
+          },
+          // Silent failure: no active session — show login screen.
+          safeSignOut,
         )
-        // Attempt silent token acquisition via hidden iframe (not a popup — safe to call on load).
-        // If the user has an active Google session and has previously granted consent,
-        // this re-authenticates them on every reload without any interaction.
-        requestToken(true)
+
+        if (didInit) {
+          // Attempt silent token acquisition via hidden iframe (not a popup — safe on load).
+          // If the user has an active Google session and has previously granted consent,
+          // this re-authenticates them on every reload without any interaction.
+          requestToken(true)
+        } else {
+          // initTokenClient was already called (useAuth used in multiple components).
+          // We're not the owner of the token client — just stop the loading spinner.
+          safeSignOut()
+        }
       }
     }, 100)
     return () => { clearInterval(interval); clearTimeout(timeout) }
