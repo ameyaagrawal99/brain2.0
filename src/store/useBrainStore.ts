@@ -44,6 +44,7 @@ interface AuthState {
   isAuthenticated: boolean
   token: string | null
   error: string | null
+  loading: boolean   // true while silent token refresh is in-flight
 }
 
 interface FilterState {
@@ -155,7 +156,7 @@ interface BrainStore {
 export const useBrainStore = create<BrainStore>()(
   persist(
     (set, get) => ({
-      authState: { isAuthenticated: false, token: null, error: null },
+      authState: { isAuthenticated: false, token: null, error: null, loading: true },
       setAuthState: (authState) => set({ authState }),
 
       rows: [],
