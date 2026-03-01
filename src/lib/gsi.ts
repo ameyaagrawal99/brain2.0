@@ -36,8 +36,16 @@ export function initTokenClient(
     client_id: clientId,
     scope: SHEETS_SCOPE,
     callback: (response: TokenResponse) => {
+      // Capture before resetting so we can route response.error to the right handler
+      const wasSilentCallback = _pendingSilentCount > 0
       _pendingSilentCount = 0   // any in-flight silent requests are now resolved
-      if (response.error) { onError(response.error); return }
+      if (response.error) {
+        // A silent request that comes back with an error should be treated the
+        // same as error_callback for silent mode — not surfaced as a user-visible
+        // error, just stop the spinner.
+        if (wasSilentCallback) { onSilentFailure?.() } else { onError(response.error) }
+        return
+      }
       // Set module-level token BEFORE calling listeners
       accessToken = response.access_token
       tokenExpiry = Date.now() + (response.expires_in - 60) * 1000
@@ -64,7 +72,10 @@ export function initTokenClient(
 export function requestToken(silent = false) {
   if (!tokenClient) throw new Error('Token client not initialized')
   if (silent) _pendingSilentCount++
-  tokenClient.requestAccessToken({ prompt: silent ? 'none' : '' })
+  // 'select_account' forces the popup account-picker for explicit sign-ins,
+  // preventing GIS from internally attempting a silent grant (which would fire
+  // an untracked error_callback and confuse the _pendingSilentCount logic).
+  tokenClient.requestAccessToken({ prompt: silent ? 'none' : 'select_account' })
 }
 
 export function getAccessToken(): string | null {
