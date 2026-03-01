@@ -2,11 +2,13 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
 import { useAuth } from '@/hooks/useAuth'
-import { appendConfigCategory, appendConfigTag, deleteConfigItem } from '@/lib/sheetsConfig'
-import { cn } from '@/lib/utils'
+import { appendConfigCategory, appendConfigTag, deleteConfigItem, saveColorConfig, deleteColorConfig } from '@/lib/sheetsConfig'
+import { cn, COLOR_PALETTE } from '@/lib/utils'
 import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, LogOut, RotateCcw, Plus, X, Tag, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+
+const BUILT_IN_CATEGORIES = ['journal', 'work', 'learning', 'health', 'finance', 'ideas', 'personal']
 
 export function SettingsPanel() {
   const showSettings    = useBrainStore((s) => s.showSettings)
@@ -16,6 +18,10 @@ export function SettingsPanel() {
   const resetSettings   = useBrainStore((s) => s.resetSettings)
   const customCats      = useBrainStore((s) => s.customCategories)
   const customTags      = useBrainStore((s) => s.customTags)
+  const rows            = useBrainStore((s) => s.rows)
+  const categoryColors       = useBrainStore((s) => s.categoryColors)
+  const updateCategoryColor  = useBrainStore((s) => s.updateCategoryColor)
+  const removeCategoryColor  = useBrainStore((s) => s.removeCategoryColor)
   const addCustomCategory    = useBrainStore((s) => s.addCustomCategory)
   const addCustomTag         = useBrainStore((s) => s.addCustomTag)
   const removeCustomCategory = useBrainStore((s) => s.removeCustomCategory)
@@ -27,9 +33,52 @@ export function SettingsPanel() {
   const [newTag,  setNewTag]  = useState('')
   const [savingCat, setSavingCat] = useState(false)
   const [savingTag, setSavingTag] = useState(false)
+  const [savingColor, setSavingColor] = useState<string | null>(null)
+
+  // All visible categories: built-in + from rows + custom (deduped)
+  const rowCategories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort()
+  const allCategories = [...new Set([...BUILT_IN_CATEGORIES, ...rowCategories, ...customCats])].sort()
 
   function toggle(key: keyof AppSettings) {
     updateSettings({ [key]: !settings[key as keyof AppSettings] } as Partial<AppSettings>)
+  }
+
+  async function handleSetCategoryColor(category: string, colorName: string) {
+    const key = category.toLowerCase()
+    // Toggle off if same color selected
+    if (categoryColors[key] === colorName) {
+      removeCategoryColor(key)
+      setSavingColor(key)
+      try {
+        await deleteColorConfig(key)
+        toast.success(`Color reset for ${category}`)
+      } catch {
+        toast.error('Failed to update color in Google Sheet')
+      } finally {
+        setSavingColor(null)
+      }
+      return
+    }
+    updateCategoryColor(key, colorName)
+    setSavingColor(key)
+    try {
+      await saveColorConfig(key, colorName)
+      toast.success(`Color saved for ${category}`)
+    } catch {
+      toast.error('Failed to save color to Google Sheet')
+    } finally {
+      setSavingColor(null)
+    }
+  }
+
+  async function handleResetCategoryColor(category: string) {
+    const key = category.toLowerCase()
+    removeCategoryColor(key)
+    try {
+      await deleteColorConfig(key)
+    } catch {
+      // non-fatal
+    }
   }
 
   function handleSignOut() {
@@ -266,6 +315,63 @@ export function SettingsPanel() {
             )}
           </Section>
         )}
+
+        {/* Category Colors */}
+        <Section title="Category colors" icon={<Palette className="w-3.5 h-3.5" />}>
+          <p className="text-xs text-ink3 mb-3">
+            Colors are saved to your Google Sheet and applied on every device and login.
+            Click a color to apply — click the same color to reset to default.
+          </p>
+          <div className="space-y-3">
+            {allCategories.map((cat) => {
+              const key = cat.toLowerCase()
+              const current = categoryColors[key]
+              const isSaving = savingColor === key
+              const currentPalette = COLOR_PALETTE.find((p) => p.name === current)
+              return (
+                <div key={cat} className="flex items-center gap-3">
+                  {/* Category name + current badge preview */}
+                  <div className="flex items-center gap-2 w-28 shrink-0">
+                    <span className={cn(
+                      'text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-full',
+                      currentPalette ? currentPalette.badge : 'bg-surface2 text-ink2'
+                    )}>
+                      {cat}
+                    </span>
+                    {isSaving && <span className="text-[10px] text-ink3 animate-pulse">saving…</span>}
+                  </div>
+                  {/* Color palette dots */}
+                  <div className="flex flex-wrap gap-1.5 flex-1">
+                    {COLOR_PALETTE.map((palette) => (
+                      <button
+                        key={palette.name}
+                        onClick={() => handleSetCategoryColor(cat, palette.name)}
+                        title={palette.label}
+                        disabled={isSaving}
+                        className={cn(
+                          'w-5 h-5 rounded-full transition-all ring-offset-1 ring-offset-surface disabled:opacity-50',
+                          current === palette.name ? 'ring-2 ring-brand scale-110' : 'hover:scale-110'
+                        )}
+                        style={{ backgroundColor: palette.dot }}
+                      />
+                    ))}
+                    {/* Reset button */}
+                    {current && (
+                      <button
+                        onClick={() => handleResetCategoryColor(cat)}
+                        disabled={isSaving}
+                        title="Reset to default"
+                        className="w-5 h-5 rounded-full border border-border bg-surface2 flex items-center justify-center text-ink3 hover:text-ink hover:bg-hover transition-colors disabled:opacity-50"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Section>
 
         {/* Notifications */}
         <Section title="Notifications" icon={<Bell className="w-3.5 h-3.5" />}>

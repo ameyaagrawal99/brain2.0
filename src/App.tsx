@@ -9,7 +9,17 @@ export default function App() {
   useAuth()
   useTheme()
 
-  const isAuthenticated = useBrainStore((s) => s.authState.isAuthenticated)
+  const { isAuthenticated, loading } = useBrainStore((s) => s.authState)
+
+  // While attempting silent re-auth on reload, show a minimal spinner so the
+  // login screen doesn't flash briefly before the token arrives.
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-brand border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <>

@@ -44,6 +44,7 @@ interface AuthState {
   isAuthenticated: boolean
   token: string | null
   error: string | null
+  loading: boolean   // true while silent token refresh is in-flight
 }
 
 interface FilterState {
@@ -54,6 +55,8 @@ interface FilterState {
   selectedTags: string[]
   sortBy:       SortKey
   showToday:    boolean
+  dateFrom:     string | null
+  dateTo:       string | null
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -64,6 +67,8 @@ const DEFAULT_FILTERS: FilterState = {
   selectedTags: [],
   sortBy:       'date-desc',
   showToday:    false,
+  dateFrom:     null,
+  dateTo:       null,
 }
 
 const MAX_HISTORY = 20
@@ -94,7 +99,14 @@ interface BrainStore {
   toggleTag:      (t: string) => void
   setSortBy:      (k: SortKey) => void
   setShowToday:   (v: boolean) => void
+  setDateRange:   (from: string | null, to: string | null) => void
   clearFilters:   () => void
+
+  // Per-category color overrides (persisted, synced to Google Sheet)
+  categoryColors:      Record<string, string>
+  setCategoryColors:   (colors: Record<string, string>) => void
+  updateCategoryColor: (category: string, color: string) => void
+  removeCategoryColor: (category: string) => void
 
   selectedRow: BrainRow | null
   openModal:   (row: BrainRow) => void
@@ -144,7 +156,7 @@ interface BrainStore {
 export const useBrainStore = create<BrainStore>()(
   persist(
     (set, get) => ({
-      authState: { isAuthenticated: false, token: null, error: null },
+      authState: { isAuthenticated: false, token: null, error: null, loading: true },
       setAuthState: (authState) => set({ authState }),
 
       rows: [],
@@ -187,7 +199,19 @@ export const useBrainStore = create<BrainStore>()(
         }),
       setSortBy:    (sortBy) => set((s) => ({ filters: { ...s.filters, sortBy } })),
       setShowToday: (showToday) => set((s) => ({ filters: { ...s.filters, showToday } })),
+      setDateRange: (dateFrom, dateTo) => set((s) => ({ filters: { ...s.filters, dateFrom, dateTo, showToday: false } })),
       clearFilters: ()       => set({ filters: DEFAULT_FILTERS }),
+
+      categoryColors:      {},
+      setCategoryColors:   (categoryColors) => set({ categoryColors }),
+      updateCategoryColor: (category, color) =>
+        set((s) => ({ categoryColors: { ...s.categoryColors, [category.toLowerCase()]: color } })),
+      removeCategoryColor: (category) =>
+        set((s) => {
+          const next = { ...s.categoryColors }
+          delete next[category.toLowerCase()]
+          return { categoryColors: next }
+        }),
 
       selectedRow: null,
       openModal:   (selectedRow) => set({ selectedRow }),
@@ -279,6 +303,7 @@ export const useBrainStore = create<BrainStore>()(
         viewMode:       state.viewMode,
         filters:        { ...DEFAULT_FILTERS, sortBy: state.filters.sortBy },
         aiInstructions: state.aiInstructions,
+        categoryColors: state.categoryColors,
       }),
     }
   )

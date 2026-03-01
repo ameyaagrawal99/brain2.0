@@ -1,6 +1,6 @@
 import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
-import { parseTags, formatDate, formatRelative, categoryColor, categoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight } from '@/lib/utils'
+import { parseTags, formatDate, formatRelative, dynamicCategoryColor, dynamicCategoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { CheckSquare, ExternalLink, Calendar, Tag } from 'lucide-react'
 import { stripMarkdown } from '@/lib/markdown'
@@ -17,10 +17,11 @@ interface BrainCardProps {
 }
 
 export function BrainCard({ row, dragHandle }: BrainCardProps) {
-  const openModal    = useBrainStore((s) => s.openModal)
-  const searchQuery  = useBrainStore((s) => s.filters.search)
-  const catClass     = categoryColor(row.category)
-  const catBorder    = categoryBorderColor(row.category)
+  const openModal      = useBrainStore((s) => s.openModal)
+  const searchQuery    = useBrainStore((s) => s.filters.search)
+  const categoryColors = useBrainStore((s) => s.categoryColors)
+  const catClass       = dynamicCategoryColor(row.category, categoryColors)
+  const catBorder      = dynamicCategoryBorderColor(row.category, categoryColors)
   const statusTint   = statusBgTint(row.taskStatus)
   const statusDot    = getStatusDot(row.taskStatus)
 

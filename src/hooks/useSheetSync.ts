@@ -31,6 +31,7 @@ export function useSheetSync() {
   const deleteRowLocally  = useBrainStore((s) => s.deleteRowLocally)
   const setCustomCategories = useBrainStore((s) => s.setCustomCategories)
   const setCustomTags       = useBrainStore((s) => s.setCustomTags)
+  const setCategoryColors   = useBrainStore((s) => s.setCategoryColors)
   const pushHistory         = useBrainStore((s) => s.pushHistory)
   const popHistory          = useBrainStore((s) => s.popHistory)
   const pushFuture          = useBrainStore((s) => s.pushFuture)
@@ -57,13 +58,16 @@ export function useSheetSync() {
   const refreshConfig = useCallback(async () => {
     try {
       await ensureConfigSheet()
-      const { categories, tags } = await fetchConfig()
+      const { categories, tags, colors } = await fetchConfig()
       setCustomCategories(categories)
       setCustomTags(tags)
+      if (Object.keys(colors).length > 0) {
+        setCategoryColors(colors)
+      }
     } catch (err) {
       console.warn('[useSheetSync] refreshConfig non-fatal:', err)
     }
-  }, [setCustomCategories, setCustomTags])
+  }, [setCustomCategories, setCustomTags, setCategoryColors])
 
   /**
    * Save fields to the sheet.

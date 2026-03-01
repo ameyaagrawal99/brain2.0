@@ -3,6 +3,7 @@ import { SHEETS_SCOPE } from '@/constants/sheet'
 let tokenClient: TokenClient | null = null
 let accessToken: string | null = null
 let tokenExpiry = 0
+let _silentRequest = false   // tracks whether the pending request used prompt:'none'
 
 // Listeners to notify when a new token arrives
 const tokenListeners: Array<(token: string) => void> = []
@@ -19,11 +20,13 @@ export function initTokenClient(
   clientId: string,
   onToken: (token: string) => void,
   onError: (msg: string) => void,
+  onSilentFailure?: () => void,
 ) {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope: SHEETS_SCOPE,
     callback: (response: TokenResponse) => {
+      _silentRequest = false
       if (response.error) { onError(response.error); return }
       // Set module-level token BEFORE calling listeners
       accessToken = response.access_token
@@ -33,8 +36,14 @@ export function initTokenClient(
       tokenListeners.forEach((fn) => fn(response.access_token))
     },
     error_callback: (err: ErrorResponse) => {
-      console.warn('[GSI] Error:', err.type, err.message)
-      if (err.type !== 'popup_closed') {
+      const wasSilent = _silentRequest
+      _silentRequest = false
+      console.warn('[GSI] Error (silent=%s):', wasSilent, err.type, err.message)
+      if (wasSilent) {
+        // Silent failures are expected (no active session / consent not yet granted).
+        // Don't surface as an error — just let the caller know so it can stop loading.
+        onSilentFailure?.()
+      } else if (err.type !== 'popup_closed') {
         onError(err.message ?? err.type)
       }
     },
@@ -43,6 +52,7 @@ export function initTokenClient(
 
 export function requestToken(silent = false) {
   if (!tokenClient) throw new Error('Token client not initialized')
+  _silentRequest = silent
   tokenClient.requestAccessToken({ prompt: silent ? 'none' : '' })
 }
 

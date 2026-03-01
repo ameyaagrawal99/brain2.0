@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   X, Wand2, Zap, Brain, Tag, CheckSquare, FileText, Sparkles,
-  Key, Download, ChevronDown, ChevronUp, RotateCcw,
+  Key, Download, ChevronDown, ChevronUp, RotateCcw, Heading,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { InstructionsBox } from '@/components/ui/InstructionsBox'
@@ -18,6 +18,7 @@ type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'export'
 /* ─── Bulk enhance options ───────────────────────────────────────────── */
 
 interface BulkOptions {
+  title:    boolean
   rewrite:  boolean
   tags:     boolean
   category: boolean
@@ -103,7 +104,7 @@ export function AIPanel() {
 
   // Bulk options (component-level state — no need to persist)
   const [bulkOptions, setBulkOptions] = useState<BulkOptions>({
-    rewrite: true, tags: true, category: true, actions: true,
+    title: false, rewrite: true, tags: true, category: true, actions: true,
   })
   const [bulkScope, setBulkScope]       = useState<BulkScope>('unenhanced')
   const [bulkInstOpen, setBulkInstOpen] = useState(false)
@@ -116,14 +117,14 @@ export function AIPanel() {
   if (!showAIPanel) return null
 
   /* ── Quick AI ── */
-  async function handleQuickProcess(action: 'rewrite' | 'tags' | 'actions' | 'all') {
+  async function handleQuickProcess(action: 'rewrite' | 'tags' | 'actions' | 'title' | 'all') {
     if (!quickText.trim()) { toast.error('Enter some text first'); return }
     const result = await runAI(action, quickText, {
       systemInstruction: aiInstructions.quick,
     })
     const out = action === 'all'
-      ? [result.rewritten, result.tags && 'Tags: ' + result.tags, result.actionItems].filter(Boolean).join('\n\n')
-      : (result.rewritten || result.tags || result.actionItems || 'No result')
+      ? [result.title && 'Title: ' + result.title, result.rewritten, result.tags && 'Tags: ' + result.tags, result.actionItems].filter(Boolean).join('\n\n')
+      : (result.title || result.rewritten || result.tags || result.actionItems || 'No result')
     setQuickResult(out || null)
   }
 
@@ -149,16 +150,17 @@ export function AIPanel() {
     for (const row of toProcess) {
       try {
         // Build a targeted prompt if not all fields selected
-        const allSelected = bulkOptions.rewrite && bulkOptions.tags && bulkOptions.category && bulkOptions.actions
+        const coreSelected = bulkOptions.rewrite && bulkOptions.tags && bulkOptions.category && bulkOptions.actions && bulkOptions.title
         let result
 
-        if (allSelected) {
+        if (coreSelected) {
           result = await runAI('all', row.original || row.title, {
             systemInstruction: aiInstructions.bulk,
           })
         } else {
           // Build custom prompt requesting only selected fields
           const wantedKeys: string[] = []
+          if (bulkOptions.title)    wantedKeys.push('title (concise 5-10 word title for the note)')
           if (bulkOptions.rewrite)  wantedKeys.push('rewritten (polished version of the note, first-person journal style)')
           if (bulkOptions.tags)     wantedKeys.push('tags (comma-separated lowercase keywords, 3-7 tags)')
           if (bulkOptions.category) wantedKeys.push('category (one word or short phrase), subCategory (optional sub-topic)')
@@ -170,10 +172,12 @@ export function AIPanel() {
         }
 
         const fields: Record<string, string> = {}
+        // Title: only fills entries that have no title yet (preserves existing titles)
+        if (bulkOptions.title    && result.title)       fields.title       = row.title || result.title
         if (bulkOptions.rewrite  && result.rewritten)   fields.rewritten   = result.rewritten
-        if (bulkOptions.tags     && result.tags)        fields.tags         = row.tags || result.tags
-        if (bulkOptions.category && result.category)    fields.category     = row.category || result.category
-        if (bulkOptions.actions  && result.actionItems) fields.actionItems  = result.actionItems
+        if (bulkOptions.tags     && result.tags)        fields.tags        = row.tags || result.tags
+        if (bulkOptions.category && result.category)    fields.category    = row.category || result.category
+        if (bulkOptions.actions  && result.actionItems) fields.actionItems = result.actionItems
 
         if (Object.keys(fields).length) {
           await saveRow(row._rowIndex, fields, 'AI: Enhance all')
@@ -358,10 +362,11 @@ export function AIPanel() {
                 />
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { action: 'rewrite' as const, label: 'Rewrite',         icon: Wand2 },
-                    { action: 'tags'    as const, label: 'Generate tags',    icon: Tag },
-                    { action: 'actions' as const, label: 'Extract actions',  icon: CheckSquare },
-                    { action: 'all'     as const, label: 'Enhance all',      icon: Sparkles },
+                    { action: 'title'   as const, label: 'Generate title',   icon: Heading },
+                    { action: 'rewrite' as const, label: 'Rewrite',          icon: Wand2 },
+                    { action: 'tags'    as const, label: 'Generate tags',     icon: Tag },
+                    { action: 'actions' as const, label: 'Extract actions',   icon: CheckSquare },
+                    { action: 'all'     as const, label: 'Enhance all',       icon: Sparkles },
                   ].map(({ action, label, icon: Icon }) => (
                     <Button key={action} size="sm" variant="outline" onClick={() => handleQuickProcess(action)} loading={aiLoading}>
                       <Icon className="w-3 h-3" />
@@ -433,10 +438,11 @@ export function AIPanel() {
                         <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">Fields to generate</p>
                         <div className="space-y-2">
                           {([
-                            ['rewrite',  'Rewrite content',       Wand2],
-                            ['tags',     'Generate tags',         Tag],
-                            ['category', 'Suggest category',      FileText],
-                            ['actions',  'Extract action items',  CheckSquare],
+                            ['title',    'Generate title (fills empty only)', Heading],
+                            ['rewrite',  'Rewrite content',                   Wand2],
+                            ['tags',     'Generate tags',                     Tag],
+                            ['category', 'Suggest category',                  FileText],
+                            ['actions',  'Extract action items',               CheckSquare],
                           ] as const).map(([key, label, Icon]) => (
                             <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
                               <div
