@@ -2,7 +2,7 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
 import { parseTags, formatDate, formatRelative, dynamicCategoryColor, dynamicCategoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import { CheckSquare, ExternalLink, Calendar, Tag } from 'lucide-react'
+import { CheckSquare, ExternalLink, Calendar, Tag, Check } from 'lucide-react'
 import { stripMarkdown } from '@/lib/markdown'
 
 function isFormula(v: string): boolean {
@@ -17,13 +17,17 @@ interface BrainCardProps {
 }
 
 export function BrainCard({ row, dragHandle }: BrainCardProps) {
-  const openModal      = useBrainStore((s) => s.openModal)
-  const searchQuery    = useBrainStore((s) => s.filters.search)
-  const categoryColors = useBrainStore((s) => s.categoryColors)
-  const catClass       = dynamicCategoryColor(row.category, categoryColors)
-  const catBorder      = dynamicCategoryBorderColor(row.category, categoryColors)
-  const statusTint   = statusBgTint(row.taskStatus)
-  const statusDot    = getStatusDot(row.taskStatus)
+  const openModal            = useBrainStore((s) => s.openModal)
+  const searchQuery          = useBrainStore((s) => s.filters.search)
+  const categoryColors       = useBrainStore((s) => s.categoryColors)
+  const selectionMode        = useBrainStore((s) => s.selectionMode)
+  const selectedCardIndices  = useBrainStore((s) => s.selectedCardIndices)
+  const toggleCardSelection  = useBrainStore((s) => s.toggleCardSelection)
+  const catClass             = dynamicCategoryColor(row.category, categoryColors)
+  const catBorder            = dynamicCategoryBorderColor(row.category, categoryColors)
+  const statusTint           = statusBgTint(row.taskStatus)
+  const statusDot            = getStatusDot(row.taskStatus)
+  const isSelected           = selectedCardIndices.includes(row._rowIndex)
 
   const preview = (() => {
     const raw = row.rewritten || row.original || ''
@@ -46,15 +50,41 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
   const titleHtml   = hasSearch ? highlight(row.title || 'Untitled', searchQuery) : ''
   const previewHtml = hasSearch ? highlight(preview, searchQuery) : ''
 
+  function handleClick(e: React.MouseEvent) {
+    if (selectionMode) {
+      e.stopPropagation()
+      toggleCardSelection(row._rowIndex)
+    } else {
+      openModal(row)
+    }
+  }
+
   return (
     <div
       className={cn(
-        'brain-card bg-surface border border-border border-l-[3px] rounded-xl overflow-hidden cursor-pointer hover:border-brand/30 transition-all',
+        'brain-card bg-surface border border-border border-l-[3px] rounded-xl overflow-hidden cursor-pointer hover:border-brand/30 transition-all relative',
         catBorder,
         statusTint,
+        selectionMode && isSelected && 'ring-2 ring-brand border-brand/50',
+        selectionMode && !isSelected && 'opacity-80',
       )}
-      onClick={() => openModal(row)}
+      onClick={handleClick}
     >
+      {/* Selection checkbox overlay */}
+      {selectionMode && (
+        <div
+          className={cn(
+            'absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors',
+            isSelected
+              ? 'bg-brand border-brand'
+              : 'bg-surface border-border2 hover:border-brand/60',
+          )}
+          onClick={(e) => { e.stopPropagation(); toggleCardSelection(row._rowIndex) }}
+        >
+          {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+        </div>
+      )}
+
       {/* Cover image */}
       {hasImage && (
         <div className="w-full h-36 overflow-hidden bg-surface2">
@@ -68,7 +98,7 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
         </div>
       )}
 
-      <div className="p-4 flex flex-col gap-2.5">
+      <div className={cn('p-4 flex flex-col gap-2.5', selectionMode && 'pl-9')}>
         {/* Category + status row */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">

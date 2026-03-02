@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
 
 interface AIResult {
@@ -20,6 +20,12 @@ export function useAI() {
   const settings = useBrainStore((s) => s.settings)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  const abort = useCallback(() => {
+    abortRef.current?.abort()
+    setLoading(false)
+  }, [])
 
   const run = useCallback(async (
     action: 'rewrite' | 'tags' | 'categorize' | 'actions' | 'all' | 'title',
@@ -34,6 +40,10 @@ export function useAI() {
       setError('No text to process.')
       return {}
     }
+
+    // Create a new AbortController for this request
+    const controller = new AbortController()
+    abortRef.current = controller
 
     setLoading(true)
     setError(null)
@@ -69,6 +79,7 @@ export function useAI() {
           'Authorization': `Bearer ${settings.openAiKey}`,
         },
         body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
+        signal: controller.signal,
       })
 
       if (!res.ok) {
@@ -109,6 +120,10 @@ export function useAI() {
       if (action === 'actions') return { actionItems: content.trim() }
       return {}
     } catch (err) {
+      // Don't set error state if the request was intentionally aborted
+      if (err instanceof Error && err.name === 'AbortError') {
+        return {}
+      }
       const msg = err instanceof Error ? err.message : 'AI request failed'
       setError(msg)
       return {}
@@ -117,5 +132,5 @@ export function useAI() {
     }
   }, [settings.openAiKey])
 
-  return { run, loading, error, clearError: () => setError(null) }
+  return { run, loading, error, clearError: () => setError(null), abort }
 }

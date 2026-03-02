@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   X, Wand2, Zap, Brain, Tag, CheckSquare, FileText, Sparkles,
-  Key, Download, ChevronDown, ChevronUp, RotateCcw, Heading,
+  Key, Download, ChevronDown, ChevronUp, RotateCcw, Heading, StopCircle, MousePointerClick,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { InstructionsBox } from '@/components/ui/InstructionsBox'
@@ -25,7 +25,7 @@ interface BulkOptions {
   actions:  boolean
 }
 
-type BulkScope = 'unenhanced' | 'all' | 'filtered'
+type BulkScope = 'unenhanced' | 'all' | 'filtered' | 'selected'
 
 /* ─── Export helpers ─────────────────────────────────────────────────── */
 
@@ -90,8 +90,12 @@ export function AIPanel() {
   const aiInstructions     = useBrainStore((s) => s.aiInstructions)
   const updateAiInstructions = useBrainStore((s) => s.updateAiInstructions)
   const lastBulkRows       = useBrainStore((s) => s.lastBulkRows)
+  const selectedCardIndices = useBrainStore((s) => s.selectedCardIndices)
+  const setSelectionMode    = useBrainStore((s) => s.setSelectionMode)
+  const clearCardSelection  = useBrainStore((s) => s.clearCardSelection)
   const { saveRow, undoBulk, setLastBulkRows } = useSheetSync()
-  const { run: runAI, loading: aiLoading } = useAI()
+  const { run: runAI, loading: aiLoading, abort: abortAI } = useAI()
+  const stopRef = useRef(false)
   const { filteredRows } = useFilters()
 
   const [mode, setMode]               = useState<AIMode>('quick')
@@ -133,7 +137,13 @@ export function AIPanel() {
     const hasContent = (r: BrainRow) => !!(r.original || r.title)
     if (bulkScope === 'unenhanced') return rows.filter((r) => !r.rewritten && hasContent(r))
     if (bulkScope === 'filtered')   return filteredRows.filter(hasContent)
+    if (bulkScope === 'selected')   return rows.filter((r) => selectedCardIndices.includes(r._rowIndex) && hasContent(r))
     return rows.filter(hasContent) // 'all'
+  }
+
+  function handlePickCards() {
+    setSelectionMode(true)
+    setShowAIPanel(false)
   }
 
   async function handleBulkEnhance() {
@@ -143,11 +153,15 @@ export function AIPanel() {
     const anySelected = Object.values(bulkOptions).some(Boolean)
     if (!anySelected) { toast.error('Select at least one field to generate'); return }
 
+    stopRef.current = false
     setBulkProgress({ done: 0, total: toProcess.length })
     const touchedIndices: number[] = []
     let done = 0
 
     for (const row of toProcess) {
+      // Check if user requested stop
+      if (stopRef.current) break
+
       try {
         // Build a targeted prompt if not all fields selected
         const coreSelected = bulkOptions.rewrite && bulkOptions.tags && bulkOptions.category && bulkOptions.actions && bulkOptions.title
@@ -171,6 +185,9 @@ export function AIPanel() {
           })
         }
 
+        // If stopped mid-request, result will be empty — skip saving
+        if (stopRef.current) break
+
         const fields: Record<string, string> = {}
         // Title: only fills entries that have no title yet (preserves existing titles)
         if (bulkOptions.title    && result.title)       fields.title       = row.title || result.title
@@ -189,8 +206,18 @@ export function AIPanel() {
     }
 
     setLastBulkRows(touchedIndices)
-    toast.success(`Enhanced ${done} entries!`)
+    if (stopRef.current) {
+      toast(`Enhancement stopped — ${touchedIndices.length} of ${toProcess.length} entries processed`)
+    } else {
+      toast.success(`Enhanced ${touchedIndices.length} entries!`)
+    }
+    stopRef.current = false
     setBulkProgress(null)
+  }
+
+  function handleStopBulk() {
+    stopRef.current = true
+    abortAI()
   }
 
   /* ── Digest ── */
@@ -247,9 +274,11 @@ export function AIPanel() {
   const hasKey = !!settings.openAiKey
 
   // Counts for bulk scope display
-  const unenhancedCount = rows.filter((r) => !r.rewritten && (r.original || r.title)).length
-  const bulkScopeCount  = bulkScope === 'unenhanced' ? unenhancedCount
-    : bulkScope === 'filtered' ? filteredRows.filter((r) => r.original || r.title).length
+  const unenhancedCount  = rows.filter((r) => !r.rewritten && (r.original || r.title)).length
+  const selectedCount    = rows.filter((r) => selectedCardIndices.includes(r._rowIndex) && (r.original || r.title)).length
+  const bulkScopeCount   = bulkScope === 'unenhanced' ? unenhancedCount
+    : bulkScope === 'filtered'  ? filteredRows.filter((r) => r.original || r.title).length
+    : bulkScope === 'selected'  ? selectedCount
     : rows.filter((r) => r.original || r.title).length
 
   const checkboxCls = (active: boolean) => cn(
@@ -470,6 +499,7 @@ export function AIPanel() {
                             ['unenhanced', `Unenhanced only (${unenhancedCount})`],
                             ['all',        `All entries with content (${rows.filter((r) => r.original || r.title).length})`],
                             ['filtered',   `Current filtered view (${filteredRows.filter((r) => r.original || r.title).length})`],
+                            ['selected',   `Selected cards (${selectedCount})`],
                           ] as const).map(([val, label]) => (
                             <label key={val} className="flex items-center gap-2.5 cursor-pointer">
                               <div
@@ -485,6 +515,26 @@ export function AIPanel() {
                             </label>
                           ))}
                         </div>
+                        {/* Pick cards button — shown when 'selected' scope is active */}
+                        {bulkScope === 'selected' && (
+                          <button
+                            type="button"
+                            onClick={handlePickCards}
+                            className="mt-2 flex items-center gap-1.5 text-xs text-brand hover:underline"
+                          >
+                            <MousePointerClick className="w-3.5 h-3.5" />
+                            {selectedCount > 0 ? `${selectedCount} cards selected — click to change` : 'Click cards to select them'}
+                          </button>
+                        )}
+                        {bulkScope === 'selected' && selectedCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={clearCardSelection}
+                            className="mt-1 text-xs text-ink3 hover:text-ink underline"
+                          >
+                            Clear selection
+                          </button>
+                        )}
                       </div>
 
                       {/* Custom instructions for bulk */}
@@ -533,19 +583,29 @@ export function AIPanel() {
                   </div>
                 )}
 
-                {/* Run button */}
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleBulkEnhance}
-                  loading={aiLoading || !!bulkProgress}
-                  className="w-full justify-center"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {bulkProgress
-                    ? `Processing… (${bulkProgress.done}/${bulkProgress.total})`
-                    : `Enhance ${bulkScopeCount} ${bulkScopeCount === 1 ? 'entry' : 'entries'}`}
-                </Button>
+                {/* Run / Stop buttons */}
+                {bulkProgress ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStopBulk}
+                    className="w-full justify-center border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                  >
+                    <StopCircle className="w-3.5 h-3.5" />
+                    Stop ({bulkProgress.done}/{bulkProgress.total} done)
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleBulkEnhance}
+                    loading={aiLoading}
+                    className="w-full justify-center"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {`Enhance ${bulkScopeCount} ${bulkScopeCount === 1 ? 'entry' : 'entries'}`}
+                  </Button>
+                )}
 
                 {/* Undo last bulk */}
                 {lastBulkRows.length > 0 && !bulkProgress && (
