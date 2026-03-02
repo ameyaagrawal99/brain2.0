@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { EditableFields } from '@/types/sheet'
 import {
   Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare,
-  ExternalLink, Calendar, Hash, Image, Undo2, Redo2, Copy,
+  ExternalLink, Calendar, Hash, Image, Undo2, Redo2, Copy, Heading,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -109,13 +109,14 @@ export function DetailModal() {
     await removeRow(row._rowIndex)
   }
 
-  async function runAIAction(action: 'rewrite' | 'tags' | 'actions' | 'all') {
+  async function runAIAction(action: 'rewrite' | 'tags' | 'actions' | 'title' | 'all') {
     const text = original || rewritten || merged.title
     if (!text) { toast.error('No text to process'); return }
     const result = await runAI(action, text, {
       systemInstruction: aiInstructions.quick || undefined,
     })
-    if (result.rewritten)   patchField('rewritten',   result.rewritten)
+    if (result.title)       patchField('title',        result.title)
+    if (result.rewritten)   patchField('rewritten',    result.rewritten)
     if (result.tags)        patchField('tags',         result.tags)
     if (result.category)    patchField('category',     result.category)
     if (result.actionItems) patchField('actionItems',  result.actionItems)
@@ -245,13 +246,14 @@ export function DetailModal() {
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-xs font-medium text-brand">AI:</span>
                     {([
-                      { a: 'rewrite' as const, l: 'Rewrite' },
-                      { a: 'tags'    as const, l: 'Tags' },
-                      { a: 'actions' as const, l: 'Actions' },
-                      { a: 'all'     as const, l: 'Enhance all' },
-                    ] as const).map(({ a, l }) => (
+                      { a: 'title'   as const, l: 'Generate title', icon: Heading },
+                      { a: 'rewrite' as const, l: 'Rewrite',        icon: Wand2 },
+                      { a: 'tags'    as const, l: 'Tags',            icon: Tag },
+                      { a: 'actions' as const, l: 'Actions',         icon: CheckSquare },
+                      { a: 'all'     as const, l: 'Enhance all',     icon: Wand2 },
+                    ] as const).map(({ a, l, icon: Icon }) => (
                       <Button key={a} size="sm" variant="outline" onClick={() => runAIAction(a)} loading={aiLoading}>
-                        <Wand2 className="w-3 h-3" />{l}
+                        <Icon className="w-3 h-3" />{l}
                       </Button>
                     ))}
                     {aiError && <span className="text-xs text-red-500 ml-1">{aiError}</span>}

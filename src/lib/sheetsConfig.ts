@@ -1,4 +1,14 @@
 import { SHEET_ID, SHEETS_BASE, CONFIG_SHEET_NAME, CONFIG_RANGE, CONFIG_TYPES } from '@/constants/sheet'
+
+export interface QuickFilter {
+  name:        string
+  search:      string
+  category:    string
+  subCategory: string
+  status:      string
+  selectedTags: string[]
+  sortBy:      string
+}
 import { sheetsFetch } from './sheets'
 
 // Re-export for external callers
@@ -132,12 +142,71 @@ export async function deleteColorConfig(category: string): Promise<void> {
   await deleteConfigItem('color', category.toLowerCase())
 }
 
+/* ── Quick Filters ─────────────────────────────────────────────────────── */
+
+/** Fetch all saved quick filters from the Config sheet. */
+export async function fetchQuickFilters(): Promise<QuickFilter[]> {
+  try {
+    const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
+    const data = await sheetsFetch(url)
+    const values = (data as { values?: string[][] }).values ?? []
+    return values
+      .slice(1)
+      .filter(r => (r[0] ?? '').toLowerCase() === CONFIG_TYPES.QUICKFILTER && r[1]?.trim() && r[2]?.trim())
+      .map(r => {
+        try { return { name: r[1].trim(), ...JSON.parse(r[2]) } as QuickFilter }
+        catch { return null }
+      })
+      .filter(Boolean) as QuickFilter[]
+  } catch {
+    return []
+  }
+}
+
+/** Save (upsert) a quick filter preset to the Config sheet. */
+export async function saveQuickFilter(filter: QuickFilter): Promise<void> {
+  try {
+    const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
+    const data = await sheetsFetch(url)
+    const values = (data as { values?: string[][] }).values ?? []
+    const nameLower = filter.name.toLowerCase()
+    const { name, ...rest } = filter
+    const jsonValue = JSON.stringify(rest)
+
+    const rowIdx = values.findIndex(
+      (r, i) => i > 0 && (r[0] ?? '').toLowerCase() === CONFIG_TYPES.QUICKFILTER && r[1]?.trim().toLowerCase() === nameLower
+    )
+
+    if (rowIdx > 0) {
+      const sheetRow = rowIdx + 1
+      const range = `${CONFIG_SHEET_NAME}!A${sheetRow}:C${sheetRow}`
+      await sheetsFetch(
+        `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ range, majorDimension: 'ROWS', values: [[CONFIG_TYPES.QUICKFILTER, name, jsonValue]] }),
+        }
+      )
+    } else {
+      await appendConfigItem(CONFIG_TYPES.QUICKFILTER, name, jsonValue)
+    }
+  } catch (err) {
+    console.warn('[sheetsConfig] saveQuickFilter failed:', err)
+    throw err
+  }
+}
+
+/** Delete a quick filter preset from the Config sheet. */
+export async function deleteQuickFilter(name: string): Promise<void> {
+  await deleteConfigItem(CONFIG_TYPES.QUICKFILTER, name)
+}
+
 /**
  * Delete a config item by type+value.
  * Finds the row index then uses batchUpdate deleteDimension.
  * This is a best-effort approach — fetches fresh config, finds matching row, deletes it.
  */
-export async function deleteConfigItem(type: 'category' | 'tag' | 'color', value: string): Promise<void> {
+export async function deleteConfigItem(type: 'category' | 'tag' | 'color' | 'quickfilter', value: string): Promise<void> {
   try {
     const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
     const data = await sheetsFetch(url)

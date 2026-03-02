@@ -151,6 +151,17 @@ interface BrainStore {
   // Per-action AI custom instructions (persisted to localStorage)
   aiInstructions:       AIInstructions
   updateAiInstructions: (patch: Partial<AIInstructions>) => void
+
+  // Card selection mode (for bulk enhance "selected cards" scope)
+  selectionMode:       boolean
+  setSelectionMode:    (v: boolean) => void
+  selectedCardIndices: number[]
+  toggleCardSelection: (rowIndex: number) => void
+  clearCardSelection:  () => void
+
+  // Left sidebar
+  showSidebar:    boolean
+  setShowSidebar: (v: boolean) => void
 }
 
 export const useBrainStore = create<BrainStore>()(
@@ -295,6 +306,22 @@ export const useBrainStore = create<BrainStore>()(
       aiInstructions:       DEFAULT_AI_INSTRUCTIONS,
       updateAiInstructions: (patch) =>
         set((s) => ({ aiInstructions: { ...s.aiInstructions, ...patch } })),
+
+      // ── Card selection mode ────────────────────────────────────────────
+      selectionMode:       false,
+      setSelectionMode:    (selectionMode) => set({ selectionMode }),
+      selectedCardIndices: [],
+      toggleCardSelection: (rowIndex) =>
+        set((s) => ({
+          selectedCardIndices: s.selectedCardIndices.includes(rowIndex)
+            ? s.selectedCardIndices.filter((i) => i !== rowIndex)
+            : [...s.selectedCardIndices, rowIndex],
+        })),
+      clearCardSelection: () => set({ selectedCardIndices: [], selectionMode: false }),
+
+      // ── Sidebar ────────────────────────────────────────────────────────
+      showSidebar:    false,
+      setShowSidebar: (showSidebar) => set({ showSidebar }),
     }),
     {
       name: 'brain2-store',

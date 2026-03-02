@@ -1,4 +1,4 @@
-import { BookOpen, Plus, RefreshCw, Settings, LayoutGrid, Table2, Sun, Moon, Wand2, Kanban } from 'lucide-react'
+import { BookOpen, Plus, RefreshCw, Settings, LayoutGrid, Table2, Sun, Moon, Wand2, Kanban, PanelLeft } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,8 @@ export function Header() {
   const setShowAIPanel  = useBrainStore((s) => s.setShowAIPanel)
   const settings        = useBrainStore((s) => s.settings)
   const updateSettings  = useBrainStore((s) => s.updateSettings)
+  const showSidebar     = useBrainStore((s) => s.showSidebar)
+  const setShowSidebar  = useBrainStore((s) => s.setShowSidebar)
   const demoMode        = settings.demoMode
 
   const { refresh } = useSheetSync()
@@ -31,6 +33,18 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-sm border-b border-border safe-top">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 h-12 sm:h-14 flex items-center gap-2">
+
+        {/* Sidebar toggle */}
+        <button
+          onClick={() => setShowSidebar(!showSidebar)}
+          className={cn(
+            'w-8 h-8 flex items-center justify-center rounded-lg transition-colors shrink-0',
+            showSidebar ? 'text-brand bg-brand/10' : 'text-ink3 hover:bg-hover hover:text-ink'
+          )}
+          title="Toggle sidebar"
+        >
+          <PanelLeft className="w-4 h-4" />
+        </button>
 
         {/* Logo */}
         <div className="flex items-center gap-2 mr-auto min-w-0">
