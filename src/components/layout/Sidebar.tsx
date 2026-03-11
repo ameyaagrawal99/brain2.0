@@ -1,23 +1,79 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart2, Calendar, Filter, X, Clock, Tag, CheckCircle,
-  Loader2, Plus, Trash2, BookmarkCheck, TrendingUp,
+  Loader2, Plus, Trash2, BookmarkCheck, TrendingUp, ListChecks,
+  Square, CheckSquare2,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
-import { parseTags, formatDate } from '@/lib/utils'
-import { cn } from '@/lib/utils'
+import { parseTags, formatDate, cn, parseActionItems, toggleActionItem } from '@/lib/utils'
 import { fetchQuickFilters, saveQuickFilter, deleteQuickFilter } from '@/lib/sheetsConfig'
+import { useSheetSync } from '@/hooks/useSheetSync'
 import type { QuickFilter } from '@/lib/sheetsConfig'
+import type { BrainRow } from '@/types/sheet'
 import toast from 'react-hot-toast'
 
-type SidebarTab = 'stats' | 'due' | 'activity' | 'filters'
+type SidebarTab = 'stats' | 'due' | 'tasks' | 'activity' | 'filters'
 
 const TABS: { key: SidebarTab; label: string; icon: typeof BarChart2 }[] = [
   { key: 'stats',    label: 'Stats',    icon: BarChart2 },
   { key: 'due',      label: 'Due Soon', icon: Calendar },
+  { key: 'tasks',    label: 'Tasks',    icon: ListChecks },
   { key: 'activity', label: 'Activity', icon: TrendingUp },
   { key: 'filters',  label: 'Filters',  icon: Filter },
 ]
+
+/** Rows whose action items are currently expanded in the sidebar */
+function useExpandedRows() {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const toggle = (rowIndex: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(rowIndex) ? next.delete(rowIndex) : next.add(rowIndex)
+      return next
+    })
+  return { expanded, toggle }
+}
+
+/** Shared action-item checklist for a single row */
+function ActionItemList({
+  row,
+  onToggle,
+  savingIndex,
+}: {
+  row: BrainRow
+  onToggle: (row: BrainRow, lineIndex: number) => void
+  savingIndex: number | null
+}) {
+  const items = parseActionItems(row.actionItems ?? '')
+  if (!items.length) return <p className="text-[10px] text-ink3 italic px-1 py-0.5">No action items</p>
+
+  return (
+    <div className="space-y-0.5 mt-1.5 pl-1">
+      {items.map(({ text, done, lineIndex }) => (
+        <button
+          key={lineIndex}
+          onClick={(e) => { e.stopPropagation(); onToggle(row, lineIndex) }}
+          disabled={savingIndex === lineIndex}
+          className="w-full flex items-start gap-1.5 group/item py-0.5 rounded hover:bg-surface2 px-1 transition-colors text-left"
+        >
+          {savingIndex === lineIndex ? (
+            <Loader2 className="w-3 h-3 text-brand animate-spin shrink-0 mt-0.5" />
+          ) : done ? (
+            <CheckSquare2 className="w-3 h-3 text-green-500 shrink-0 mt-0.5" />
+          ) : (
+            <Square className="w-3 h-3 text-ink3 group-hover/item:text-brand shrink-0 mt-0.5" />
+          )}
+          <span className={cn(
+            'text-[11px] leading-snug',
+            done ? 'line-through text-ink3' : 'text-ink2',
+          )}>
+            {text}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export function Sidebar() {
   const showSidebar    = useBrainStore((s) => s.showSidebar)
@@ -33,11 +89,17 @@ export function Sidebar() {
   const clearFilters   = useBrainStore((s) => s.clearFilters)
   const demoMode       = useBrainStore((s) => s.settings.demoMode)
 
+  const { saveRow } = useSheetSync()
+
   const [tab, setTab]                   = useState<SidebarTab>('stats')
   const [quickFilters, setQuickFilters] = useState<QuickFilter[]>([])
   const [loadingQF, setLoadingQF]       = useState(false)
   const [savingQF, setSavingQF]         = useState(false)
   const [newFilterName, setNewFilterName] = useState('')
+  // rowIndex → lineIndex being saved right now (optimistic spinner)
+  const [saving, setSaving] = useState<Record<number, number | null>>({})
+
+  const { expanded, toggle: toggleExpanded } = useExpandedRows()
 
   // Load quick filters when tab is shown
   useEffect(() => {
@@ -106,12 +168,36 @@ export function Sidebar() {
       .slice(0, 10)
   }, [rows])
 
+  /* ── All Tasks (Tasks tab) ─────────────────────────────────────────── */
+
+  const taskRows = useMemo(() => {
+    // Show entries that have action items or a taskStatus, excluding Done entries with no action items
+    return rows
+      .filter(r => r.actionItems?.trim() || r.taskStatus)
+      .sort((a, b) => {
+        // Entries with due dates come first
+        if (a.dueDate && !b.dueDate) return -1
+        if (!a.dueDate && b.dueDate) return 1
+        if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+        return 0
+      })
+  }, [rows])
+
+  // Count of pending action items across all task rows (for badge)
+  const pendingTaskCount = useMemo(() => {
+    let n = 0
+    for (const r of taskRows) {
+      const items = parseActionItems(r.actionItems ?? '')
+      n += items.filter(i => !i.done).length
+    }
+    return n
+  }, [taskRows])
+
   /* ── Activity (last 30 days) ───────────────────────────────────────── */
 
   const activityData = useMemo(() => {
     const counts: Record<string, number> = {}
     const today  = new Date()
-    // Initialize last 30 days with 0
     for (let i = 29; i >= 0; i--) {
       const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
       counts[d.toISOString().slice(0, 10)] = 0
@@ -178,6 +264,20 @@ export function Sidebar() {
     setShowSidebar(false)
   }
 
+  /* ── Toggle individual action item ────────────────────────────────── */
+
+  async function handleToggleTask(row: BrainRow, lineIndex: number) {
+    setSaving(prev => ({ ...prev, [row._rowIndex]: lineIndex }))
+    try {
+      const newActionItems = toggleActionItem(row.actionItems ?? '', lineIndex)
+      await saveRow(row._rowIndex, { actionItems: newActionItems }, 'Task toggle')
+    } catch {
+      // saveRow already shows a toast on error
+    } finally {
+      setSaving(prev => ({ ...prev, [row._rowIndex]: null }))
+    }
+  }
+
   if (!showSidebar) return null
 
   const maxCatCount = Math.max(1, ...categoryStats.map(([, c]) => c))
@@ -188,6 +288,75 @@ export function Sidebar() {
     'Pending':     'bg-amber-500',
     'Blocked':     'bg-red-500',
     'In Review':   'bg-purple-500',
+  }
+
+  /* ── Shared row card for Due Soon + Tasks tabs ─────────────────────── */
+  function RowCard({
+    row,
+    isOverdue = false,
+  }: {
+    row: BrainRow
+    isOverdue?: boolean
+  }) {
+    const items    = parseActionItems(row.actionItems ?? '')
+    const doneCount = items.filter(i => i.done).length
+    const isExpanded = expanded.has(row._rowIndex)
+    const savingIdx  = saving[row._rowIndex] ?? null
+
+    return (
+      <div className={cn(
+        'border rounded-lg overflow-hidden',
+        isOverdue
+          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+          : 'bg-surface2 border-border',
+      )}>
+        {/* Entry header — click to open modal */}
+        <button
+          onClick={() => { openModal(row); setShowSidebar(false) }}
+          className="w-full text-left px-2.5 pt-2 pb-1.5 hover:opacity-80 transition-opacity"
+        >
+          <p className="text-xs font-medium text-ink line-clamp-1">{row.title || 'Untitled'}</p>
+          <div className="flex items-center justify-between mt-0.5">
+            <p className={cn(
+              'text-[10px] flex items-center gap-1',
+              isOverdue ? 'text-red-500' : 'text-ink3',
+            )}>
+              {row.dueDate && (
+                <>
+                  <Clock className="w-2.5 h-2.5" />
+                  {isOverdue ? 'Overdue · ' : ''}{formatDate(row.dueDate)}
+                </>
+              )}
+              {!row.dueDate && row.taskStatus && (
+                <span className="text-ink3">{row.taskStatus}</span>
+              )}
+            </p>
+            {items.length > 0 && (
+              <span className="text-[10px] text-ink3">{doneCount}/{items.length}</span>
+            )}
+          </div>
+        </button>
+
+        {/* Expand/collapse action items toggle */}
+        {items.length > 0 && (
+          <div className="px-2.5 pb-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleExpanded(row._rowIndex) }}
+              className="text-[10px] text-brand hover:underline"
+            >
+              {isExpanded ? 'Hide tasks ▲' : `Show ${items.length} task${items.length !== 1 ? 's' : ''} ▼`}
+            </button>
+            {isExpanded && (
+              <ActionItemList
+                row={row}
+                onToggle={handleToggleTask}
+                savingIndex={savingIdx}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -203,7 +372,6 @@ export function Sidebar() {
         'fixed sm:relative z-40 sm:z-auto',
         'bg-surface border-r border-border flex flex-col',
         'w-72 h-full sm:h-auto sm:min-h-0',
-        // Mobile: slide in from left
         'inset-y-0 left-0',
         'sm:flex-shrink-0',
       )}>
@@ -225,7 +393,7 @@ export function Sidebar() {
               key={key}
               onClick={() => setTab(key)}
               className={cn(
-                'flex flex-col items-center gap-0.5 px-3 py-2 text-[10px] font-medium transition-colors whitespace-nowrap flex-1',
+                'relative flex flex-col items-center gap-0.5 px-2 py-2 text-[10px] font-medium transition-colors whitespace-nowrap flex-1',
                 tab === key
                   ? 'text-brand border-b-2 border-brand'
                   : 'text-ink3 hover:text-ink'
@@ -233,6 +401,12 @@ export function Sidebar() {
             >
               <Icon className="w-3.5 h-3.5" />
               {label}
+              {/* Pending tasks badge on Tasks tab */}
+              {key === 'tasks' && pendingTaskCount > 0 && (
+                <span className="absolute top-1 right-1 bg-brand text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                  {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -324,19 +498,9 @@ export function Sidebar() {
                   <p className="text-[11px] font-medium text-red-500 uppercase tracking-wide mb-2">
                     Overdue ({overdueRows.length})
                   </p>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {overdueRows.map(row => (
-                      <button
-                        key={row._rowIndex}
-                        onClick={() => { openModal(row); setShowSidebar(false) }}
-                        className="w-full text-left p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                      >
-                        <p className="text-xs font-medium text-ink line-clamp-1">{row.title || 'Untitled'}</p>
-                        <p className="text-[10px] text-red-500 mt-0.5 flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5" />
-                          Due {formatDate(row.dueDate)}
-                        </p>
-                      </button>
+                      <RowCard key={row._rowIndex} row={row} isOverdue />
                     ))}
                   </div>
                 </div>
@@ -347,20 +511,9 @@ export function Sidebar() {
                   <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">
                     Next 7 days ({dueSoonRows.length})
                   </p>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {dueSoonRows.map(row => (
-                      <button
-                        key={row._rowIndex}
-                        onClick={() => { openModal(row); setShowSidebar(false) }}
-                        className="w-full text-left p-2.5 bg-surface2 border border-border rounded-lg hover:bg-hover transition-colors"
-                      >
-                        <p className="text-xs font-medium text-ink line-clamp-1">{row.title || 'Untitled'}</p>
-                        <p className="text-[10px] text-ink3 mt-0.5 flex items-center gap-1">
-                          <Calendar className="w-2.5 h-2.5" />
-                          {formatDate(row.dueDate)}
-                          {row.taskStatus && <span className="ml-1 text-ink3">· {row.taskStatus}</span>}
-                        </p>
-                      </button>
+                      <RowCard key={row._rowIndex} row={row} />
                     ))}
                   </div>
                 </div>
@@ -371,6 +524,95 @@ export function Sidebar() {
                   {overdueRows.length === 0 && (
                     <p className="text-xs text-ink3 mt-1">You're all caught up!</p>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── ALL TASKS ── */}
+          {tab === 'tasks' && (
+            <div className="space-y-4">
+              <p className="text-xs text-ink2">
+                All entries with tasks — click a task to toggle it complete.
+              </p>
+
+              {taskRows.length === 0 ? (
+                <div className="text-center py-8">
+                  <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500 opacity-60" />
+                  <p className="text-sm text-ink2">No tasks found</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {taskRows.map(row => {
+                    const items    = parseActionItems(row.actionItems ?? '')
+                    const doneCount = items.filter(i => i.done).length
+                    const savingIdx = saving[row._rowIndex] ?? null
+                    const isExpanded = expanded.has(row._rowIndex)
+
+                    return (
+                      <div key={row._rowIndex} className="border border-border rounded-lg overflow-hidden bg-surface2">
+                        {/* Header */}
+                        <div className="flex items-start gap-1.5 px-2.5 pt-2 pb-1">
+                          <button
+                            onClick={() => { openModal(row); setShowSidebar(false) }}
+                            className="flex-1 text-left min-w-0"
+                          >
+                            <p className="text-xs font-medium text-ink line-clamp-1">{row.title || 'Untitled'}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {row.dueDate && (
+                                <span className="text-[10px] text-ink3 flex items-center gap-0.5">
+                                  <Calendar className="w-2.5 h-2.5" />
+                                  {formatDate(row.dueDate)}
+                                </span>
+                              )}
+                              {row.taskStatus && (
+                                <span className="text-[10px] text-ink3">{row.taskStatus}</span>
+                              )}
+                            </div>
+                          </button>
+                          {items.length > 0 && (
+                            <span className={cn(
+                              'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                              doneCount === items.length
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-surface text-ink3',
+                            )}>
+                              {doneCount}/{items.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Action items — always visible in Tasks tab */}
+                        {items.length > 0 ? (
+                          <div className="px-2.5 pb-2">
+                            {/* Show first 3 or all if expanded */}
+                            <ActionItemList
+                              row={{ ...row, actionItems: items.length <= 3 || isExpanded
+                                ? row.actionItems
+                                : items.slice(0, 3).map(
+                                    (item) => row.actionItems!.split('\n')[item.lineIndex]
+                                  ).join('\n')
+                              }}
+                              onToggle={handleToggleTask}
+                              savingIndex={savingIdx}
+                            />
+                            {items.length > 3 && (
+                              <button
+                                onClick={() => toggleExpanded(row._rowIndex)}
+                                className="text-[10px] text-brand hover:underline mt-1 ml-1"
+                              >
+                                {isExpanded ? 'Show less ▲' : `+${items.length - 3} more ▼`}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="px-2.5 pb-2">
+                            <span className="text-[10px] text-ink3 italic">Entry-level task</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -396,7 +638,6 @@ export function Sidebar() {
                       )}
                       style={{ height: `${(count / maxActivity) * 100}%`, minHeight: count > 0 ? '3px' : '2px' }}
                     />
-                    {/* Tooltip on hover */}
                     <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-ink text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity">
                       {count}
                     </div>

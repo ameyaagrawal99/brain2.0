@@ -4,6 +4,22 @@ let tokenClient: TokenClient | null = null
 let accessToken: string | null = null
 let tokenExpiry = 0
 let _pendingSilentCount = 0  // number of in-flight silent requests
+let _refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Schedule a silent token refresh ~5 minutes before expiry.
+ * This keeps the user logged in without requiring any interaction.
+ */
+function scheduleTokenRefresh(expiresIn: number) {
+  if (_refreshTimer) clearTimeout(_refreshTimer)
+  // Refresh 5 min before expiry; if token is shorter than 10 min, refresh at halfway point
+  const refreshInSec = expiresIn > 600 ? expiresIn - 300 : Math.floor(expiresIn / 2)
+  const refreshInMs  = Math.max(0, refreshInSec * 1000)
+  _refreshTimer = setTimeout(() => {
+    console.log('[GSI] Auto-refreshing token silently…')
+    try { requestToken(true) } catch { /* ignore if not yet initialised */ }
+  }, refreshInMs)
+}
 
 // Listeners to notify when a new token arrives
 const tokenListeners: Array<(token: string) => void> = []
@@ -42,6 +58,7 @@ export function initTokenClient(
       accessToken = response.access_token
       tokenExpiry = Date.now() + (response.expires_in - 60) * 1000
       console.log('[GSI] Token received, expires in', response.expires_in, 'seconds')
+      scheduleTokenRefresh(response.expires_in)
       onToken(response.access_token)
       tokenListeners.forEach((fn) => fn(response.access_token))
     },
@@ -77,6 +94,7 @@ export function getAccessToken(): string | null {
 }
 
 export function revokeToken() {
+  if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null }
   if (!accessToken) return
   google.accounts.oauth2.revoke(accessToken, () => {
     accessToken = null
