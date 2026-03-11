@@ -156,6 +156,51 @@ export function isImageUrl(url: string): boolean {
   return imageHosts.some((h) => url.includes(h))
 }
 
+/**
+ * Parse an actionItems string into individual task objects.
+ * Supports numbered lines like "1. Task text" or "1. [x] Done task".
+ * Returns the original line index so we can toggle it back.
+ */
+export interface ActionItem {
+  text: string
+  done: boolean
+  lineIndex: number
+}
+
+export function parseActionItems(raw: string): ActionItem[] {
+  if (!raw) return []
+  return raw
+    .split('\n')
+    .map((line, i) => {
+      const noNum = line.replace(/^\d+\.\s*/, '').trim()
+      if (!noNum) return null
+      const done = /^\[x\]\s*/i.test(noNum)
+      const text = noNum.replace(/^\[x\]\s*/i, '').replace(/^\[\s*\]\s*/, '').trim()
+      return text ? { text, done, lineIndex: i } : null
+    })
+    .filter((x): x is ActionItem => x !== null)
+}
+
+/**
+ * Toggle the [x] completion marker on a specific line of an actionItems string.
+ * Returns the updated string.
+ */
+export function toggleActionItem(raw: string, lineIndex: number): string {
+  const lines = raw.split('\n')
+  if (lineIndex >= lines.length) return raw
+  const line = lines[lineIndex]
+  const numMatch = line.match(/^(\d+\.\s*)/)
+  const prefix = numMatch ? numMatch[1] : ''
+  const rest = line.slice(prefix.length).trim()
+  const isDone = /^\[x\]\s*/i.test(rest)
+  if (isDone) {
+    lines[lineIndex] = prefix + rest.replace(/^\[x\]\s*/i, '').trim()
+  } else {
+    lines[lineIndex] = prefix + '[x] ' + rest.replace(/^\[\s*\]\s*/, '').trim()
+  }
+  return lines.join('\n')
+}
+
 /** Wraps search query matches in <mark> tags. Returns HTML string. */
 export function highlight(text: string, query: string): string {
   if (!query?.trim() || !text) return text

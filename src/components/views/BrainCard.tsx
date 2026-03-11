@@ -1,6 +1,6 @@
 import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
-import { parseTags, formatDate, formatRelative, dynamicCategoryColor, dynamicCategoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight } from '@/lib/utils'
+import { parseTags, formatDate, formatRelative, dynamicCategoryColor, dynamicCategoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight, parseActionItems } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { CheckSquare, ExternalLink, Calendar, Tag, Check } from 'lucide-react'
 import { stripMarkdown } from '@/lib/markdown'
@@ -35,13 +35,20 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
     return stripMarkdown(raw).slice(0, 200)
   })()
 
-  const firstAction = (() => {
-    if (!row.actionItems || isFormula(row.actionItems)) return ''
-    return row.actionItems
-      .split('\n')
-      .map((l) => l.replace(/^\d+\.\s*/, '').trim())
-      .find((l) => l.length > 0) || ''
+  const actionItemsParsed = (() => {
+    if (!row.actionItems || isFormula(row.actionItems)) return []
+    return parseActionItems(row.actionItems)
   })()
+
+  const firstAction = (() => {
+    // Show first incomplete task, or first task if all done
+    const pending = actionItemsParsed.find(i => !i.done)
+    return (pending ?? actionItemsParsed[0])?.text ?? ''
+  })()
+
+  const taskProgress = actionItemsParsed.length > 0
+    ? { done: actionItemsParsed.filter(i => i.done).length, total: actionItemsParsed.length }
+    : null
 
   const tags = parseTags(row.tags).slice(0, 2)
   const hasImage = row.mediaUrl && isImageUrl(row.mediaUrl)
@@ -141,11 +148,21 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
           )
         )}
 
-        {/* First action item */}
+        {/* Action items: first item + progress */}
         {firstAction && (
-          <div className="flex items-start gap-1.5 bg-surface2 rounded-lg px-2.5 py-1.5">
-            <CheckSquare className="w-3 h-3 text-brand shrink-0 mt-0.5" />
-            <span className="text-[11px] text-ink2 leading-snug line-clamp-1">{firstAction}</span>
+          <div className="flex items-center gap-1.5 bg-surface2 rounded-lg px-2.5 py-1.5">
+            <CheckSquare className="w-3 h-3 text-brand shrink-0 mt-0.5 self-start" />
+            <span className="text-[11px] text-ink2 leading-snug line-clamp-1 flex-1">{firstAction}</span>
+            {taskProgress && taskProgress.total > 1 && (
+              <span className={cn(
+                'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none',
+                taskProgress.done === taskProgress.total
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-surface text-ink3',
+              )}>
+                {taskProgress.done}/{taskProgress.total}
+              </span>
+            )}
           </div>
         )}
 
