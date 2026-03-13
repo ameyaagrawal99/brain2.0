@@ -50,6 +50,8 @@ export interface SpecialDay {
   date: string       // ISO date: "YYYY-MM-DD"
   description?: string
   emoji?: string
+  imageUrl?: string  // image URL (stored in meta JSON, displayed as <img>)
+  links?: string     // newline-separated URLs
 }
 
 export interface HistoryEntry {

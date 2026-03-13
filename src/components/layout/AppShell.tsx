@@ -1,21 +1,78 @@
-import { useEffect, useRef } from 'react'
-import { Header }        from './Header'
-import { FilterBar }     from './FilterBar'
-import { StatsBar }      from './StatsBar'
-import { BottomNav }     from './BottomNav'
-import { Sidebar }       from './Sidebar'
-import { CardView }      from '@/components/views/CardView'
-import { TableView }     from '@/components/views/TableView'
-import { TaskBoard }     from '@/components/views/TaskBoard'
-import { DetailModal }   from '@/components/modal/DetailModal'
-import { NewRowModal }   from '@/components/modal/NewRowModal'
-import { SettingsPanel } from '@/components/modal/SettingsPanel'
-import { AIPanel }       from '@/components/modal/AIPanel'
-import { useBrainStore } from '@/store/useBrainStore'
-import { useSheetSync }  from '@/hooks/useSheetSync'
-import { DEMO_ROWS }     from '@/data/demoData'
+import { useEffect, useRef, useState } from 'react'
+import { Header }          from './Header'
+import { FilterBar }       from './FilterBar'
+import { StatsBar }        from './StatsBar'
+import { BottomNav }       from './BottomNav'
+import { Sidebar }         from './Sidebar'
+import { CardView }        from '@/components/views/CardView'
+import { TableView }       from '@/components/views/TableView'
+import { TaskBoard }       from '@/components/views/TaskBoard'
+import { DetailModal }     from '@/components/modal/DetailModal'
+import { NewRowModal }     from '@/components/modal/NewRowModal'
+import { MilestoneModal }  from '@/components/modal/MilestoneModal'
+import { SettingsPanel }   from '@/components/modal/SettingsPanel'
+import { AIPanel }         from '@/components/modal/AIPanel'
+import { useBrainStore }   from '@/store/useBrainStore'
+import { useSheetSync }    from '@/hooks/useSheetSync'
+import { DEMO_ROWS }       from '@/data/demoData'
 import { useConfettiCheck } from '@/components/ui/Confetti'
-import { Sparkles, X } from 'lucide-react'
+import { Sparkles, X, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+function MilestoneBanner() {
+  const specialDays          = useBrainStore((s) => s.specialDays)
+  const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
+  const [dismissed, setDismissed] = useState(false)
+
+  const today   = new Date().toISOString().slice(0, 10)
+  const todayMD = today.slice(5)
+
+  const todayMs       = specialDays.filter(d => d.date === today)
+  const anniversaryMs = specialDays.filter(d => d.date !== today && d.date.slice(5) === todayMD)
+  const allSpecial    = [...todayMs, ...anniversaryMs]
+
+  if (dismissed || allSpecial.length === 0) return null
+
+  const first  = allSpecial[0]
+  const isAnni = first.date !== today && first.date.slice(5) === todayMD
+  const extra  = allSpecial.length - 1
+
+  return (
+    <div className="relative overflow-hidden animate-slideUp">
+      {/* Gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 opacity-90" />
+      <div className="milestone-shimmer absolute inset-0" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-3">
+        <span className="text-xl shrink-0 select-none drop-shadow">
+          {isAnni ? '🎂' : '🎉'}
+        </span>
+        <button
+          onClick={() => setSelectedMilestone(first)}
+          className="flex-1 flex items-center gap-2 text-left min-w-0"
+        >
+          <div className="min-w-0">
+            <span className="text-sm font-bold text-white drop-shadow-sm">
+              {isAnni ? 'Anniversary: ' : 'Today: '}
+              <span className="font-extrabold">{first.title}</span>
+            </span>
+            {extra > 0 && (
+              <span className="ml-2 text-xs text-white/70">+{extra} more</span>
+            )}
+          </div>
+          <ChevronRight className="w-4 h-4 text-white/70 shrink-0" />
+        </button>
+        <button
+          onClick={() => setDismissed(true)}
+          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
+          title="Dismiss"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function AppShell() {
   const viewMode            = useBrainStore((s) => s.viewMode)
@@ -29,6 +86,8 @@ export function AppShell() {
   const selectedCardIndices = useBrainStore((s) => s.selectedCardIndices)
   const clearCardSelection  = useBrainStore((s) => s.clearCardSelection)
   const setShowAIPanel      = useBrainStore((s) => s.setShowAIPanel)
+  const selectedMilestone   = useBrainStore((s) => s.selectedMilestone)
+  const showNewMilestone    = useBrainStore((s) => s.showNewMilestone)
 
   const { refresh, refreshConfig } = useSheetSync()
   const hasLoadedRef = useRef(false)
@@ -44,7 +103,6 @@ export function AppShell() {
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true
       const t = setTimeout(() => {
-        // Run data fetch and config fetch in parallel
         Promise.all([refresh(), refreshConfig()]).catch(() => {})
       }, 100)
       return () => clearTimeout(t)
@@ -52,18 +110,18 @@ export function AppShell() {
   }, [demoMode, refresh, refreshConfig, setRows])
 
   // Lock body scroll when any modal is open
-  // AI panel on desktop (sm+) is a drawer — don't lock scroll
   useEffect(() => {
     const isDesktop = window.innerWidth >= 640
     const aiLocks   = showAIPanel && !isDesktop
-    const locked    = !!(selectedRow || showNewRow || showSettings || aiLocks)
+    const locked    = !!(selectedRow || showNewRow || showSettings || aiLocks || selectedMilestone || showNewMilestone)
     document.body.style.overflow = locked ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [selectedRow, showNewRow, showSettings, showAIPanel])
+  }, [selectedRow, showNewRow, showSettings, showAIPanel, selectedMilestone, showNewMilestone])
 
   return (
     <div className="min-h-screen bg-bg flex flex-col">
       <Header />
+      <MilestoneBanner />
       <FilterBar />
       <StatsBar />
       <div className="flex flex-1 overflow-hidden">
@@ -103,6 +161,7 @@ export function AppShell() {
 
       <DetailModal />
       <NewRowModal />
+      <MilestoneModal />
       <SettingsPanel />
       <AIPanel />
     </div>

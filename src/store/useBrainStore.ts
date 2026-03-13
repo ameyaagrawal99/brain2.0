@@ -168,8 +168,15 @@ interface BrainStore {
   setSpecialDays:      (days: SpecialDay[]) => void
   addSpecialDay:       (day: SpecialDay) => void
   removeSpecialDay:    (id: string) => void
+  updateSpecialDayLocally: (day: SpecialDay) => void
   lastConfettiDate:    string | null
   setLastConfettiDate: (d: string) => void
+
+  // Milestone modal / create flow
+  selectedMilestone:    SpecialDay | null
+  setSelectedMilestone: (day: SpecialDay | null) => void
+  showNewMilestone:     boolean
+  setShowNewMilestone:  (v: boolean) => void
 }
 
 export const useBrainStore = create<BrainStore>()(
@@ -338,8 +345,16 @@ export const useBrainStore = create<BrainStore>()(
         set((s) => ({ specialDays: [...s.specialDays, day] })),
       removeSpecialDay:    (id) =>
         set((s) => ({ specialDays: s.specialDays.filter((d) => d.id !== id) })),
+      updateSpecialDayLocally: (day) =>
+        set((s) => ({ specialDays: s.specialDays.map((d) => d.id === day.id ? day : d) })),
       lastConfettiDate:    null,
       setLastConfettiDate: (lastConfettiDate) => set({ lastConfettiDate }),
+
+      // ── Milestone modal ────────────────────────────────────────────────
+      selectedMilestone:    null,
+      setSelectedMilestone: (selectedMilestone) => set({ selectedMilestone }),
+      showNewMilestone:     false,
+      setShowNewMilestone:  (showNewMilestone) => set({ showNewMilestone }),
     }),
     {
       name: 'brain2-store',
