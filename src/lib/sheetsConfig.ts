@@ -236,6 +236,36 @@ export async function deleteSpecialDay(id: string): Promise<void> {
   await deleteConfigItem(CONFIG_TYPES.SPECIALDAY, id)
 }
 
+/** Update an existing special day in the Config sheet by id (in-place PUT). */
+export async function updateSpecialDay(day: SpecialDay): Promise<void> {
+  try {
+    const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
+    const data = await sheetsFetch(url)
+    const values = (data as { values?: string[][] }).values ?? []
+    const rowIdx = values.findIndex(
+      (r, i) => i > 0 && (r[0] ?? '').toLowerCase() === CONFIG_TYPES.SPECIALDAY && r[1]?.trim() === day.id
+    )
+    if (rowIdx < 0) throw new Error('Milestone not found')
+    const { id, ...rest } = day
+    const sheetRow = rowIdx + 1
+    const range = `${CONFIG_SHEET_NAME}!A${sheetRow}:C${sheetRow}`
+    await sheetsFetch(
+      `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          range,
+          majorDimension: 'ROWS',
+          values: [[CONFIG_TYPES.SPECIALDAY, id, JSON.stringify(rest)]],
+        }),
+      }
+    )
+  } catch (err) {
+    console.warn('[sheetsConfig] updateSpecialDay failed:', err)
+    throw err
+  }
+}
+
 /**
  * Delete a config item by type+value.
  * Finds the row index then uses batchUpdate deleteDimension.

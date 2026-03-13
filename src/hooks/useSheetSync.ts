@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { fetchRows, updateRow, appendRow, deleteRow } from '@/lib/sheets'
-import { ensureConfigSheet, fetchConfig, fetchSpecialDays, appendSpecialDay, deleteSpecialDay } from '@/lib/sheetsConfig'
+import { ensureConfigSheet, fetchConfig, fetchSpecialDays, appendSpecialDay, deleteSpecialDay, updateSpecialDay } from '@/lib/sheetsConfig'
 import { useBrainStore } from '@/store/useBrainStore'
 import { EditableFields, SpecialDay } from '@/types/sheet'
 import toast from 'react-hot-toast'
@@ -242,5 +242,17 @@ export function useSheetSync() {
     }
   }, [refreshConfig])
 
-  return { refresh, refreshConfig, saveRow, createRow, removeRow, undoRow, redoRow, undoBulk, setLastBulkRows, createSpecialDay, removeSpecialDay }
+  const updateSpecialDayEntry = useCallback(async (day: SpecialDay) => {
+    try {
+      await updateSpecialDay(day)
+      await refreshConfig()
+      toast.success('Milestone updated!')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update milestone'
+      toast.error(msg)
+      throw err
+    }
+  }, [refreshConfig])
+
+  return { refresh, refreshConfig, saveRow, createRow, removeRow, undoRow, redoRow, undoBulk, setLastBulkRows, createSpecialDay, removeSpecialDay, updateSpecialDayEntry }
 }
