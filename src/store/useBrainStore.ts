@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { BrainRow, EditableFields, HistoryEntry, SortKey, ViewMode } from '@/types/sheet'
+import { BrainRow, EditableFields, HistoryEntry, SortKey, SpecialDay, ViewMode } from '@/types/sheet'
 
 export type ThemeMode  = 'light' | 'dark' | 'system'
 export type ThemeColor = 'indigo' | 'warm' | 'green' | 'rose'
@@ -162,6 +162,14 @@ interface BrainStore {
   // Left sidebar
   showSidebar:    boolean
   setShowSidebar: (v: boolean) => void
+
+  // Special Days / Milestones
+  specialDays:         SpecialDay[]
+  setSpecialDays:      (days: SpecialDay[]) => void
+  addSpecialDay:       (day: SpecialDay) => void
+  removeSpecialDay:    (id: string) => void
+  lastConfettiDate:    string | null
+  setLastConfettiDate: (d: string) => void
 }
 
 export const useBrainStore = create<BrainStore>()(
@@ -322,15 +330,26 @@ export const useBrainStore = create<BrainStore>()(
       // ── Sidebar ────────────────────────────────────────────────────────
       showSidebar:    false,
       setShowSidebar: (showSidebar) => set({ showSidebar }),
+
+      // ── Special Days / Milestones ──────────────────────────────────────
+      specialDays:         [],
+      setSpecialDays:      (specialDays) => set({ specialDays }),
+      addSpecialDay:       (day) =>
+        set((s) => ({ specialDays: [...s.specialDays, day] })),
+      removeSpecialDay:    (id) =>
+        set((s) => ({ specialDays: s.specialDays.filter((d) => d.id !== id) })),
+      lastConfettiDate:    null,
+      setLastConfettiDate: (lastConfettiDate) => set({ lastConfettiDate }),
     }),
     {
       name: 'brain2-store',
       partialize: (state) => ({
-        settings:       state.settings,
-        viewMode:       state.viewMode,
-        filters:        { ...DEFAULT_FILTERS, sortBy: state.filters.sortBy },
-        aiInstructions: state.aiInstructions,
-        categoryColors: state.categoryColors,
+        settings:          state.settings,
+        viewMode:          state.viewMode,
+        filters:           { ...DEFAULT_FILTERS, sortBy: state.filters.sortBy },
+        aiInstructions:    state.aiInstructions,
+        categoryColors:    state.categoryColors,
+        lastConfettiDate:  state.lastConfettiDate,
       }),
     }
   )

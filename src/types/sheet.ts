@@ -44,6 +44,14 @@ export type SortKey =
 
 export type ViewMode = 'card' | 'table' | 'board'
 
+export interface SpecialDay {
+  id: string
+  title: string
+  date: string       // ISO date: "YYYY-MM-DD"
+  description?: string
+  emoji?: string
+}
+
 export interface HistoryEntry {
   fields:  Partial<EditableFields>
   savedAt: string   // ISO timestamp

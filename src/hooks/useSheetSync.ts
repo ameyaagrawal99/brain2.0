@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
 import { fetchRows, updateRow, appendRow, deleteRow } from '@/lib/sheets'
-import { ensureConfigSheet, fetchConfig } from '@/lib/sheetsConfig'
+import { ensureConfigSheet, fetchConfig, fetchSpecialDays, appendSpecialDay, deleteSpecialDay } from '@/lib/sheetsConfig'
 import { useBrainStore } from '@/store/useBrainStore'
-import { EditableFields } from '@/types/sheet'
+import { EditableFields, SpecialDay } from '@/types/sheet'
 import toast from 'react-hot-toast'
 
 // Internal helper: extract all editable fields from a BrainRow as a snapshot
@@ -32,6 +32,7 @@ export function useSheetSync() {
   const setCustomCategories = useBrainStore((s) => s.setCustomCategories)
   const setCustomTags       = useBrainStore((s) => s.setCustomTags)
   const setCategoryColors   = useBrainStore((s) => s.setCategoryColors)
+  const setSpecialDays      = useBrainStore((s) => s.setSpecialDays)
   const pushHistory         = useBrainStore((s) => s.pushHistory)
   const popHistory          = useBrainStore((s) => s.popHistory)
   const pushFuture          = useBrainStore((s) => s.pushFuture)
@@ -58,16 +59,20 @@ export function useSheetSync() {
   const refreshConfig = useCallback(async () => {
     try {
       await ensureConfigSheet()
-      const { categories, tags, colors } = await fetchConfig()
+      const [{ categories, tags, colors }, specialDays] = await Promise.all([
+        fetchConfig(),
+        fetchSpecialDays(),
+      ])
       setCustomCategories(categories)
       setCustomTags(tags)
       if (Object.keys(colors).length > 0) {
         setCategoryColors(colors)
       }
+      setSpecialDays(specialDays)
     } catch (err) {
       console.warn('[useSheetSync] refreshConfig non-fatal:', err)
     }
-  }, [setCustomCategories, setCustomTags, setCategoryColors])
+  }, [setCustomCategories, setCustomTags, setCategoryColors, setSpecialDays])
 
   /**
    * Save fields to the sheet.
@@ -213,5 +218,29 @@ export function useSheetSync() {
     }
   }, [deleteRowLocally, refresh])
 
-  return { refresh, refreshConfig, saveRow, createRow, removeRow, undoRow, redoRow, undoBulk, setLastBulkRows }
+  const createSpecialDay = useCallback(async (day: SpecialDay) => {
+    try {
+      await appendSpecialDay(day)
+      await refreshConfig()
+      toast.success('Milestone saved!')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save milestone'
+      toast.error(msg)
+      throw err
+    }
+  }, [refreshConfig])
+
+  const removeSpecialDay = useCallback(async (id: string) => {
+    try {
+      await deleteSpecialDay(id)
+      await refreshConfig()
+      toast.success('Milestone removed')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to remove milestone'
+      toast.error(msg)
+      throw err
+    }
+  }, [refreshConfig])
+
+  return { refresh, refreshConfig, saveRow, createRow, removeRow, undoRow, redoRow, undoBulk, setLastBulkRows, createSpecialDay, removeSpecialDay }
 }

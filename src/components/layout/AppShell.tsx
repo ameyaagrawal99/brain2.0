@@ -14,6 +14,7 @@ import { AIPanel }       from '@/components/modal/AIPanel'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync }  from '@/hooks/useSheetSync'
 import { DEMO_ROWS }     from '@/data/demoData'
+import { useConfettiCheck } from '@/components/ui/Confetti'
 import { Sparkles, X } from 'lucide-react'
 
 export function AppShell() {
@@ -31,6 +32,8 @@ export function AppShell() {
 
   const { refresh, refreshConfig } = useSheetSync()
   const hasLoadedRef = useRef(false)
+
+  useConfettiCheck()
 
   useEffect(() => {
     if (demoMode) {

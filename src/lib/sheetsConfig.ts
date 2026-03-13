@@ -1,4 +1,5 @@
 import { SHEET_ID, SHEETS_BASE, CONFIG_SHEET_NAME, CONFIG_RANGE, CONFIG_TYPES } from '@/constants/sheet'
+import type { SpecialDay } from '@/types/sheet'
 
 export interface QuickFilter {
   name:        string
@@ -201,12 +202,46 @@ export async function deleteQuickFilter(name: string): Promise<void> {
   await deleteConfigItem(CONFIG_TYPES.QUICKFILTER, name)
 }
 
+/* ── Special Days ───────────────────────────────────────────────────────── */
+
+/** Fetch all saved special days from the Config sheet. */
+export async function fetchSpecialDays(): Promise<SpecialDay[]> {
+  try {
+    const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
+    const data = await sheetsFetch(url)
+    const values = (data as { values?: string[][] }).values ?? []
+    return values
+      .slice(1)
+      .filter(r => (r[0] ?? '').toLowerCase() === CONFIG_TYPES.SPECIALDAY && r[1]?.trim() && r[2]?.trim())
+      .map(r => {
+        try {
+          const meta = JSON.parse(r[2]) as Omit<SpecialDay, 'id'>
+          return { id: r[1].trim(), ...meta } as SpecialDay
+        } catch { return null }
+      })
+      .filter(Boolean) as SpecialDay[]
+  } catch {
+    return []
+  }
+}
+
+/** Append a new special day to the Config sheet. */
+export async function appendSpecialDay(day: SpecialDay): Promise<void> {
+  const { id, ...rest } = day
+  await appendConfigItem(CONFIG_TYPES.SPECIALDAY, id, JSON.stringify(rest))
+}
+
+/** Delete a special day from the Config sheet by id. */
+export async function deleteSpecialDay(id: string): Promise<void> {
+  await deleteConfigItem(CONFIG_TYPES.SPECIALDAY, id)
+}
+
 /**
  * Delete a config item by type+value.
  * Finds the row index then uses batchUpdate deleteDimension.
  * This is a best-effort approach — fetches fresh config, finds matching row, deletes it.
  */
-export async function deleteConfigItem(type: 'category' | 'tag' | 'color' | 'quickfilter', value: string): Promise<void> {
+export async function deleteConfigItem(type: 'category' | 'tag' | 'color' | 'quickfilter' | 'specialday', value: string): Promise<void> {
   try {
     const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(CONFIG_RANGE)}?valueRenderOption=FORMATTED_VALUE`
     const data = await sheetsFetch(url)
