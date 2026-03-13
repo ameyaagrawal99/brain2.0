@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart2, Calendar, Filter, X, Clock, Tag, CheckCircle,
   Loader2, Plus, Trash2, BookmarkCheck, TrendingUp, ListChecks,
-  Square, CheckSquare2,
+  Square, CheckSquare2, Star,
 } from 'lucide-react'
+import { formatDistance } from 'date-fns'
 import { useBrainStore } from '@/store/useBrainStore'
 import { parseTags, formatDate, cn, parseActionItems, toggleActionItem } from '@/lib/utils'
 import { fetchQuickFilters, saveQuickFilter, deleteQuickFilter } from '@/lib/sheetsConfig'
@@ -12,14 +13,15 @@ import type { QuickFilter } from '@/lib/sheetsConfig'
 import type { BrainRow } from '@/types/sheet'
 import toast from 'react-hot-toast'
 
-type SidebarTab = 'stats' | 'due' | 'tasks' | 'activity' | 'filters'
+type SidebarTab = 'stats' | 'due' | 'tasks' | 'activity' | 'filters' | 'milestones'
 
 const TABS: { key: SidebarTab; label: string; icon: typeof BarChart2 }[] = [
-  { key: 'stats',    label: 'Stats',    icon: BarChart2 },
-  { key: 'due',      label: 'Due Soon', icon: Calendar },
-  { key: 'tasks',    label: 'Tasks',    icon: ListChecks },
-  { key: 'activity', label: 'Activity', icon: TrendingUp },
-  { key: 'filters',  label: 'Filters',  icon: Filter },
+  { key: 'stats',      label: 'Stats',      icon: BarChart2 },
+  { key: 'due',        label: 'Due Soon',   icon: Calendar },
+  { key: 'tasks',      label: 'Tasks',      icon: ListChecks },
+  { key: 'activity',   label: 'Activity',   icon: TrendingUp },
+  { key: 'filters',    label: 'Filters',    icon: Filter },
+  { key: 'milestones', label: 'Milestones', icon: Star },
 ]
 
 /** Rows whose action items are currently expanded in the sidebar */
@@ -89,7 +91,9 @@ export function Sidebar() {
   const clearFilters   = useBrainStore((s) => s.clearFilters)
   const demoMode       = useBrainStore((s) => s.settings.demoMode)
 
-  const { saveRow } = useSheetSync()
+  const specialDays = useBrainStore((s) => s.specialDays)
+
+  const { saveRow, createSpecialDay, removeSpecialDay } = useSheetSync()
 
   const [tab, setTab]                   = useState<SidebarTab>('stats')
   const [quickFilters, setQuickFilters] = useState<QuickFilter[]>([])
@@ -98,6 +102,14 @@ export function Sidebar() {
   const [newFilterName, setNewFilterName] = useState('')
   // rowIndex → lineIndex being saved right now (optimistic spinner)
   const [saving, setSaving] = useState<Record<number, number | null>>({})
+
+  // Milestones add-form state
+  const [showAddMilestone, setShowAddMilestone] = useState(false)
+  const [msTitle, setMsTitle]   = useState('')
+  const [msDate, setMsDate]     = useState('')
+  const [msEmoji, setMsEmoji]   = useState('')
+  const [msDesc, setMsDesc]     = useState('')
+  const [savingMs, setSavingMs] = useState(false)
 
   const { expanded, toggle: toggleExpanded } = useExpandedRows()
 
@@ -275,6 +287,35 @@ export function Sidebar() {
       // saveRow already shows a toast on error
     } finally {
       setSaving(prev => ({ ...prev, [row._rowIndex]: null }))
+    }
+  }
+
+  /* ── Milestones ─────────────────────────────────────────────────────── */
+
+  async function handleSaveMilestone() {
+    const title = msTitle.trim()
+    const date  = msDate.trim()
+    if (!title) { toast.error('Enter a title for the milestone'); return }
+    if (!date)  { toast.error('Pick a date for the milestone'); return }
+    setSavingMs(true)
+    try {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      await createSpecialDay({
+        id,
+        title,
+        date,
+        emoji: msEmoji.trim() || undefined,
+        description: msDesc.trim() || undefined,
+      })
+      setMsTitle('')
+      setMsDate('')
+      setMsEmoji('')
+      setMsDesc('')
+      setShowAddMilestone(false)
+    } catch {
+      // toast already shown by createSpecialDay
+    } finally {
+      setSavingMs(false)
     }
   }
 
@@ -760,6 +801,134 @@ export function Sidebar() {
               </div>
             </div>
           )}
+
+          {/* ── MILESTONES ── */}
+          {tab === 'milestones' && (() => {
+            const today   = new Date().toISOString().slice(0, 10)
+            const todayMD = today.slice(5)
+            const sorted  = [...specialDays].sort((a, b) => b.date.localeCompare(a.date))
+            const isToday       = (d: string) => d === today
+            const isAnniversary = (d: string) => d !== today && d.slice(5) === todayMD
+            return (
+              <div className="space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-ink2 uppercase tracking-wide">Milestones</p>
+                  <button
+                    onClick={() => setShowAddMilestone(v => !v)}
+                    className="flex items-center gap-1 text-[11px] text-brand hover:text-brand/80 transition-colors font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add
+                  </button>
+                </div>
+
+                {/* Add form */}
+                {showAddMilestone && (
+                  <div className="bg-surface2 border border-border rounded-xl p-3 space-y-2 animate-fade-in">
+                    <input
+                      type="text"
+                      placeholder="Title (e.g. Visa approved!)"
+                      value={msTitle}
+                      onChange={e => setMsTitle(e.target.value)}
+                      className="w-full text-xs bg-surface border border-border rounded-lg px-2.5 py-1.5 text-ink placeholder:text-ink3 focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        value={msDate}
+                        onChange={e => setMsDate(e.target.value)}
+                        className="flex-1 text-xs bg-surface border border-border rounded-lg px-2.5 py-1.5 text-ink focus:outline-none focus:ring-1 focus:ring-brand"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Emoji"
+                        value={msEmoji}
+                        onChange={e => setMsEmoji(e.target.value)}
+                        maxLength={4}
+                        className="w-16 text-xs bg-surface border border-border rounded-lg px-2.5 py-1.5 text-ink placeholder:text-ink3 text-center focus:outline-none focus:ring-1 focus:ring-brand"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Description (optional)"
+                      value={msDesc}
+                      onChange={e => setMsDesc(e.target.value)}
+                      className="w-full text-xs bg-surface border border-border rounded-lg px-2.5 py-1.5 text-ink placeholder:text-ink3 focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveMilestone}
+                        disabled={savingMs}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium bg-brand text-white rounded-lg py-1.5 hover:bg-brand/90 disabled:opacity-60 transition-colors"
+                      >
+                        {savingMs ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setShowAddMilestone(false)}
+                        className="px-3 text-xs text-ink3 hover:text-ink transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Milestone list */}
+                {sorted.length === 0 && !showAddMilestone && (
+                  <p className="text-xs text-ink3 italic text-center py-4">
+                    No milestones yet. Add your first special day!
+                  </p>
+                )}
+
+                {sorted.map(day => {
+                  const highlight = isToday(day.date) || isAnniversary(day.date)
+                  const dateObj = new Date(day.date + 'T12:00:00')
+                  const elapsed = formatDistance(dateObj, new Date(), { addSuffix: true })
+                  return (
+                    <div
+                      key={day.id}
+                      className={cn(
+                        'border rounded-xl p-3 transition-colors',
+                        highlight
+                          ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700'
+                          : 'bg-surface2 border-border',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {day.emoji && <span className="text-base shrink-0">{day.emoji}</span>}
+                          <p className="text-xs font-semibold text-ink leading-snug truncate">{day.title}</p>
+                        </div>
+                        <button
+                          onClick={() => removeSpecialDay(day.id)}
+                          className="shrink-0 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-ink3 hover:text-red-500 transition-colors"
+                          title="Remove milestone"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-ink3 mt-0.5">{formatDate(day.date)} · {elapsed}</p>
+                      {day.description && (
+                        <p className="text-[10px] text-ink2 mt-1 italic line-clamp-2">"{day.description}"</p>
+                      )}
+                      {isToday(day.date) && (
+                        <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold text-amber-600 bg-amber-100 dark:bg-amber-900/40 rounded-full px-2 py-0.5">
+                          🎉 Today!
+                        </span>
+                      )}
+                      {isAnniversary(day.date) && (
+                        <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold text-amber-600 bg-amber-100 dark:bg-amber-900/40 rounded-full px-2 py-0.5">
+                          🎂 Anniversary!
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
         </div>
       </aside>

@@ -33,4 +33,5 @@ export const CONFIG_TYPES = {
   TAG:         'tag',
   COLOR:       'color',
   QUICKFILTER: 'quickfilter',
+  SPECIALDAY:  'specialday',
 } as const
