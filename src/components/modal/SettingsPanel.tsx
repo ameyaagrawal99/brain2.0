@@ -4,7 +4,8 @@ import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/s
 import { useAuth } from '@/hooks/useAuth'
 import { appendConfigCategory, appendConfigTag, deleteConfigItem, saveColorConfig, deleteColorConfig } from '@/lib/sheetsConfig'
 import { cn, COLOR_PALETTE } from '@/lib/utils'
-import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, LogOut, RotateCcw, Plus, X, Tag, FolderOpen } from 'lucide-react'
+import { requestNotificationPermission, getNotificationPermission } from '@/hooks/useNotifications'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 
@@ -39,8 +40,28 @@ export function SettingsPanel() {
   const rowCategories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort()
   const allCategories = [...new Set([...BUILT_IN_CATEGORIES, ...rowCategories, ...customCats])].sort()
 
-  function toggle(key: keyof AppSettings) {
-    updateSettings({ [key]: !settings[key as keyof AppSettings] } as Partial<AppSettings>)
+  async function toggle(key: keyof AppSettings) {
+    const newVal = !settings[key as keyof AppSettings]
+    updateSettings({ [key]: newVal } as Partial<AppSettings>)
+
+    // When enabling a notification setting, request permission
+    if (newVal && (key === 'notifyDueSoon' || key === 'notifyNewEntry')) {
+      const perm = getNotificationPermission()
+      if (perm === 'unsupported') {
+        toast('Notifications are not supported in this browser', { icon: '⚠️' })
+      } else if (perm === 'denied') {
+        toast('Notifications are blocked. Please enable them in your browser settings.', { icon: '🔒', duration: 5000 })
+        updateSettings({ [key]: false } as Partial<AppSettings>)
+      } else if (perm === 'default') {
+        const result = await requestNotificationPermission()
+        if (result === 'granted') {
+          toast.success('Notifications enabled!')
+        } else {
+          toast('Notification permission denied', { icon: '❌' })
+          updateSettings({ [key]: false } as Partial<AppSettings>)
+        }
+      }
+    }
   }
 
   async function handleSetCategoryColor(category: string, colorName: string) {
@@ -374,18 +395,53 @@ export function SettingsPanel() {
         </Section>
 
         {/* Notifications */}
-        <Section title="Notifications" icon={<Bell className="w-3.5 h-3.5" />}>
+        <Section title="Notifications & PWA" icon={<Bell className="w-3.5 h-3.5" />}>
+          {/* Permission status banner */}
+          {(() => {
+            const perm = getNotificationPermission()
+            if (perm === 'denied') return (
+              <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-3">
+                <BellOff className="w-4 h-4 text-red-500 shrink-0" />
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  Notifications blocked. Enable them in browser/device settings.
+                </p>
+              </div>
+            )
+            if (perm === 'granted') return (
+              <div className="flex items-center gap-2 p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg mb-3">
+                <Bell className="w-4 h-4 text-green-600 shrink-0" />
+                <p className="text-xs text-green-700 dark:text-green-400">Notifications are enabled</p>
+              </div>
+            )
+            return null
+          })()}
+
           <div className="space-y-2">
             <Toggle
-              label="Remind me of entries due soon"
+              label="Remind me of overdue & due-soon tasks"
               checked={settings.notifyDueSoon}
               onChange={() => toggle('notifyDueSoon')}
             />
             <Toggle
-              label="Notify when new entry is added"
+              label="Notify on milestone anniversaries"
               checked={settings.notifyNewEntry}
               onChange={() => toggle('notifyNewEntry')}
             />
+          </div>
+
+          {/* Install as PWA hint */}
+          <div className="mt-3 p-3 bg-brand/5 border border-brand/20 rounded-xl">
+            <div className="flex items-start gap-2">
+              <Download className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-ink mb-1">Install as a PWA</p>
+                <p className="text-[11px] text-ink3 leading-relaxed">
+                  Add Brain 2.0 to your home screen for a full app experience with notifications.
+                  On iOS: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>.
+                  On Android/Chrome: tap the install icon in the address bar.
+                </p>
+              </div>
+            </div>
           </div>
         </Section>
 
