@@ -16,6 +16,7 @@ import { useBrainStore }   from '@/store/useBrainStore'
 import { useSheetSync }    from '@/hooks/useSheetSync'
 import { DEMO_ROWS }       from '@/data/demoData'
 import { useConfettiCheck } from '@/components/ui/Confetti'
+import { useNotifications } from '@/hooks/useNotifications'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -80,6 +81,7 @@ export function AppShell() {
   const setRows             = useBrainStore((s) => s.setRows)
   const selectedRow         = useBrainStore((s) => s.selectedRow)
   const showNewRow          = useBrainStore((s) => s.showNewRow)
+  const setShowNewRow       = useBrainStore((s) => s.setShowNewRow)
   const showSettings        = useBrainStore((s) => s.showSettings)
   const showAIPanel         = useBrainStore((s) => s.showAIPanel)
   const selectionMode       = useBrainStore((s) => s.selectionMode)
@@ -88,11 +90,28 @@ export function AppShell() {
   const setShowAIPanel      = useBrainStore((s) => s.setShowAIPanel)
   const selectedMilestone   = useBrainStore((s) => s.selectedMilestone)
   const showNewMilestone    = useBrainStore((s) => s.showNewMilestone)
+  const setShowNewMilestone = useBrainStore((s) => s.setShowNewMilestone)
 
   const { refresh, refreshConfig } = useSheetSync()
   const hasLoadedRef = useRef(false)
 
   useConfettiCheck()
+  useNotifications()
+
+  // Handle PWA shortcut URLs (e.g. ?action=new-entry from manifest shortcuts)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const action = params.get('action')
+    const view   = params.get('view')
+    if (action === 'new-entry')     setShowNewRow(true)
+    if (action === 'new-milestone') setShowNewMilestone(true)
+    if (view === 'board')           useBrainStore.getState().setViewMode('board')
+    if (action || view) {
+      // Clean the URL without reloading
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (demoMode) {

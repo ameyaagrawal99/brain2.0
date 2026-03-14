@@ -144,7 +144,7 @@ export function Header() {
 
           {/* Memories dropdown */}
           {showMemories && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-surface border border-border rounded-2xl shadow-xl z-50 animate-slideUp overflow-hidden">
+            <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-[3.25rem] sm:top-full sm:mt-2 w-auto sm:w-80 bg-surface border border-border rounded-2xl shadow-xl z-50 animate-slideUp overflow-hidden">
               {/* Header */}
               <div className="px-4 pt-3 pb-2 border-b border-border flex items-center justify-between">
                 <div>
