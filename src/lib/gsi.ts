@@ -1,4 +1,4 @@
-import { SHEETS_SCOPE, CONTACTS_SCOPE } from '@/constants/sheet'
+import { SHEETS_SCOPE, CONTACTS_SCOPE, CONTACTS_OTHER_SCOPE } from '@/constants/sheet'
 
 let tokenClient: TokenClient | null = null
 let accessToken: string | null = null
@@ -133,7 +133,7 @@ export function requestContactsAccess(
   onToken: (token: string) => void,
   onError: (msg: string) => void,
 ) {
-  const scope = `${SHEETS_SCOPE} ${CONTACTS_SCOPE}`
+  const scope = `${SHEETS_SCOPE} ${CONTACTS_SCOPE} ${CONTACTS_OTHER_SCOPE}`
   const client = google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope,

@@ -162,6 +162,33 @@ export function SettingsPanel() {
   async function handleConnectContacts() {
     if (!clientId) { toast.error('Google Client ID not configured'); return }
     setConnectingContacts(true)
+    const loadingToast = toast.loading('Connecting to Google Contacts…')
+    requestContactsAccess(
+      clientId,
+      async (token) => {
+        try {
+          toast.loading('Loading contacts — this may take a moment for large contact lists…', { id: loadingToast })
+          const fetched = await fetchGoogleContacts(token)
+          setContacts(fetched)
+          setContactsConnected(true)
+          toast.success(`Connected — ${fetched.length} contact${fetched.length !== 1 ? 's' : ''} loaded`, { id: loadingToast })
+        } catch {
+          toast.error('Failed to load contacts', { id: loadingToast })
+        } finally {
+          setConnectingContacts(false)
+        }
+      },
+      (err) => {
+        toast.error(`Contacts access denied: ${err}`, { id: loadingToast })
+        setConnectingContacts(false)
+      },
+    )
+  }
+
+  async function handleRefreshContacts() {
+    if (!clientId) { toast.error('Google Client ID not configured'); return }
+    setConnectingContacts(true)
+    const loadingToast = toast.loading('Refreshing contacts…')
     requestContactsAccess(
       clientId,
       async (token) => {
@@ -169,15 +196,15 @@ export function SettingsPanel() {
           const fetched = await fetchGoogleContacts(token)
           setContacts(fetched)
           setContactsConnected(true)
-          toast.success(`Connected — ${fetched.length} contact${fetched.length !== 1 ? 's' : ''} loaded`)
+          toast.success(`Refreshed — ${fetched.length} contact${fetched.length !== 1 ? 's' : ''} loaded`, { id: loadingToast })
         } catch {
-          toast.error('Failed to load contacts')
+          toast.error('Failed to refresh contacts', { id: loadingToast })
         } finally {
           setConnectingContacts(false)
         }
       },
       (err) => {
-        toast.error(`Contacts access denied: ${err}`)
+        toast.error(`Contacts access denied: ${err}`, { id: loadingToast })
         setConnectingContacts(false)
       },
     )
@@ -491,16 +518,31 @@ export function SettingsPanel() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                   <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
-                  <p className="text-xs text-green-700 dark:text-green-400">
-                    Connected — {contacts.length} contact{contacts.length !== 1 ? 's' : ''} available for autocomplete
+                  <p className="text-xs text-green-700 dark:text-green-400 flex-1">
+                    Connected — {contacts.length.toLocaleString()} contact{contacts.length !== 1 ? 's' : ''} available for autocomplete
                   </p>
                 </div>
-                <button
-                  onClick={handleDisconnectContacts}
-                  className="text-xs text-ink3 hover:text-red-500 underline underline-offset-2 transition-colors"
-                >
-                  Disconnect Google Contacts
-                </button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRefreshContacts}
+                    loading={connectingContacts}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Refresh contacts
+                  </Button>
+                  <button
+                    onClick={handleDisconnectContacts}
+                    className="text-xs text-ink3 hover:text-red-500 underline underline-offset-2 transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+                <p className="text-[11px] text-ink3">
+                  Fetches from both "My Contacts" and "Other contacts" in your Google account.
+                  Large contact lists (10 000+) may take a few seconds to load.
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
