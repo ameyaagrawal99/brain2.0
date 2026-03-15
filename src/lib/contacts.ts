@@ -7,34 +7,58 @@ export interface Contact {
 }
 
 /**
- * Fetch the user's Google Contacts via the People API.
+ * Fetch ALL of the user's Google Contacts via the People API.
  * Requires a token that includes the contacts.readonly scope.
+ * Paginates automatically — Google caps each page at 1000, so users with
+ * 2000+ contacts need multiple requests via nextPageToken.
  * Returns an empty array if the token lacks the scope or the API call fails.
  */
 export async function fetchGoogleContacts(token: string): Promise<Contact[]> {
+  const all: Contact[] = []
+  let pageToken: string | undefined
+
   try {
-    const url = `${PEOPLE_API}/people/me/connections?personFields=names,emailAddresses&pageSize=1000&sortOrder=FIRST_NAME_ASCENDING`
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.status === 403) {
-      // Token doesn't have contacts scope — user hasn't granted permission yet.
-      return []
-    }
-    if (!res.ok) return []
-    const data = await res.json() as { connections?: unknown[] }
-    const connections = data.connections ?? []
-    return (connections as Array<{
-      resourceName?: string
-      names?: Array<{ displayName?: string }>
-      emailAddresses?: Array<{ value?: string }>
-    }>).map((c) => ({
-      resourceName: c.resourceName ?? '',
-      name: c.names?.[0]?.displayName ?? '',
-      email: c.emailAddresses?.[0]?.value,
-    })).filter((c) => c.name.trim())
+    do {
+      const params = new URLSearchParams({
+        personFields: 'names,emailAddresses',
+        pageSize: '1000',
+        sortOrder: 'FIRST_NAME_ASCENDING',
+      })
+      if (pageToken) params.set('pageToken', pageToken)
+
+      const res = await fetch(`${PEOPLE_API}/people/me/connections?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.status === 403) return []   // no contacts scope
+      if (!res.ok) break
+
+      const data = await res.json() as {
+        connections?: unknown[]
+        nextPageToken?: string
+      }
+
+      const page = (data.connections ?? []) as Array<{
+        resourceName?: string
+        names?: Array<{ displayName?: string }>
+        emailAddresses?: Array<{ value?: string }>
+      }>
+
+      const mapped = page
+        .map((c) => ({
+          resourceName: c.resourceName ?? '',
+          name: c.names?.[0]?.displayName ?? '',
+          email: c.emailAddresses?.[0]?.value,
+        }))
+        .filter((c) => c.name.trim())
+
+      all.push(...mapped)
+      pageToken = data.nextPageToken
+    } while (pageToken)
+
+    return all
   } catch {
-    return []
+    return all.length > 0 ? all : []
   }
 }
 
