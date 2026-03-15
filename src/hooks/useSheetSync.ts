@@ -195,6 +195,7 @@ export function useSheetSync() {
         mediaUrl:    fields.mediaUrl    ?? '',
         tags:        fields.tags        ?? '',
         messageId:   '',
+        people:      fields.people      ?? '',
       })
       await refresh()
       toast.success('Added!')
