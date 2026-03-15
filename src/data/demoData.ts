@@ -12,7 +12,7 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '2024-12-15', taskStatus: 'In Progress',
     links: 'https://www.swyx.io/learn-in-public',
     mediaUrl: '', tags: 'career, reflection, building-in-public, goals',
-    messageId: 'demo-001',
+    messageId: 'demo-001', people: '',
   },
   {
     _rowIndex: 3, _dirty: false,
@@ -25,7 +25,7 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '2024-12-31', taskStatus: 'Done',
     links: 'https://jamesclear.com/atomic-habits',
     mediaUrl: '', tags: 'books, habits, learning, systems-thinking',
-    messageId: 'demo-002',
+    messageId: 'demo-002', people: '',
   },
   {
     _rowIndex: 4, _dirty: false,
@@ -38,7 +38,7 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '2025-01-15', taskStatus: 'Pending',
     links: '', mediaUrl: '',
     tags: 'ideas, AI, journaling, product, startup',
-    messageId: 'demo-003',
+    messageId: 'demo-003', people: '',
   },
   {
     _rowIndex: 5, _dirty: false,
@@ -51,7 +51,7 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '2024-12-07', taskStatus: 'Done',
     links: 'https://calnewport.com/books/deep-work/',
     mediaUrl: '', tags: 'productivity, focus, deep-work, habits',
-    messageId: 'demo-004',
+    messageId: 'demo-004', people: '',
   },
   {
     _rowIndex: 6, _dirty: false,
@@ -64,7 +64,7 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '2024-12-07', taskStatus: 'In Progress',
     links: '', mediaUrl: '',
     tags: 'review, weekly, reflection, habits, goals',
-    messageId: 'demo-005',
+    messageId: 'demo-005', people: '',
   },
   {
     _rowIndex: 7, _dirty: false,
@@ -77,7 +77,7 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '', taskStatus: 'Done',
     links: 'https://www.vitsoe.com/us/about/good-design',
     mediaUrl: '', tags: 'design, inspiration, minimalism, UX',
-    messageId: 'demo-006',
+    messageId: 'demo-006', people: '',
   },
   {
     _rowIndex: 8, _dirty: false,
@@ -90,7 +90,7 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '2025-01-31', taskStatus: 'In Progress',
     links: '', mediaUrl: '',
     tags: 'health, running, fitness, habits',
-    messageId: 'demo-007',
+    messageId: 'demo-007', people: '',
   },
   {
     _rowIndex: 9, _dirty: false,
@@ -103,6 +103,6 @@ export const DEMO_ROWS: BrainRow[] = [
     dueDate: '2024-12-20', taskStatus: 'Pending',
     links: 'https://react.dev/blog/2023/03/22/react-labs-what-we-have-been-working-on-march-2023',
     mediaUrl: '', tags: 'tech, react, learning, frontend, RSC',
-    messageId: 'demo-008',
+    messageId: 'demo-008', people: '',
   },
 ]
