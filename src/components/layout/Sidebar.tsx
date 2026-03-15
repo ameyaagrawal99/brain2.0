@@ -421,55 +421,79 @@ export function Sidebar() {
       <aside className={cn(
         'fixed sm:relative z-40 sm:z-auto',
         'bg-surface border-r border-border flex flex-col',
-        'w-80 h-full sm:h-auto sm:min-h-0',
+        'w-72 h-full sm:h-auto sm:min-h-0',
         'inset-y-0 left-0',
         'sm:flex-shrink-0',
       )}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-          <span className="text-sm font-semibold text-ink">Dashboard</span>
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border shrink-0 bg-surface2/50">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-brand/15 flex items-center justify-center">
+              <BarChart2 className="w-3.5 h-3.5 text-brand" />
+            </div>
+            <span className="text-sm font-bold text-ink tracking-tight">Dashboard</span>
+          </div>
           <button
             onClick={() => setShowSidebar(false)}
-            className="sm:hidden w-7 h-7 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover"
+            className="sm:hidden w-7 h-7 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover hover:text-ink transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-border shrink-0 overflow-x-auto">
-          {TABS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={cn(
-                'relative flex flex-col items-center gap-0.5 px-2 py-2 text-[10px] font-medium transition-colors whitespace-nowrap flex-1',
-                tab === key
-                  ? 'text-brand border-b-2 border-brand'
-                  : 'text-ink3 hover:text-ink'
-              )}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-              {/* Pending tasks badge on Tasks tab */}
-              {key === 'tasks' && pendingTaskCount > 0 && (
-                <span className="absolute top-1 right-1 bg-brand text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
-                  {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
-                </span>
-              )}
-              {/* Anniversary/today badge on Milestones tab */}
-              {key === 'milestones' && (() => {
-                const today = new Date().toISOString().slice(0, 10)
-                const todayMD = today.slice(5)
-                const special = specialDays.filter(d => d.date === today || (d.date !== today && d.date.slice(5) === todayMD))
-                return special.length > 0 ? (
-                  <span className="absolute top-1 right-1 bg-rose-500 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none animate-pulse">
-                    🎉
+        {/* Tabs — 2 rows of 4+3 to avoid cramping */}
+        <div className="shrink-0 border-b border-border bg-surface">
+          {/* Row 1: first 4 tabs */}
+          <div className="flex">
+            {TABS.slice(0, 4).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  'relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors whitespace-nowrap flex-1 tracking-wide',
+                  tab === key
+                    ? 'text-brand bg-brand/5 border-b-2 border-brand'
+                    : 'text-ink3 hover:text-ink hover:bg-hover border-b-2 border-transparent'
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+                {key === 'tasks' && pendingTaskCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 bg-brand text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                    {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
                   </span>
-                ) : null
-              })()}
-            </button>
-          ))}
+                )}
+              </button>
+            ))}
+          </div>
+          {/* Row 2: last 3 tabs */}
+          <div className="flex border-t border-border/50">
+            {TABS.slice(4).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  'relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors whitespace-nowrap flex-1 tracking-wide',
+                  tab === key
+                    ? 'text-brand bg-brand/5 border-b-2 border-brand'
+                    : 'text-ink3 hover:text-ink hover:bg-hover border-b-2 border-transparent'
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+                {key === 'milestones' && (() => {
+                  const today = new Date().toISOString().slice(0, 10)
+                  const todayMD = today.slice(5)
+                  const special = specialDays.filter(d => d.date === today || (d.date !== today && d.date.slice(5) === todayMD))
+                  return special.length > 0 ? (
+                    <span className="absolute top-1.5 right-1.5 bg-rose-500 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none animate-pulse">
+                      🎉
+                    </span>
+                  ) : null
+                })()}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Tab content */}
@@ -481,14 +505,14 @@ export function Sidebar() {
               {/* Summary row */}
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: 'Total', value: rows.length, color: 'text-ink' },
-                  { label: 'Enhanced', value: enhancedCount, color: 'text-brand' },
-                  { label: 'Tasks', value: rows.filter(r => r.taskStatus).length, color: 'text-amber-500' },
-                  { label: 'Done', value: rows.filter(r => r.taskStatus === 'Done').length, color: 'text-green-500' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="bg-surface2 rounded-xl p-3 text-center">
-                    <div className={cn('text-xl font-bold', color)}>{value}</div>
-                    <div className="text-[10px] text-ink3 mt-0.5">{label}</div>
+                  { label: 'Total', value: rows.length, color: 'text-ink', bg: 'bg-surface2' },
+                  { label: 'Enhanced', value: enhancedCount, color: 'text-brand', bg: 'bg-brand/5' },
+                  { label: 'Tasks', value: rows.filter(r => r.taskStatus).length, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/15' },
+                  { label: 'Done', value: rows.filter(r => r.taskStatus === 'Done').length, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/15' },
+                ].map(({ label, value, color, bg }) => (
+                  <div key={label} className={cn('rounded-xl p-3 text-center border border-border/60', bg)}>
+                    <div className={cn('text-2xl font-bold tracking-tight', color)}>{value}</div>
+                    <div className="text-[11px] text-ink3 mt-0.5 font-medium">{label}</div>
                   </div>
                 ))}
               </div>
@@ -496,7 +520,7 @@ export function Sidebar() {
               {/* Category breakdown */}
               {categoryStats.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">Categories</p>
+                  <p className="text-[11px] font-semibold text-ink2 uppercase tracking-wider mb-2.5">Categories</p>
                   <div className="space-y-1.5">
                     {categoryStats.map(([cat, count]) => (
                       <div key={cat} className="flex items-center gap-2">
@@ -517,7 +541,7 @@ export function Sidebar() {
               {/* Status breakdown */}
               {statusStats.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">Task Status</p>
+                  <p className="text-[11px] font-semibold text-ink2 uppercase tracking-wider mb-2.5">Task Status</p>
                   <div className="space-y-1.5">
                     {statusStats.map(([status, count]) => (
                       <div key={status} className="flex items-center gap-2">
@@ -533,7 +557,7 @@ export function Sidebar() {
               {/* Top tags */}
               {tagStats.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">Top Tags</p>
+                  <p className="text-[11px] font-semibold text-ink2 uppercase tracking-wider mb-2.5">Top Tags</p>
                   <div className="flex flex-wrap gap-1.5">
                     {tagStats.map(([tag, count]) => (
                       <span
@@ -828,7 +852,7 @@ export function Sidebar() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-bold text-ink">People</p>
-                  <p className="text-[10px] text-ink3">{peopleStats.length} contact{peopleStats.length !== 1 ? 's' : ''} across your entries</p>
+                  <p className="text-[11px] text-ink3">{peopleStats.length} contact{peopleStats.length !== 1 ? 's' : ''} tagged in entries</p>
                 </div>
                 {personFilter && (
                   <button
@@ -1012,11 +1036,13 @@ export function Sidebar() {
         </div>
 
         {/* Build version footer */}
-        <div className="shrink-0 px-4 py-2 border-t border-border/50">
+        <div className="shrink-0 px-4 py-2.5 border-t border-border bg-surface2/40 flex items-center justify-between">
           <p className="text-[10px] text-ink3 tabular-nums">
-            v{__BUILD_TIME__.slice(0, 10)}&nbsp;·&nbsp;
+            <span className="font-semibold text-ink2">v{__BUILD_TIME__.slice(0, 10)}</span>
+            &nbsp;·&nbsp;
             <span className="font-mono">{__COMMIT_SHA__.slice(0, 7)}</span>
           </p>
+          <span className="text-[9px] text-ink3 uppercase tracking-widest font-medium">Brain 2.0</span>
         </div>
       </aside>
     </>
