@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { LoginScreen } from '@/components/auth/LoginScreen'
 import { AppShell } from '@/components/layout/AppShell'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 
 export default function App() {
   useAuth()
@@ -23,7 +24,9 @@ export default function App() {
 
   return (
     <>
-      {isAuthenticated ? <AppShell /> : <LoginScreen />}
+      <ErrorBoundary>
+        {isAuthenticated ? <AppShell /> : <LoginScreen />}
+      </ErrorBoundary>
       <Toaster
         position="bottom-right"
         containerStyle={{ bottom: 24, right: 24 }}
