@@ -141,7 +141,7 @@ export function NewRowModal() {
         updatedAt: '', category: form.category, subCategory: form.subCategory,
         original: form.original, rewritten: '', actionItems: '', dueDate: form.dueDate,
         taskStatus: form.taskStatus, links: '', mediaUrl: form.mediaUrl,
-        tags: form.tags, messageId: '',
+        tags: form.tags, messageId: '', people: '',
       })
       toast.success('Added to Google Sheet')
       await refresh()
