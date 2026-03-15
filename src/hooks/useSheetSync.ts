@@ -19,6 +19,7 @@ function rowToEditableSnapshot(row: ReturnType<typeof useBrainStore.getState>['r
     links:       row.links,
     mediaUrl:    row.mediaUrl,
     tags:        row.tags,
+    people:      row.people ?? '',
   }
 }
 
