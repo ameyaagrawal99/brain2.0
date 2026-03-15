@@ -42,6 +42,12 @@ export function useFilters() {
         const dueToday     = r.dueDate?.trim() === today
         if (!createdToday && !dueToday) return false
       }
+      // Person filter: check if any comma-separated name in `people` matches exactly (case-insensitive)
+      if (filters.person) {
+        const personLower = filters.person.toLowerCase().trim()
+        const rowPeople = (r.people ?? '').split(',').map((n) => n.trim().toLowerCase())
+        if (!rowPeople.some((n) => n === personLower)) return false
+      }
       return true
     })
 
@@ -76,7 +82,7 @@ export function useFilters() {
   const hasActiveFilters = !!(
     filters.search || filters.category || filters.subCategory ||
     filters.status || filters.selectedTags.length > 0 || filters.showToday ||
-    filters.dateFrom || filters.dateTo
+    filters.dateFrom || filters.dateTo || filters.person
   )
 
   return { filteredRows, categories, subCategories, topTags, hasActiveFilters }

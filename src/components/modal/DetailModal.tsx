@@ -1,18 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { MarkdownToolbar } from '@/components/ui/MarkdownToolbar'
 import { InstructionsBox } from '@/components/ui/InstructionsBox'
+import { WikiLinkedText, WikiTextarea } from '@/components/ui/WikiLinkedText'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
 import { parseTags, formatDate, formatRelative, isImageUrl } from '@/lib/utils'
+import { parsePeople } from '@/lib/contacts'
 import { renderMarkdown } from '@/lib/markdown'
 import { cn } from '@/lib/utils'
 import { EditableFields } from '@/types/sheet'
 import {
   Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare,
   ExternalLink, Calendar, Hash, Image, Undo2, Redo2, Copy, Heading,
+  Users, UserPlus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -38,6 +41,8 @@ export function DetailModal() {
   const entryFuture          = useBrainStore((s) => s.entryFuture)
   const aiInstructions       = useBrainStore((s) => s.aiInstructions)
   const updateAiInstructions = useBrainStore((s) => s.updateAiInstructions)
+  const allRows              = useBrainStore((s) => s.rows)
+  const contacts             = useBrainStore((s) => s.contacts)
 
   const { saveRow, removeRow, undoRow, redoRow } = useSheetSync()
   const { run: runAI, loading: aiLoading, error: aiError } = useAI()
@@ -132,8 +137,17 @@ export function DetailModal() {
     .map((l) => l.replace(/^\d+\.\s*/, '').trim())
     .filter((l) => l.length > 0)
 
-  const linkLines = links.split('\n').filter((l) => l.trim().startsWith('http'))
-  const hasImage  = mediaUrl && isImageUrl(mediaUrl)
+  const linkLines  = links.split('\n').filter((l) => l.trim().startsWith('http'))
+  const hasImage   = mediaUrl && isImageUrl(mediaUrl)
+  const peopleTags = parsePeople(cleanVal(merged.people ?? ''))
+
+  // All names already used across entries (for people autocomplete)
+  const allPeopleNames = useMemo(() => {
+    const set = new Set<string>()
+    allRows.forEach((r) => parsePeople(r.people ?? '').forEach((n) => set.add(n)))
+    contacts.forEach((c) => set.add(c.name))
+    return [...set].sort()
+  }, [allRows, contacts])
 
   const inputCls = 'w-full text-sm px-3 py-2 bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-2 focus:ring-brand/40'
 
@@ -434,6 +448,39 @@ export function DetailModal() {
               </div>
             </div>
 
+            {/* People */}
+            <div>
+              <SectionLabel icon={<Users className="w-3.5 h-3.5" />}>People</SectionLabel>
+              <div className="mt-2">
+                {editing ? (
+                  <PeopleInput
+                    value={merged.people ?? ''}
+                    onChange={(v) => patchField('people', v)}
+                    suggestions={allPeopleNames}
+                  />
+                ) : peopleTags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {peopleTags.map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center gap-1 text-xs bg-brand/10 text-brand border border-brand/20 rounded-full px-2.5 py-0.5 font-medium"
+                      >
+                        <span className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[9px] font-bold">
+                          {name[0]?.toUpperCase()}
+                        </span>
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-ink3 italic flex items-center gap-1">
+                    <UserPlus className="w-3 h-3" />
+                    {editing ? 'Add people' : 'No contacts linked'}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* Footer timestamps */}
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink3 pt-2 border-t border-border">
               {merged.createdAt && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Created {formatDate(merged.createdAt)}</span>}
@@ -467,6 +514,97 @@ export function DetailModal() {
         </div>
       )}
     </>
+  )
+}
+
+/* ── PeopleInput ─────────────────────────────────────────────────────────── */
+
+function PeopleInput({
+  value,
+  onChange,
+  suggestions,
+}: {
+  value: string
+  onChange: (v: string) => void
+  suggestions: string[]
+}) {
+  const [inputVal, setInputVal] = useState('')
+  const [open, setOpen]         = useState(false)
+  const people = value.split(',').map((s) => s.trim()).filter(Boolean)
+
+  const filtered = suggestions
+    .filter((s) => s.toLowerCase().includes(inputVal.toLowerCase()) && !people.includes(s))
+    .slice(0, 8)
+
+  function add(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || people.includes(trimmed)) return
+    onChange([...people, trimmed].join(', '))
+    setInputVal('')
+    setOpen(false)
+  }
+
+  function remove(name: string) {
+    onChange(people.filter((p) => p !== name).join(', '))
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Current people pills */}
+      {people.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {people.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center gap-1 text-xs bg-brand/10 text-brand border border-brand/20 rounded-full pl-2 pr-1 py-0.5 font-medium"
+            >
+              <span className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[9px] font-bold shrink-0">
+                {name[0]?.toUpperCase()}
+              </span>
+              {name}
+              <button
+                type="button"
+                onClick={() => remove(name)}
+                className="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-brand/20 transition-colors ml-0.5"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {/* Input */}
+      <div className="relative">
+        <input
+          value={inputVal}
+          onChange={(e) => { setInputVal(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && inputVal.trim()) { e.preventDefault(); add(inputVal) }
+            if (e.key === 'Escape') { setOpen(false); setInputVal('') }
+          }}
+          placeholder="Type a name and press Enter…"
+          className="w-full text-sm px-3 py-2 bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-2 focus:ring-brand/40 placeholder:text-ink3"
+        />
+        {open && filtered.length > 0 && (
+          <div className="absolute left-0 top-full mt-1 z-50 w-full bg-surface border border-border rounded-xl shadow-xl overflow-hidden">
+            {filtered.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); add(s) }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-hover flex items-center gap-2 text-ink"
+              >
+                <span className="w-5 h-5 rounded-full bg-brand/10 text-brand flex items-center justify-center text-[10px] font-bold shrink-0">
+                  {s[0]?.toUpperCase()}
+                </span>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

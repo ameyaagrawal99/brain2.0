@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { BrainRow, EditableFields, HistoryEntry, SortKey, SpecialDay, ViewMode } from '@/types/sheet'
+import type { Contact } from '@/lib/contacts'
 
 export type ThemeMode  = 'light' | 'dark' | 'system'
 export type ThemeColor = 'indigo' | 'warm' | 'green' | 'rose'
@@ -57,6 +58,7 @@ interface FilterState {
   showToday:    boolean
   dateFrom:     string | null
   dateTo:       string | null
+  person:       string   // filter by person name in the `people` field
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -69,6 +71,7 @@ const DEFAULT_FILTERS: FilterState = {
   showToday:    false,
   dateFrom:     null,
   dateTo:       null,
+  person:       '',
 }
 
 const MAX_HISTORY = 20
@@ -100,7 +103,14 @@ interface BrainStore {
   setSortBy:      (k: SortKey) => void
   setShowToday:   (v: boolean) => void
   setDateRange:   (from: string | null, to: string | null) => void
+  setPerson:      (name: string) => void
   clearFilters:   () => void
+
+  // Google Contacts (fetched after auth if user has granted contacts scope)
+  contacts:              Contact[]
+  setContacts:           (contacts: Contact[]) => void
+  contactsConnected:     boolean
+  setContactsConnected:  (v: boolean) => void
 
   // Per-category color overrides (persisted, synced to Google Sheet)
   categoryColors:      Record<string, string>
@@ -226,7 +236,13 @@ export const useBrainStore = create<BrainStore>()(
       setSortBy:    (sortBy) => set((s) => ({ filters: { ...s.filters, sortBy } })),
       setShowToday: (showToday) => set((s) => ({ filters: { ...s.filters, showToday } })),
       setDateRange: (dateFrom, dateTo) => set((s) => ({ filters: { ...s.filters, dateFrom, dateTo, showToday: false } })),
+      setPerson:    (person) => set((s) => ({ filters: { ...s.filters, person } })),
       clearFilters: ()       => set({ filters: DEFAULT_FILTERS }),
+
+      contacts:             [],
+      setContacts:          (contacts) => set({ contacts }),
+      contactsConnected:    false,
+      setContactsConnected: (contactsConnected) => set({ contactsConnected }),
 
       categoryColors:      {},
       setCategoryColors:   (categoryColors) => set({ categoryColors }),

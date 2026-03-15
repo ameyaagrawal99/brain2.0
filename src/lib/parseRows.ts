@@ -26,6 +26,7 @@ export function parseRows(rawValues: string[][]): BrainRow[] {
     mediaUrl:    cell(row, COL.MEDIA_URL),
     tags:        cell(row, COL.TAGS),
     messageId:   cell(row, COL.MESSAGE_ID),
+    people:      cell(row, COL.PEOPLE),
   })).filter(r => r.srNo || r.title || r.original || r.rewritten)
 }
 
@@ -35,5 +36,6 @@ export function rowToValues(row: BrainRow): string[] {
     row.category, row.subCategory, row.original, row.rewritten,
     row.actionItems, row.dueDate, row.taskStatus,
     row.links, row.mediaUrl, row.tags, row.messageId,
+    row.people ?? '',
   ]
 }

@@ -2,18 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart2, Calendar, Filter, X, Clock, Tag, CheckCircle,
   Loader2, Plus, Trash2, BookmarkCheck, TrendingUp, ListChecks,
-  Square, CheckSquare2, Star, ChevronRight,
+  Square, CheckSquare2, Star, ChevronRight, Users,
 } from 'lucide-react'
 import { differenceInYears, differenceInMonths } from 'date-fns'
 import { useBrainStore } from '@/store/useBrainStore'
 import { parseTags, formatDate, cn, parseActionItems, toggleActionItem } from '@/lib/utils'
+import { parsePeople } from '@/lib/contacts'
 import { fetchQuickFilters, saveQuickFilter, deleteQuickFilter } from '@/lib/sheetsConfig'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import type { QuickFilter } from '@/lib/sheetsConfig'
 import type { BrainRow } from '@/types/sheet'
 import toast from 'react-hot-toast'
 
-type SidebarTab = 'stats' | 'due' | 'tasks' | 'activity' | 'filters' | 'milestones'
+type SidebarTab = 'stats' | 'due' | 'tasks' | 'activity' | 'filters' | 'milestones' | 'people'
 
 const TABS: { key: SidebarTab; label: string; icon: typeof BarChart2 }[] = [
   { key: 'stats',      label: 'Stats',      icon: BarChart2 },
@@ -21,6 +22,7 @@ const TABS: { key: SidebarTab; label: string; icon: typeof BarChart2 }[] = [
   { key: 'tasks',      label: 'Tasks',      icon: ListChecks },
   { key: 'activity',   label: 'Activity',   icon: TrendingUp },
   { key: 'filters',    label: 'Filters',    icon: Filter },
+  { key: 'people',     label: 'People',     icon: Users },
   { key: 'milestones', label: 'Milestones', icon: Star },
 ]
 
@@ -95,6 +97,10 @@ export function Sidebar() {
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
   const setShowNewMilestone  = useBrainStore((s) => s.setShowNewMilestone)
 
+  const setPerson    = useBrainStore((s) => s.setPerson)
+  const personFilter = useBrainStore((s) => s.filters.person)
+  const contacts     = useBrainStore((s) => s.contacts)
+
   const { saveRow } = useSheetSync()
 
   const [tab, setTab]                   = useState<SidebarTab>('stats')
@@ -152,6 +158,23 @@ export function Sidebar() {
   }, [rows])
 
   const enhancedCount = useMemo(() => rows.filter(r => r.rewritten).length, [rows])
+
+  /* ── People ────────────────────────────────────────────────────────── */
+  const peopleStats = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const r of rows) {
+      parsePeople(r.people ?? '').forEach((name) => {
+        counts[name] = (counts[name] || 0) + 1
+      })
+    }
+    // Also include contacts that appear in entries
+    contacts.forEach((c) => {
+      if (!counts[c.name]) counts[c.name] = 0
+    })
+    return Object.entries(counts)
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1])
+  }, [rows, contacts])
 
   /* ── Due Soon ──────────────────────────────────────────────────────── */
 
@@ -796,6 +819,77 @@ export function Sidebar() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ── PEOPLE ── */}
+          {tab === 'people' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-ink">People</p>
+                  <p className="text-[10px] text-ink3">{peopleStats.length} contact{peopleStats.length !== 1 ? 's' : ''} across your entries</p>
+                </div>
+                {personFilter && (
+                  <button
+                    onClick={() => { setPerson(''); setShowSidebar(false) }}
+                    className="flex items-center gap-1 text-xs text-brand hover:underline"
+                  >
+                    <X className="w-3 h-3" />
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {personFilter && (
+                <div className="bg-brand/5 border border-brand/15 rounded-xl px-3 py-2 flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5 text-brand shrink-0" />
+                  <p className="text-xs text-brand font-medium flex-1">Filtering by: {personFilter}</p>
+                </div>
+              )}
+
+              {peopleStats.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users className="w-8 h-8 mx-auto mb-2 text-ink3 opacity-40" />
+                  <p className="text-sm text-ink2">No contacts yet</p>
+                  <p className="text-xs text-ink3 mt-1">Open an entry and add people in the People section.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {peopleStats.map(([name, count]) => {
+                    const isActive = personFilter === name
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => {
+                          setPerson(isActive ? '' : name)
+                          setShowSidebar(false)
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors text-left',
+                          isActive
+                            ? 'bg-brand/10 border-brand/30 text-brand'
+                            : 'bg-surface2 border-border hover:border-brand/30 hover:bg-brand/5 text-ink',
+                        )}
+                      >
+                        <div className={cn(
+                          'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0',
+                          isActive ? 'bg-brand text-white' : 'bg-brand/15 text-brand',
+                        )}>
+                          {name[0]?.toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{name}</p>
+                          <p className="text-[10px] text-ink3">{count} {count === 1 ? 'entry' : 'entries'}</p>
+                        </div>
+                        {isActive && (
+                          <div className="w-2 h-2 rounded-full bg-brand shrink-0" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 

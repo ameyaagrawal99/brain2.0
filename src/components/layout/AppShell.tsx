@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
-import { Header }          from './Header'
-import { FilterBar }       from './FilterBar'
-import { StatsBar }        from './StatsBar'
-import { BottomNav }       from './BottomNav'
-import { Sidebar }         from './Sidebar'
-import { CardView }        from '@/components/views/CardView'
-import { TableView }       from '@/components/views/TableView'
-import { TaskBoard }       from '@/components/views/TaskBoard'
-import { DetailModal }     from '@/components/modal/DetailModal'
-import { NewRowModal }     from '@/components/modal/NewRowModal'
-import { MilestoneModal }  from '@/components/modal/MilestoneModal'
-import { SettingsPanel }   from '@/components/modal/SettingsPanel'
-import { AIPanel }         from '@/components/modal/AIPanel'
-import { useBrainStore }   from '@/store/useBrainStore'
-import { useSheetSync }    from '@/hooks/useSheetSync'
-import { DEMO_ROWS }       from '@/data/demoData'
-import { useConfettiCheck } from '@/components/ui/Confetti'
-import { useNotifications } from '@/hooks/useNotifications'
+import { Header }             from './Header'
+import { FilterBar }          from './FilterBar'
+import { StatsBar }           from './StatsBar'
+import { BottomNav }          from './BottomNav'
+import { Sidebar }            from './Sidebar'
+import { CardView }           from '@/components/views/CardView'
+import { TableView }          from '@/components/views/TableView'
+import { TaskBoard }          from '@/components/views/TaskBoard'
+import { DetailModal }        from '@/components/modal/DetailModal'
+import { NewRowModal }        from '@/components/modal/NewRowModal'
+import { MilestoneModal }     from '@/components/modal/MilestoneModal'
+import { SettingsPanel }      from '@/components/modal/SettingsPanel'
+import { AIPanel }            from '@/components/modal/AIPanel'
+import { PWAInstallBanner }   from '@/components/ui/PWAInstallBanner'
+import { useBrainStore }      from '@/store/useBrainStore'
+import { useSheetSync }       from '@/hooks/useSheetSync'
+import { DEMO_ROWS }          from '@/data/demoData'
+import { useConfettiCheck }   from '@/components/ui/Confetti'
+import { useNotifications }   from '@/hooks/useNotifications'
+import { fetchGoogleContacts } from '@/lib/contacts'
+import { getAccessToken }     from '@/lib/gsi'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -92,11 +95,30 @@ export function AppShell() {
   const showNewMilestone    = useBrainStore((s) => s.showNewMilestone)
   const setShowNewMilestone = useBrainStore((s) => s.setShowNewMilestone)
 
+  const setContacts         = useBrainStore((s) => s.setContacts)
+  const setContactsConnected = useBrainStore((s) => s.setContactsConnected)
+
   const { refresh, refreshConfig } = useSheetSync()
   const hasLoadedRef = useRef(false)
 
   useConfettiCheck()
   useNotifications()
+
+  // Attempt to silently fetch Google Contacts once after data is loaded.
+  // Succeeds only if the user's token already covers the contacts.readonly scope.
+  // Silent: no error shown if it doesn't work (user can grant access in Settings).
+  useEffect(() => {
+    if (demoMode) return
+    const token = getAccessToken()
+    if (!token) return
+    fetchGoogleContacts(token).then((contacts) => {
+      if (contacts.length > 0) {
+        setContacts(contacts)
+        setContactsConnected(true)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode])
 
   // Handle PWA shortcut URLs (e.g. ?action=new-entry from manifest shortcuts)
   useEffect(() => {
@@ -140,6 +162,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-bg flex flex-col">
       <Header />
+      <PWAInstallBanner />
       <MilestoneBanner />
       <FilterBar />
       <StatsBar />

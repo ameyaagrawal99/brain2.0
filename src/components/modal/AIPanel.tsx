@@ -17,15 +17,42 @@ type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'export'
 
 /* ─── Bulk enhance options ───────────────────────────────────────────── */
 
-interface BulkOptions {
-  title:    boolean
-  rewrite:  boolean
-  tags:     boolean
-  category: boolean
-  actions:  boolean
+/** Per-field scope for smart bulk enhancement.
+ *  off      → skip this field entirely
+ *  missing  → only process entries that don't have this field yet
+ *  all      → process every entry in the global scope (may overwrite)
+ */
+type FieldScope = 'off' | 'missing' | 'all'
+
+interface BulkFieldOptions {
+  title:    FieldScope
+  rewrite:  FieldScope
+  tags:     FieldScope
+  category: FieldScope
+  actions:  FieldScope
 }
 
 type BulkScope = 'unenhanced' | 'all' | 'filtered' | 'selected'
+
+/** Returns true if the row already has a value for the given field */
+function fieldHasValue(row: BrainRow, field: keyof BulkFieldOptions): boolean {
+  switch (field) {
+    case 'title':    return !!row.title?.trim()
+    case 'rewrite':  return !!row.rewritten?.trim()
+    case 'tags':     return !!row.tags?.trim()
+    case 'category': return !!row.category?.trim()
+    case 'actions':  return !!row.actionItems?.trim()
+  }
+}
+
+/** Returns the list of fields that actually need enhancement for this row */
+function getFieldsToGenerate(row: BrainRow, opts: BulkFieldOptions): (keyof BulkFieldOptions)[] {
+  return (['title', 'rewrite', 'tags', 'category', 'actions'] as const).filter((f) => {
+    if (opts[f] === 'off') return false
+    if (opts[f] === 'missing') return !fieldHasValue(row, f)
+    return true // 'all'
+  })
+}
 
 /* ─── Export helpers ─────────────────────────────────────────────────── */
 
@@ -107,10 +134,10 @@ export function AIPanel() {
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
 
   // Bulk options (component-level state — no need to persist)
-  const [bulkOptions, setBulkOptions] = useState<BulkOptions>({
-    title: false, rewrite: true, tags: true, category: true, actions: true,
+  const [bulkFieldOptions, setBulkFieldOptions] = useState<BulkFieldOptions>({
+    title: 'missing', rewrite: 'missing', tags: 'missing', category: 'missing', actions: 'missing',
   })
-  const [bulkScope, setBulkScope]       = useState<BulkScope>('unenhanced')
+  const [bulkScope, setBulkScope]       = useState<BulkScope>('all')
   const [bulkInstOpen, setBulkInstOpen] = useState(false)
   const [showBulkOptions, setShowBulkOptions] = useState(false)
 
@@ -134,11 +161,15 @@ export function AIPanel() {
 
   /* ── Bulk enhance ── */
   function getBulkRows(): BrainRow[] {
-    const hasContent = (r: BrainRow) => !!(r.original || r.title)
-    if (bulkScope === 'unenhanced') return rows.filter((r) => !r.rewritten && hasContent(r))
-    if (bulkScope === 'filtered')   return filteredRows.filter(hasContent)
-    if (bulkScope === 'selected')   return rows.filter((r) => selectedCardIndices.includes(r._rowIndex) && hasContent(r))
-    return rows.filter(hasContent) // 'all'
+    const hasContent = (r: BrainRow) => !!(r.original?.trim() || r.title?.trim())
+    let base: BrainRow[]
+    if (bulkScope === 'unenhanced') base = rows.filter((r) => !r.rewritten && hasContent(r))
+    else if (bulkScope === 'filtered')   base = filteredRows.filter(hasContent)
+    else if (bulkScope === 'selected')   base = rows.filter((r) => selectedCardIndices.includes(r._rowIndex) && hasContent(r))
+    else base = rows.filter(hasContent) // 'all'
+
+    // Only include rows that actually need at least one field enhanced
+    return base.filter((row) => getFieldsToGenerate(row, bulkFieldOptions).length > 0)
   }
 
   function handlePickCards() {
@@ -148,10 +179,7 @@ export function AIPanel() {
 
   async function handleBulkEnhance() {
     const toProcess = getBulkRows()
-    if (!toProcess.length) { toast('No entries match the selected scope'); return }
-
-    const anySelected = Object.values(bulkOptions).some(Boolean)
-    if (!anySelected) { toast.error('Select at least one field to generate'); return }
+    if (!toProcess.length) { toast('No entries need enhancement with the current settings'); return }
 
     stopRef.current = false
     setBulkProgress({ done: 0, total: toProcess.length })
@@ -159,45 +187,44 @@ export function AIPanel() {
     let done = 0
 
     for (const row of toProcess) {
-      // Check if user requested stop
       if (stopRef.current) break
 
       try {
-        // Build a targeted prompt if not all fields selected
-        const coreSelected = bulkOptions.rewrite && bulkOptions.tags && bulkOptions.category && bulkOptions.actions && bulkOptions.title
-        let result
+        // Determine exactly which fields this row needs (respects per-field scope)
+        const fieldsNeeded = getFieldsToGenerate(row, bulkFieldOptions)
+        if (!fieldsNeeded.length) { done++; setBulkProgress({ done, total: toProcess.length }); continue }
 
-        if (coreSelected) {
+        const wantedKeys: string[] = []
+        if (fieldsNeeded.includes('title'))    wantedKeys.push('title (concise 5-10 word title for the note)')
+        if (fieldsNeeded.includes('rewrite'))  wantedKeys.push('rewritten (polished version of the note, first-person journal style)')
+        if (fieldsNeeded.includes('tags'))     wantedKeys.push('tags (comma-separated lowercase keywords, 3-7 tags)')
+        if (fieldsNeeded.includes('category')) wantedKeys.push('category (one word or short phrase), subCategory (optional sub-topic)')
+        if (fieldsNeeded.includes('actions'))  wantedKeys.push('actionItems (numbered list of action items, or empty string if none)')
+
+        let result
+        if (fieldsNeeded.length === 5) {
+          // All fields — use the optimised 'all' prompt
           result = await runAI('all', row.original || row.title, {
             systemInstruction: aiInstructions.bulk,
           })
         } else {
-          // Build custom prompt requesting only selected fields
-          const wantedKeys: string[] = []
-          if (bulkOptions.title)    wantedKeys.push('title (concise 5-10 word title for the note)')
-          if (bulkOptions.rewrite)  wantedKeys.push('rewritten (polished version of the note, first-person journal style)')
-          if (bulkOptions.tags)     wantedKeys.push('tags (comma-separated lowercase keywords, 3-7 tags)')
-          if (bulkOptions.category) wantedKeys.push('category (one word or short phrase), subCategory (optional sub-topic)')
-          if (bulkOptions.actions)  wantedKeys.push('actionItems (numbered list of action items, or empty string if none)')
           const customPrompt = `Analyze this journal note and return a JSON object with ONLY these keys: ${wantedKeys.join('; ')}. Output only valid JSON.\n\n${row.original || row.title}`
           result = await runAI('all', customPrompt, {
             systemInstruction: aiInstructions.bulk,
           })
         }
 
-        // If stopped mid-request, result will be empty — skip saving
         if (stopRef.current) break
 
         const fields: Record<string, string> = {}
-        // Title: only fills entries that have no title yet (preserves existing titles)
-        if (bulkOptions.title    && result.title)       fields.title       = row.title || result.title
-        if (bulkOptions.rewrite  && result.rewritten)   fields.rewritten   = result.rewritten
-        if (bulkOptions.tags     && result.tags)        fields.tags        = row.tags || result.tags
-        if (bulkOptions.category && result.category)    fields.category    = row.category || result.category
-        if (bulkOptions.actions  && result.actionItems) fields.actionItems = result.actionItems
+        if (fieldsNeeded.includes('title')    && result.title)       fields.title       = result.title
+        if (fieldsNeeded.includes('rewrite')  && result.rewritten)   fields.rewritten   = result.rewritten
+        if (fieldsNeeded.includes('tags')     && result.tags)        fields.tags        = result.tags
+        if (fieldsNeeded.includes('category') && result.category)    fields.category    = result.category
+        if (fieldsNeeded.includes('actions')  && result.actionItems) fields.actionItems = result.actionItems
 
         if (Object.keys(fields).length) {
-          await saveRow(row._rowIndex, fields, 'AI: Enhance all')
+          await saveRow(row._rowIndex, fields, 'AI: Enhance')
           touchedIndices.push(row._rowIndex)
         }
       } catch { /* skip failed rows */ }
@@ -276,14 +303,25 @@ export function AIPanel() {
   // Counts for bulk scope display
   const unenhancedCount  = rows.filter((r) => !r.rewritten && (r.original || r.title)).length
   const selectedCount    = rows.filter((r) => selectedCardIndices.includes(r._rowIndex) && (r.original || r.title)).length
-  const bulkScopeCount   = bulkScope === 'unenhanced' ? unenhancedCount
-    : bulkScope === 'filtered'  ? filteredRows.filter((r) => r.original || r.title).length
-    : bulkScope === 'selected'  ? selectedCount
-    : rows.filter((r) => r.original || r.title).length
 
-  const checkboxCls = (active: boolean) => cn(
-    'w-4 h-4 rounded border transition-colors shrink-0',
-    active ? 'bg-brand border-brand' : 'border-border bg-surface2',
+  // Count of entries missing each field (for the "Missing only" badge)
+  const missingCounts: Record<keyof BulkFieldOptions, number> = {
+    title:    rows.filter((r) => (r.original || r.title) && !r.title?.trim()).length,
+    rewrite:  rows.filter((r) => (r.original || r.title) && !r.rewritten?.trim()).length,
+    tags:     rows.filter((r) => (r.original || r.title) && !r.tags?.trim()).length,
+    category: rows.filter((r) => (r.original || r.title) && !r.category?.trim()).length,
+    actions:  rows.filter((r) => (r.original || r.title) && !r.actionItems?.trim()).length,
+  }
+
+  const bulkScopeCount   = getBulkRows().length
+
+  const fieldScopePill = (field: keyof BulkFieldOptions, scope: FieldScope) => cn(
+    'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
+    bulkFieldOptions[field] === scope
+      ? scope === 'off'
+        ? 'bg-surface2 text-ink2'
+        : 'bg-brand text-white'
+      : 'bg-surface2 text-ink3 hover:text-ink hover:bg-hover',
   )
 
   return (
@@ -443,8 +481,8 @@ export function AIPanel() {
                     <div className="text-xs text-ink3 mt-0.5">Enhanced</div>
                   </div>
                   <div className="bg-surface2 rounded-xl p-3">
-                    <div className="text-2xl font-bold text-amber-500">{unenhancedCount}</div>
-                    <div className="text-xs text-ink3 mt-0.5">Pending</div>
+                    <div className="text-2xl font-bold text-amber-500">{bulkScopeCount}</div>
+                    <div className="text-xs text-ink3 mt-0.5">To Enhance</div>
                   </div>
                 </div>
 
@@ -462,41 +500,50 @@ export function AIPanel() {
                   {showBulkOptions && (
                     <div className="border-t border-border bg-surface2 px-4 py-3 space-y-4">
 
-                      {/* Fields to generate */}
+                      {/* Fields to generate — smart per-field scope */}
                       <div>
-                        <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">Fields to generate</p>
-                        <div className="space-y-2">
+                        <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-1">Fields to generate</p>
+                        <p className="text-[10px] text-ink3 mb-3">
+                          Choose <span className="font-medium text-ink2">Missing only</span> to skip entries that already have this field — saves credits.
+                        </p>
+                        <div className="space-y-3">
                           {([
-                            ['title',    'Generate title (fills empty only)', Heading],
-                            ['rewrite',  'Rewrite content',                   Wand2],
-                            ['tags',     'Generate tags',                     Tag],
-                            ['category', 'Suggest category',                  FileText],
-                            ['actions',  'Extract action items',               CheckSquare],
+                            ['title',    'Generate title',       Heading],
+                            ['rewrite',  'Rewrite content',      Wand2],
+                            ['tags',     'Generate tags',        Tag],
+                            ['category', 'Suggest category',     FileText],
+                            ['actions',  'Extract action items', CheckSquare],
                           ] as const).map(([key, label, Icon]) => (
-                            <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
-                              <div
-                                className={checkboxCls(bulkOptions[key])}
-                                onClick={() => setBulkOptions((o) => ({ ...o, [key]: !o[key] }))}
-                              >
-                                {bulkOptions[key] && (
-                                  <svg viewBox="0 0 10 10" className="w-full h-full p-0.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
+                            <div key={key}>
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <Icon className="w-3 h-3 text-ink3 shrink-0" />
+                                <span className="text-xs text-ink font-medium">{label}</span>
+                                {missingCounts[key] > 0 && (
+                                  <span className="text-[10px] text-ink3 ml-auto">{missingCounts[key]} missing</span>
                                 )}
                               </div>
-                              <Icon className="w-3 h-3 text-ink3" />
-                              <span className="text-xs text-ink group-hover:text-ink transition-colors">{label}</span>
-                            </label>
+                              <div className="flex gap-1 ml-4">
+                                {(['off', 'missing', 'all'] as FieldScope[]).map((scope) => (
+                                  <button
+                                    key={scope}
+                                    type="button"
+                                    onClick={() => setBulkFieldOptions((o) => ({ ...o, [key]: scope }))}
+                                    className={fieldScopePill(key, scope)}
+                                  >
+                                    {scope === 'off' ? 'Skip' : scope === 'missing' ? 'Missing only' : 'All'}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
 
                       {/* Scope */}
                       <div>
-                        <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">Scope</p>
+                        <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide mb-2">Which entries to include</p>
                         <div className="flex flex-col gap-1.5">
                           {([
-                            ['unenhanced', `Unenhanced only (${unenhancedCount})`],
                             ['all',        `All entries with content (${rows.filter((r) => r.original || r.title).length})`],
                             ['filtered',   `Current filtered view (${filteredRows.filter((r) => r.original || r.title).length})`],
                             ['selected',   `Selected cards (${selectedCount})`],
@@ -603,7 +650,9 @@ export function AIPanel() {
                     className="w-full justify-center"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    {`Enhance ${bulkScopeCount} ${bulkScopeCount === 1 ? 'entry' : 'entries'}`}
+                    {bulkScopeCount > 0
+                      ? `Enhance ${bulkScopeCount} ${bulkScopeCount === 1 ? 'entry' : 'entries'}`
+                      : 'Nothing to enhance'}
                   </Button>
                 )}
 
