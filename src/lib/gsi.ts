@@ -6,6 +6,24 @@ let tokenExpiry = 0
 let _pendingSilentCount = 0  // number of in-flight silent requests
 let _refreshTimer: ReturnType<typeof setTimeout> | null = null
 
+/* ── Session hint ────────────────────────────────────────────────────────
+ * A lightweight localStorage flag that survives page refreshes.
+ * It tells useAuth that this is a returning user who should be
+ * silently re-authenticated, so the app shows "Reconnecting…" instead
+ * of immediately jumping to the login screen.
+ */
+const SESSION_KEY = 'brain2_session'
+
+export function setSessionHint(): void {
+  try { localStorage.setItem(SESSION_KEY, '1') } catch { /* ignore */ }
+}
+export function clearSessionHint(): void {
+  try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+}
+export function hasSessionHint(): boolean {
+  try { return localStorage.getItem(SESSION_KEY) === '1' } catch { return false }
+}
+
 /**
  * Schedule a silent token refresh ~5 minutes before expiry.
  * This keeps the user logged in without requiring any interaction.
@@ -58,6 +76,7 @@ export function initTokenClient(
       accessToken = response.access_token
       tokenExpiry = Date.now() + (response.expires_in - 60) * 1000
       console.log('[GSI] Token received, expires in', response.expires_in, 'seconds')
+      setSessionHint()  // mark that user has an active session (survives refresh)
       scheduleTokenRefresh(response.expires_in)
       onToken(response.access_token)
       tokenListeners.forEach((fn) => fn(response.access_token))
@@ -95,6 +114,7 @@ export function getAccessToken(): string | null {
 
 export function revokeToken() {
   if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null }
+  clearSessionHint()  // user explicitly signed out — don't try to silently re-auth
   if (!accessToken) return
   google.accounts.oauth2.revoke(accessToken, () => {
     accessToken = null
