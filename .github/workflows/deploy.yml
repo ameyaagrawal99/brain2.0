@@ -29,6 +29,7 @@ jobs:
         env:
           VITE_BASE_PATH: /brain2.0/
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_COMMIT_SHA: ${{ github.sha }}
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

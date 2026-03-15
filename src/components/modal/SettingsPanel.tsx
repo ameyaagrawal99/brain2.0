@@ -3,9 +3,11 @@ import { Button } from '@/components/ui/Button'
 import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
 import { useAuth } from '@/hooks/useAuth'
 import { appendConfigCategory, appendConfigTag, deleteConfigItem, saveColorConfig, deleteColorConfig } from '@/lib/sheetsConfig'
+import { fetchGoogleContacts } from '@/lib/contacts'
+import { requestContactsAccess } from '@/lib/gsi'
 import { cn, COLOR_PALETTE } from '@/lib/utils'
 import { requestNotificationPermission, getNotificationPermission } from '@/hooks/useNotifications'
-import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download } from 'lucide-react'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2 } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 
@@ -29,12 +31,19 @@ export function SettingsPanel() {
   const removeCustomTag      = useBrainStore((s) => s.removeCustomTag)
   const { signOut }     = useAuth()
 
+  const contacts           = useBrainStore((s) => s.contacts)
+  const setContacts        = useBrainStore((s) => s.setContacts)
+  const contactsConnected  = useBrainStore((s) => s.contactsConnected)
+  const setContactsConnected = useBrainStore((s) => s.setContactsConnected)
+
   const [showKey, setShowKey] = useState(false)
   const [newCat,  setNewCat]  = useState('')
   const [newTag,  setNewTag]  = useState('')
   const [savingCat, setSavingCat] = useState(false)
   const [savingTag, setSavingTag] = useState(false)
   const [savingColor, setSavingColor] = useState<string | null>(null)
+  const [connectingContacts, setConnectingContacts] = useState(false)
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   // All visible categories: built-in + from rows + custom (deduped)
   const rowCategories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort()
@@ -148,6 +157,36 @@ export function SettingsPanel() {
     } finally {
       setSavingTag(false)
     }
+  }
+
+  async function handleConnectContacts() {
+    if (!clientId) { toast.error('Google Client ID not configured'); return }
+    setConnectingContacts(true)
+    requestContactsAccess(
+      clientId,
+      async (token) => {
+        try {
+          const fetched = await fetchGoogleContacts(token)
+          setContacts(fetched)
+          setContactsConnected(true)
+          toast.success(`Connected — ${fetched.length} contact${fetched.length !== 1 ? 's' : ''} loaded`)
+        } catch {
+          toast.error('Failed to load contacts')
+        } finally {
+          setConnectingContacts(false)
+        }
+      },
+      (err) => {
+        toast.error(`Contacts access denied: ${err}`)
+        setConnectingContacts(false)
+      },
+    )
+  }
+
+  function handleDisconnectContacts() {
+    setContacts([])
+    setContactsConnected(false)
+    toast('Google Contacts disconnected')
   }
 
   async function handleRemoveTag(tag: string) {
@@ -444,6 +483,47 @@ export function SettingsPanel() {
             </div>
           </div>
         </Section>
+
+        {/* Google Contacts */}
+        {!settings.demoMode && (
+          <Section title="Google Contacts" icon={<Users className="w-3.5 h-3.5" />}>
+            {contactsConnected ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                  <p className="text-xs text-green-700 dark:text-green-400">
+                    Connected — {contacts.length} contact{contacts.length !== 1 ? 's' : ''} available for autocomplete
+                  </p>
+                </div>
+                <button
+                  onClick={handleDisconnectContacts}
+                  className="text-xs text-ink3 hover:text-red-500 underline underline-offset-2 transition-colors"
+                >
+                  Disconnect Google Contacts
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-ink3 leading-relaxed">
+                  Connect your Google Contacts to get name autocomplete when tagging people in entries.
+                  Brain 2.0 only reads contact names — it never modifies your contacts.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleConnectContacts}
+                  loading={connectingContacts}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  Connect Google Contacts
+                </Button>
+                <p className="text-[11px] text-ink3">
+                  Requires approving "read contacts" permission in Google's consent screen.
+                </p>
+              </div>
+            )}
+          </Section>
+        )}
 
         {/* Demo mode */}
         <Section title="Demo mode">

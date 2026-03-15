@@ -57,6 +57,15 @@ export function DetailModal() {
   const histSteps  = row ? (entryHistory[row._rowIndex]?.length  ?? 0) : 0
   const futSteps   = row ? (entryFuture[row._rowIndex]?.length   ?? 0) : 0
 
+  // All names already used across entries (for people autocomplete)
+  // ⚠️ Must be BEFORE any conditional return to satisfy Rules of Hooks
+  const allPeopleNames = useMemo(() => {
+    const set = new Set<string>()
+    allRows.forEach((r) => parsePeople(r.people ?? '').forEach((n) => set.add(n)))
+    contacts.forEach((c) => set.add(c.name))
+    return [...set].sort()
+  }, [allRows, contacts])
+
   // Keyboard shortcuts: Cmd+Z / Cmd+Shift+Z only when modal is open
   useEffect(() => {
     if (!row) return
@@ -140,14 +149,6 @@ export function DetailModal() {
   const linkLines  = links.split('\n').filter((l) => l.trim().startsWith('http'))
   const hasImage   = mediaUrl && isImageUrl(mediaUrl)
   const peopleTags = parsePeople(cleanVal(merged.people ?? ''))
-
-  // All names already used across entries (for people autocomplete)
-  const allPeopleNames = useMemo(() => {
-    const set = new Set<string>()
-    allRows.forEach((r) => parsePeople(r.people ?? '').forEach((n) => set.add(n)))
-    contacts.forEach((c) => set.add(c.name))
-    return [...set].sort()
-  }, [allRows, contacts])
 
   const inputCls = 'w-full text-sm px-3 py-2 bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-2 focus:ring-brand/40'
 
