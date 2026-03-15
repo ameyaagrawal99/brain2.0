@@ -17,6 +17,7 @@ export interface BrainRow {
   mediaUrl: string
   tags: string
   messageId: string
+  people: string   // comma-separated contact names linked to this entry
 }
 
 export type EditableFields = Pick<
@@ -32,6 +33,7 @@ export type EditableFields = Pick<
   | 'links'
   | 'mediaUrl'
   | 'tags'
+  | 'people'
 >
 
 export type SortKey =

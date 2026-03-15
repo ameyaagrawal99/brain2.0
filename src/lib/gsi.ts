@@ -1,4 +1,4 @@
-import { SHEETS_SCOPE } from '@/constants/sheet'
+import { SHEETS_SCOPE, CONTACTS_SCOPE } from '@/constants/sheet'
 
 let tokenClient: TokenClient | null = null
 let accessToken: string | null = null
@@ -120,4 +120,37 @@ export function revokeToken() {
     accessToken = null
     tokenExpiry = 0
   })
+}
+
+/**
+ * Request an access token that includes the Google Contacts read-only scope.
+ * This shows a consent dialog if the user hasn't granted contacts permission yet.
+ * On success, the module-level accessToken is updated to one that covers both
+ * Sheets and Contacts — subsequent API calls will automatically use it.
+ */
+export function requestContactsAccess(
+  clientId: string,
+  onToken: (token: string) => void,
+  onError: (msg: string) => void,
+) {
+  const scope = `${SHEETS_SCOPE} ${CONTACTS_SCOPE}`
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope,
+    // prompt: 'consent' forces the consent screen even if user previously granted some scopes.
+    // This is needed to add the new Contacts scope to an existing session.
+    callback: (response: TokenResponse) => {
+      if (response.error) { onError(response.error); return }
+      // Promote token to module level — now covers both Sheets + Contacts.
+      accessToken = response.access_token
+      tokenExpiry = Date.now() + (response.expires_in - 60) * 1000
+      scheduleTokenRefresh(response.expires_in)
+      onToken(response.access_token)
+      tokenListeners.forEach((fn) => fn(response.access_token))
+    },
+    error_callback: (err: ErrorResponse) => {
+      if (err.type !== 'popup_closed') onError(err.message ?? err.type)
+    },
+  })
+  client.requestAccessToken({ prompt: 'consent' })
 }
