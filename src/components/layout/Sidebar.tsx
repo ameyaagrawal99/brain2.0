@@ -1010,6 +1010,14 @@ export function Sidebar() {
           })()}
 
         </div>
+
+        {/* Build version footer */}
+        <div className="shrink-0 px-4 py-2 border-t border-border/50">
+          <p className="text-[10px] text-ink3 tabular-nums">
+            v{__BUILD_TIME__.slice(0, 10)}&nbsp;·&nbsp;
+            <span className="font-mono">{__COMMIT_SHA__.slice(0, 7)}</span>
+          </p>
+        </div>
       </aside>
     </>
   )

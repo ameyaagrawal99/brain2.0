@@ -102,6 +102,11 @@ export default defineConfig({
       },
     }),
   ],
+  define: {
+    // Injected at build time so the running app can show "which build is deployed"
+    __BUILD_TIME__:   JSON.stringify(new Date().toISOString()),
+    __COMMIT_SHA__:   JSON.stringify(process.env.VITE_COMMIT_SHA ?? 'dev'),
+  },
   base: process.env.VITE_BASE_PATH ?? './',
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
