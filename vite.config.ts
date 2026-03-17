@@ -107,6 +107,11 @@ export default defineConfig({
     __BUILD_TIME__:   JSON.stringify(new Date().toISOString()),
     __COMMIT_SHA__:   JSON.stringify(process.env.VITE_COMMIT_SHA ?? 'dev'),
   },
+  server: {
+    host: '0.0.0.0',
+    port: 5000,
+    allowedHosts: true,
+  },
   base: process.env.VITE_BASE_PATH ?? './',
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
