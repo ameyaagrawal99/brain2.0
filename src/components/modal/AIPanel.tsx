@@ -17,7 +17,7 @@ import type { BrainRow } from '@/types/sheet'
 
 type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'relate' | 'links' | 'export'
 
-interface RelatedEntry { row: BrainRow; reason: string }
+interface RelatedEntry { row: BrainRow; reason: string; score?: number }
 
 interface LinkSuggestion {
   a:      BrainRow
@@ -178,7 +178,10 @@ export function AIPanel() {
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
   const [relateQuery, setRelateQuery] = useState('')
   const [relateResults, setRelateResults] = useState<RelatedEntry[]>([])
+  const [relatePage, setRelatePage]       = useState(0)
+  const [selectedRelateRows, setSelectedRelateRows] = useState<Set<number>>(new Set())
   const [linkSuggestions, setLinkSuggestions] = useState<LinkSuggestion[]>([])
+  const RELATE_PAGE_SIZE = 5
 
   // Bulk options (component-level state — no need to persist)
   const [bulkFieldOptions, setBulkFieldOptions] = useState<BulkFieldOptions>({
@@ -352,6 +355,9 @@ Answer helpfully and specifically. Reference relevant entries using [[Entry Titl
   /* ── Relate ── */
   async function handleRelate() {
     if (!relateQuery.trim()) return
+    setRelatePage(0)
+    setSelectedRelateRows(new Set())
+
     // Keyword-pre-score entries and take top 30 as candidates
     const words = relateQuery.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
     const candidates = words.length
@@ -371,20 +377,25 @@ Answer helpfully and specifically. Reference relevant entries using [[Entry Titl
 Here are candidate entries from the knowledge base:
 ${pool}
 
-Return a JSON array of the most related entries (up to 8). Format:
-[{"title":"exact title from list","reason":"1 short sentence why it's related"}]
+Return a JSON array of the most related entries (up to 15). Format:
+[{"title":"exact title from list","reason":"1 short sentence why it's related","score":0-100}]
+Where score is relevance 0-100. Output only valid JSON, no other text.`
 
-Output only valid JSON, no other text.`
-
-    const result = await runRelate('rewrite', prompt)
+    const result = await runRelate('rewrite', prompt, {
+      systemInstruction: aiInstructions.relate || undefined,
+    })
     const raw = result.rewritten || ''
     try {
       const jsonMatch = raw.match(/\[[\s\S]*\]/)
       if (!jsonMatch) throw new Error('No JSON')
-      const parsed = JSON.parse(jsonMatch[0]) as { title: string; reason: string }[]
+      const parsed = JSON.parse(jsonMatch[0]) as { title: string; reason: string; score?: number }[]
       const titleMap = new Map(rows.map((r) => [r.title?.toLowerCase().trim(), r]))
       const matched: RelatedEntry[] = parsed
-        .map((item) => ({ row: titleMap.get(item.title?.toLowerCase().trim() ?? ''), reason: item.reason }))
+        .map((item) => ({
+          row: titleMap.get(item.title?.toLowerCase().trim() ?? ''),
+          reason: item.reason,
+          score: item.score,
+        }))
         .filter((x): x is RelatedEntry => !!x.row)
       setRelateResults(matched)
       if (!matched.length) toast.error('No matching entries found')
@@ -945,6 +956,11 @@ Return ONLY a valid JSON array (no explanation, no markdown):
                 <p className="text-xs text-ink2">
                   Describe a topic or paste text — AI will find the most related entries in your brain.
                 </p>
+                <InstructionsBox
+                  value={aiInstructions.relate}
+                  onChange={(v) => updateAiInstructions({ relate: v })}
+                  placeholder="e.g. focus on technical connections, only health topics, ignore personal entries"
+                />
                 <textarea
                   className="w-full bg-surface2 border border-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/40 resize-none"
                   rows={4}
@@ -963,35 +979,121 @@ Return ONLY a valid JSON array (no explanation, no markdown):
                   Find Related Entries
                 </Button>
 
-                {relateResults.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-ink2 uppercase tracking-wide">{relateResults.length} related entries found</p>
-                    {relateResults.map(({ row, reason }) => (
-                      <div
-                        key={row._rowIndex}
-                        className="bg-surface2 border border-border rounded-xl p-3 space-y-1.5"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-ink leading-tight">{row.title}</p>
+                {relateResults.length > 0 && (() => {
+                  const totalPages = Math.ceil(relateResults.length / RELATE_PAGE_SIZE)
+                  const pageResults = relateResults.slice(relatePage * RELATE_PAGE_SIZE, (relatePage + 1) * RELATE_PAGE_SIZE)
+                  return (
+                    <div className="space-y-3">
+                      {/* Header + multi-select toolbar */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-xs font-medium text-ink2 uppercase tracking-wide">
+                          {relateResults.length} related entries found
+                        </p>
+                        {selectedRelateRows.size > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-brand font-medium">{selectedRelateRows.size} selected</span>
+                            <button
+                              onClick={() => {
+                                const links = relateResults
+                                  .filter(({ row }) => selectedRelateRows.has(row._rowIndex))
+                                  .map(({ row }) => `[[${row.title}]]`)
+                                  .join('\n')
+                                navigator.clipboard.writeText(links)
+                                toast.success('Copied as wiki links — paste in any entry\'s Links field')
+                                setSelectedRelateRows(new Set())
+                              }}
+                              className="text-[10px] px-2 py-1 bg-brand text-white rounded-md hover:bg-brand/80 transition-colors font-medium flex items-center gap-1"
+                            >
+                              <Link2 className="w-2.5 h-2.5" />
+                              Copy as links
+                            </button>
+                            <button
+                              onClick={() => setSelectedRelateRows(new Set())}
+                              className="text-[10px] text-ink3 hover:text-ink transition-colors font-medium"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Results for current page */}
+                      {pageResults.map(({ row, reason, score }) => (
+                        <div
+                          key={row._rowIndex}
+                          className="bg-surface2 border border-border rounded-xl p-3 space-y-1.5"
+                        >
+                          <div className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedRelateRows.has(row._rowIndex)}
+                              onChange={() => setSelectedRelateRows((prev) => {
+                                const next = new Set(prev)
+                                next.has(row._rowIndex) ? next.delete(row._rowIndex) : next.add(row._rowIndex)
+                                return next
+                              })}
+                              className="w-3.5 h-3.5 rounded border-border accent-brand shrink-0 mt-0.5 cursor-pointer"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-sm font-medium text-ink leading-tight">{row.title}</p>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {score != null && (
+                                    <span className={cn(
+                                      'text-[9px] px-1.5 py-0.5 rounded-full font-bold',
+                                      score >= 70 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                        : score >= 40 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                        : 'bg-border text-ink3',
+                                    )}>
+                                      {score}%
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => useBrainStore.getState().openModal(row)}
+                                    className="flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    Open
+                                  </button>
+                                </div>
+                              </div>
+                              {row.category && (
+                                <span className="inline-block text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded font-medium mt-0.5">
+                                  {row.category}
+                                </span>
+                              )}
+                              <p className="text-xs text-ink2 leading-relaxed mt-1">{reason}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between gap-2 pt-1">
                           <button
-                            type="button"
-                            onClick={() => useBrainStore.getState().openModal(row)}
-                            className="shrink-0 flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+                            onClick={() => setRelatePage((p) => Math.max(0, p - 1))}
+                            disabled={relatePage === 0}
+                            className="text-xs px-3 py-1.5 bg-surface2 border border-border rounded-lg disabled:opacity-40 hover:bg-hover transition-colors font-medium"
                           >
-                            <ExternalLink className="w-3 h-3" />
-                            Open
+                            ← Prev
+                          </button>
+                          <span className="text-xs text-ink3">
+                            {relatePage + 1} / {totalPages}
+                          </span>
+                          <button
+                            onClick={() => setRelatePage((p) => Math.min(totalPages - 1, p + 1))}
+                            disabled={relatePage >= totalPages - 1}
+                            className="text-xs px-3 py-1.5 bg-surface2 border border-border rounded-lg disabled:opacity-40 hover:bg-hover transition-colors font-medium"
+                          >
+                            Next →
                           </button>
                         </div>
-                        {row.category && (
-                          <span className="inline-block text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded font-medium">
-                            {row.category}
-                          </span>
-                        )}
-                        <p className="text-xs text-ink2 leading-relaxed">{reason}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {!relateResults.length && !relateLoading && relateQuery.trim() && (
                   <p className="text-xs text-ink3 text-center py-4">Run a search above to find related entries</p>
