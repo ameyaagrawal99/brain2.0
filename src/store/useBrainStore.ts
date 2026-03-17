@@ -32,6 +32,7 @@ export interface AIInstructions {
   bulk:   string
   digest: string
   chat:   string
+  relate: string
 }
 
 const DEFAULT_AI_INSTRUCTIONS: AIInstructions = {
@@ -39,6 +40,7 @@ const DEFAULT_AI_INSTRUCTIONS: AIInstructions = {
   bulk:   '',
   digest: '',
   chat:   '',
+  relate: '',
 }
 
 interface AuthState {

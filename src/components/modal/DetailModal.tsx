@@ -8,6 +8,7 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
 import { parseTags, formatDate, formatRelative, isImageUrl } from '@/lib/utils'
+import { expandChain } from '@/lib/linkGraph'
 import { parsePeople } from '@/lib/contacts'
 import { renderMarkdown } from '@/lib/markdown'
 import { cn } from '@/lib/utils'
@@ -33,7 +34,15 @@ function cleanVal(v: string): string {
 const DEFAULT_CATEGORIES = ['', 'Journal', 'Work', 'Learning', 'Health', 'Finance', 'Ideas', 'Personal', 'Other']
 const STATUS_OPTIONS      = ['', 'Pending', 'In Progress', 'In Review', 'Done', 'Blocked']
 
-interface RelatedEntry { row: BrainRow; reason: string }
+interface RelatedEntry {
+  row: BrainRow
+  reason: string
+  score?: number
+  alreadyLinked?: boolean
+  isBacklink?: boolean
+}
+
+type ConnectionTab = 'backlinks' | 'outgoing' | 'suggested'
 
 export function DetailModal() {
   const selectedRow          = useBrainStore((s) => s.selectedRow)
@@ -59,6 +68,8 @@ export function DetailModal() {
   const [fields, setFields]         = useState<Partial<EditableFields>>({})
   const [relatedEntries, setRelatedEntries] = useState<RelatedEntry[]>([])
   const [showRelated, setShowRelated]       = useState(false)
+  const [selectedRelated, setSelectedRelated] = useState<Set<number>>(new Set())
+  const [activeConnTab, setActiveConnTab]     = useState<ConnectionTab>('suggested')
 
   const row        = selectedRow
   const histSteps  = row ? (entryHistory[row._rowIndex]?.length  ?? 0) : 0
@@ -84,6 +95,11 @@ export function DetailModal() {
       return pattern.test([r.original, r.rewritten, r.actionItems, r.links].join('\n'))
     })
   }, [allRows, selectedRow])
+
+  // Reset multi-select when AI suggestions change
+  useEffect(() => {
+    setSelectedRelated(new Set())
+  }, [relatedEntries])
 
   // Keyboard shortcuts: Cmd+Z / Cmd+Shift+Z only when modal is open
   useEffect(() => {
@@ -178,6 +194,15 @@ export function DetailModal() {
 
     setRelatedEntries([])
     setShowRelated(true)
+    setActiveConnTab('suggested')
+
+    // Build set of already-linked entry titles for deduplication
+    const currentLinksText = (fields.links ?? selectedRow?.links ?? '')
+    const existingLinkTitles = new Set(
+      currentLinksText.split('\n')
+        .filter((l) => /^\[\[.+\]\]$/.test(l.trim()))
+        .map((l) => l.trim().slice(2, -2).toLowerCase())
+    )
 
     // Keyword-score the other rows for better context selection
     const words = thisContent.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
@@ -185,10 +210,10 @@ export function DetailModal() {
       .filter((r) => r._rowIndex !== row._rowIndex)
       .map((r) => {
         const text = [r.title, r.category, r.tags, r.rewritten, r.original].join(' ').toLowerCase()
-        const score = words.reduce((s, w) => s + (text.split(w).length - 1), 0)
-        return { r, score }
+        const kw = words.reduce((s, w) => s + (text.split(w).length - 1), 0)
+        return { r, kw }
       })
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => b.kw - a.kw)
 
     // Top 35 most keyword-relevant as AI context
     const pool = scored.slice(0, 35).map(({ r }) => r)
@@ -196,22 +221,33 @@ export function DetailModal() {
       `${i + 1}. Title: "${r.title}" | Category: ${r.category || 'general'} | Snippet: ${(r.rewritten || r.original || '').slice(0, 120)}`
     ).join('\n')
 
-    const prompt = `Current entry: "${merged.title}"\nContent: ${thisContent.slice(0, 300)}\n\nKnowledge base (${pool.length} entries):\n${context}\n\nFind the 5 most semantically related entries. Return ONLY valid JSON array:\n[{"title":"exact entry title","reason":"brief 1-sentence why related"}]\nJSON only, no other text.`
+    const prompt = `Current entry: "${merged.title}"\nContent: ${thisContent.slice(0, 300)}\n\nKnowledge base (${pool.length} entries):\n${context}\n\nFind the 10 most semantically related entries. Return ONLY valid JSON array:\n[{"title":"exact entry title","reason":"brief 1-sentence why related","score":0-100}]\nWhere score is 0-100 relevance (70+ = strong, 40-69 = moderate, <40 = weak). JSON only, no other text.`
 
     try {
-      const result = await runRelated('rewrite', prompt, { maxTokens: 500 })
+      const result = await runRelated('rewrite', prompt, {
+        maxTokens: 600,
+        systemInstruction: aiInstructions.relate || undefined,
+      })
       const json = (result.rewritten || '').trim()
       const match = json.match(/\[[\s\S]*\]/)
       if (match) {
-        const parsed = JSON.parse(match[0]) as { title: string; reason: string }[]
-        const matched = parsed.flatMap((item) => {
+        const parsed = JSON.parse(match[0]) as { title: string; reason: string; score?: number }[]
+        const enriched = parsed.flatMap((item) => {
           const found = allRows.find((r) =>
             r.title?.toLowerCase().trim() === item.title.toLowerCase().trim()
           )
-          return found ? [{ row: found, reason: item.reason || '' }] : []
+          if (!found) return []
+          const titleKey = found.title?.toLowerCase().trim() ?? ''
+          return [{
+            row: found,
+            reason: item.reason || '',
+            score: typeof item.score === 'number' ? item.score : undefined,
+            alreadyLinked: existingLinkTitles.has(titleKey),
+            isBacklink: backlinks.some((b) => b._rowIndex === found._rowIndex),
+          }]
         })
-        setRelatedEntries(matched)
-        if (!matched.length) toast('No closely related entries found')
+        setRelatedEntries(enriched)
+        if (!enriched.length) toast('No closely related entries found')
       } else {
         toast.error('Could not parse AI response')
       }
@@ -229,13 +265,55 @@ export function DetailModal() {
     toast.success('Linked — click Save to keep')
   }
 
+  function handleLinkSelected() {
+    const toLink = relatedEntries
+      .filter(({ row: r }) => selectedRelated.has(r._rowIndex))
+      .map(({ row: r }) => r)
+    const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
+    const newRefs = toLink
+      .map((r) => `[[${r.title}]]`)
+      .filter((ref) => !currentLinks.includes(ref))
+    if (!newRefs.length) { toast('All selected entries already linked'); return }
+    patchField('links', [currentLinks, ...newRefs].filter(Boolean).join('\n'))
+    setEditing(true)
+    setSelectedRelated(new Set())
+    toast.success(`${newRefs.length} entr${newRefs.length === 1 ? 'y' : 'ies'} linked — click Save to keep`)
+  }
+
+  function handleLinkChain(r: BrainRow) {
+    const chain = expandChain([r], allRows, 3)
+    const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
+    const newRefs = [r, ...chain]
+      .map((c) => `[[${c.title}]]`)
+      .filter((ref) => !currentLinks.includes(ref))
+    if (!newRefs.length) { toast('Entire chain already linked'); return }
+    patchField('links', [currentLinks, ...newRefs].filter(Boolean).join('\n'))
+    setEditing(true)
+    toast.success(
+      chain.length > 0
+        ? `Linked ${newRefs.length} entr${newRefs.length === 1 ? 'y' : 'ies'} (entry + ${chain.length} chained) — click Save to keep`
+        : 'Linked — click Save to keep'
+    )
+  }
+
+  function unlinkEntry(title: string) {
+    const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
+    const newLinks = currentLinks
+      .split('\n')
+      .filter((l) => l.trim() !== `[[${title}]]`)
+      .join('\n')
+    patchField('links', newLinks)
+    setEditing(true)
+    toast.success('Unlinked — click Save to keep')
+  }
+
   const actionLines = actionItems
     .split('\n')
     .filter(Boolean)
     .map((l) => l.replace(/^\d+\.\s*/, '').trim())
     .filter((l) => l.length > 0)
 
-  const showRelatedSection = backlinks.length > 0 || relatedEntries.length > 0 || relatedLoading
+  const showRelatedSection = backlinks.length > 0 || entryRefs.length > 0 || relatedEntries.length > 0 || relatedLoading
 
   return (
     <>
@@ -378,6 +456,14 @@ export function DetailModal() {
                       Find related
                     </Button>
                     {aiError && <span className="text-xs text-red-500 ml-1">{aiError}</span>}
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-ink3 mb-1 px-0.5">For "Find related":</p>
+                    <InstructionsBox
+                      value={aiInstructions.relate}
+                      onChange={(v) => updateAiInstructions({ relate: v })}
+                      placeholder="e.g. focus on technical connections, only health topics, ignore personal entries"
+                    />
                   </div>
                 </>
               ) : (
@@ -621,9 +707,10 @@ export function DetailModal() {
               </div>
             </div>
 
-            {/* ── Related Entries ── */}
+            {/* ── Connections Panel ── */}
             {(showRelatedSection || showRelated) && (
               <div className="border border-border rounded-xl overflow-hidden">
+                {/* Header (collapsible) */}
                 <button
                   onClick={() => setShowRelated((v) => !v)}
                   className="w-full flex items-center justify-between px-4 py-3 bg-surface2/50 hover:bg-hover transition-colors"
@@ -631,102 +718,267 @@ export function DetailModal() {
                   <div className="flex items-center gap-2">
                     <Network className="w-3.5 h-3.5 text-brand" />
                     <span className="text-[11px] font-semibold text-ink2 uppercase tracking-wider">
-                      Related Entries
+                      Connections
                     </span>
-                    {(backlinks.length > 0 || relatedEntries.length > 0) && (
-                      <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold">
-                        {backlinks.length + relatedEntries.length}
-                      </span>
-                    )}
+                    <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold">
+                      {backlinks.length + entryRefs.length + relatedEntries.length}
+                    </span>
                   </div>
                   {showRelated ? <ChevronUp className="w-3.5 h-3.5 text-ink3" /> : <ChevronDown className="w-3.5 h-3.5 text-ink3" />}
                 </button>
 
                 {showRelated && (
-                  <div className="px-4 py-3 space-y-4">
-                    {/* Backlinks */}
-                    {backlinks.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider mb-2">
-                          Linked from ({backlinks.length})
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {backlinks.map((r) => (
-                            <button
-                              key={r._rowIndex}
-                              onClick={() => openModal(r)}
-                              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-surface2 border border-border rounded-lg text-xs hover:border-brand/30 hover:bg-brand/5 transition-colors"
-                            >
-                              <Link2 className="w-3 h-3 text-brand shrink-0" />
-                              <span className="text-ink font-medium truncate max-w-[160px]">{r.title}</span>
-                              {r.category && <span className="text-ink3 shrink-0">{r.category}</span>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  <>
+                    {/* Tab bar */}
+                    <div className="flex border-b border-border bg-surface2/30">
+                      {([
+                        { key: 'backlinks' as ConnectionTab, label: `Backlinks`, count: backlinks.length },
+                        { key: 'outgoing'  as ConnectionTab, label: `Outgoing`,  count: entryRefs.length },
+                        { key: 'suggested' as ConnectionTab, label: `AI Suggested`, count: relatedEntries.length },
+                      ]).map(({ key, label, count }) => (
+                        <button
+                          key={key}
+                          onClick={() => setActiveConnTab(key)}
+                          className={cn(
+                            'flex-1 text-[10px] font-semibold py-2 px-1.5 transition-colors uppercase tracking-wider flex items-center justify-center gap-1',
+                            activeConnTab === key
+                              ? 'text-brand border-b-2 border-brand bg-brand/5'
+                              : 'text-ink3 hover:text-ink2 border-b-2 border-transparent',
+                          )}
+                        >
+                          {label}
+                          {count > 0 && (
+                            <span className={cn(
+                              'text-[9px] px-1 py-0.5 rounded-full font-bold',
+                              activeConnTab === key ? 'bg-brand text-white' : 'bg-border text-ink3',
+                            )}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
 
-                    {/* AI-suggested related entries */}
-                    {relatedLoading && (
-                      <div className="flex items-center gap-2 text-xs text-ink3 py-2">
-                        <div className="flex gap-1">
-                          <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
-                        Finding related entries…
-                      </div>
-                    )}
+                    {/* Tab content */}
+                    <div className="px-4 py-3">
 
-                    {relatedEntries.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider mb-2">
-                          AI suggested
-                        </p>
-                        <div className="space-y-2">
-                          {relatedEntries.map(({ row: r, reason }) => (
-                            <div
-                              key={r._rowIndex}
-                              className="flex items-center gap-2 p-2.5 bg-surface2 border border-border rounded-lg"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <button
-                                  onClick={() => openModal(r)}
-                                  className="text-sm font-medium text-brand hover:underline text-left truncate block max-w-full"
-                                >
-                                  {r.title}
-                                </button>
-                                {reason && (
-                                  <p className="text-[11px] text-ink3 mt-0.5 line-clamp-1">{reason}</p>
-                                )}
+                      {/* ── BACKLINKS TAB ── */}
+                      {activeConnTab === 'backlinks' && (
+                        backlinks.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {backlinks.map((r) => (
+                              <button
+                                key={r._rowIndex}
+                                onClick={() => openModal(r)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-surface2 border border-border rounded-lg text-xs hover:border-brand/30 hover:bg-brand/5 transition-colors"
+                              >
+                                <Link2 className="w-3 h-3 text-brand shrink-0" />
+                                <span className="text-ink font-medium truncate max-w-[160px]">{r.title}</span>
+                                {r.category && <span className="text-ink3 shrink-0">{r.category}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-ink3 italic py-2">No entries link to this one yet.</p>
+                        )
+                      )}
+
+                      {/* ── OUTGOING TAB ── */}
+                      {activeConnTab === 'outgoing' && (
+                        entryRefs.length > 0 ? (
+                          <div className="space-y-2">
+                            {entryRefs.map((title, i) => {
+                              const found = allRows.find((r) => r.title?.toLowerCase().trim() === title.toLowerCase().trim())
+                              return found ? (
+                                <div key={i} className="flex items-center gap-2 p-2.5 bg-surface2 border border-border rounded-lg">
+                                  <div className="flex-1 min-w-0">
+                                    <button
+                                      onClick={() => openModal(found)}
+                                      className="text-sm font-medium text-brand hover:underline text-left truncate block max-w-full"
+                                    >
+                                      {title}
+                                    </button>
+                                    {found.category && (
+                                      <span className="text-[10px] text-ink3">{found.category}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-1.5 shrink-0">
+                                    <button
+                                      onClick={() => openModal(found)}
+                                      className="text-[10px] px-2 py-1 bg-brand/5 text-brand border border-brand/20 rounded-lg hover:bg-brand/10 transition-colors font-medium"
+                                    >
+                                      Open
+                                    </button>
+                                    <button
+                                      onClick={() => unlinkEntry(title)}
+                                      className="text-[10px] px-2 py-1 bg-surface text-ink2 border border-border rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors font-medium"
+                                    >
+                                      Unlink
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div key={i} className="flex items-center gap-2 p-2.5 bg-surface2 border border-border rounded-lg">
+                                  <span className="text-xs text-red-400 line-through flex items-center gap-1 flex-1">
+                                    <Link2 className="w-3 h-3" />{title}
+                                  </span>
+                                  <span className="text-[10px] text-ink3 shrink-0">not found</span>
+                                  <button
+                                    onClick={() => unlinkEntry(title)}
+                                    className="text-[10px] px-2 py-1 bg-surface text-red-400 border border-red-200 rounded-lg hover:bg-red-50 transition-colors font-medium shrink-0"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-ink3 italic py-2">
+                            No outgoing links yet. Add <code className="text-brand">{'[[Entry Title]]'}</code> in the Links field to connect entries.
+                          </p>
+                        )
+                      )}
+
+                      {/* ── AI SUGGESTED TAB ── */}
+                      {activeConnTab === 'suggested' && (
+                        <div className="space-y-3">
+                          {relatedLoading && (
+                            <div className="flex items-center gap-2 text-xs text-ink3 py-2">
+                              <div className="flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                               </div>
-                              <div className="flex gap-1.5 shrink-0">
-                                <button
-                                  onClick={() => openModal(r)}
-                                  className="text-[10px] px-2 py-1 bg-brand/5 text-brand border border-brand/20 rounded-lg hover:bg-brand/10 transition-colors font-medium"
-                                >
-                                  Open
-                                </button>
-                                <button
-                                  onClick={() => linkToEntry(r)}
-                                  className="text-[10px] px-2 py-1 bg-surface text-ink2 border border-border rounded-lg hover:bg-hover transition-colors font-medium flex items-center gap-1"
-                                >
-                                  <Link2 className="w-2.5 h-2.5" />
-                                  Link
-                                </button>
-                              </div>
+                              Finding related entries…
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          )}
 
-                    {!relatedLoading && relatedEntries.length === 0 && backlinks.length === 0 && (
-                      <p className="text-xs text-ink3 italic py-2">
-                        No related entries yet. Click "Find related" in the AI bar to discover connections.
-                      </p>
-                    )}
-                  </div>
+                          {!relatedLoading && relatedEntries.length === 0 && (
+                            <p className="text-xs text-ink3 italic py-2">
+                              Click "Find related" in the AI bar to discover AI-suggested connections.
+                            </p>
+                          )}
+
+                          {/* Multi-select toolbar */}
+                          {selectedRelated.size > 0 && (
+                            <div className="flex items-center gap-2 bg-brand/5 border border-brand/20 rounded-lg px-3 py-2">
+                              <span className="text-xs text-brand font-medium">{selectedRelated.size} selected</span>
+                              <button
+                                onClick={handleLinkSelected}
+                                className="text-[10px] px-2 py-1 bg-brand text-white rounded-md hover:bg-brand/80 transition-colors font-medium flex items-center gap-1"
+                              >
+                                <Link2 className="w-2.5 h-2.5" />
+                                Link all
+                              </button>
+                              <button
+                                onClick={() => setSelectedRelated(new Set())}
+                                className="text-[10px] px-2 py-1 text-ink3 hover:text-ink transition-colors font-medium ml-auto"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Tiered groups */}
+                          {relatedEntries.length > 0 && (() => {
+                            const strong   = relatedEntries.filter((e) => (e.score ?? 50) >= 70)
+                            const moderate = relatedEntries.filter((e) => { const s = e.score ?? 50; return s >= 40 && s < 70 })
+                            const weak     = relatedEntries.filter((e) => (e.score ?? 50) < 40)
+                            const tiers = [
+                              { label: 'Strong match',   entries: strong,   cls: 'text-green-600 dark:text-green-400' },
+                              { label: 'Moderate match', entries: moderate, cls: 'text-amber-600 dark:text-amber-400' },
+                              { label: 'Weak match',     entries: weak,     cls: 'text-ink3' },
+                            ].filter(({ entries }) => entries.length > 0)
+
+                            return (
+                              <div className="space-y-3">
+                                {tiers.map(({ label, entries, cls }) => (
+                                  <div key={label}>
+                                    <p className={cn('text-[10px] font-semibold uppercase tracking-wider mb-1.5', cls)}>
+                                      {label} ({entries.length})
+                                    </p>
+                                    <div className="space-y-2">
+                                      {entries.map(({ row: r, reason, alreadyLinked, isBacklink }) => (
+                                        <div
+                                          key={r._rowIndex}
+                                          className={cn(
+                                            'flex items-center gap-2 p-2.5 bg-surface2 border border-border rounded-lg transition-opacity',
+                                            alreadyLinked && 'opacity-60',
+                                          )}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedRelated.has(r._rowIndex)}
+                                            disabled={!!alreadyLinked}
+                                            onChange={() => setSelectedRelated((prev) => {
+                                              const next = new Set(prev)
+                                              next.has(r._rowIndex) ? next.delete(r._rowIndex) : next.add(r._rowIndex)
+                                              return next
+                                            })}
+                                            className="w-3.5 h-3.5 rounded border-border accent-brand shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <button
+                                                onClick={() => openModal(r)}
+                                                className="text-sm font-medium text-brand hover:underline text-left truncate max-w-[160px]"
+                                              >
+                                                {r.title}
+                                              </button>
+                                              {alreadyLinked && (
+                                                <span className="text-[9px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold shrink-0">
+                                                  Linked
+                                                </span>
+                                              )}
+                                              {isBacklink && !alreadyLinked && (
+                                                <span className="text-[9px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold shrink-0">
+                                                  Backlink
+                                                </span>
+                                              )}
+                                            </div>
+                                            {reason && (
+                                              <p className="text-[11px] text-ink3 mt-0.5 line-clamp-1">{reason}</p>
+                                            )}
+                                          </div>
+                                          {!alreadyLinked && (
+                                            <div className="flex gap-1 shrink-0">
+                                              <button
+                                                onClick={() => openModal(r)}
+                                                className="text-[10px] px-2 py-1 bg-brand/5 text-brand border border-brand/20 rounded-lg hover:bg-brand/10 transition-colors font-medium"
+                                              >
+                                                Open
+                                              </button>
+                                              <button
+                                                onClick={() => linkToEntry(r)}
+                                                className="text-[10px] px-2 py-1 bg-surface text-ink2 border border-border rounded-lg hover:bg-hover transition-colors font-medium flex items-center gap-1"
+                                              >
+                                                <Link2 className="w-2.5 h-2.5" />
+                                                Link
+                                              </button>
+                                              <button
+                                                onClick={() => handleLinkChain(r)}
+                                                title={`Link entry + all its connected entries (up to 3 hops)`}
+                                                className="text-[10px] px-2 py-1 bg-surface text-ink2 border border-border rounded-lg hover:bg-hover transition-colors font-medium flex items-center gap-1"
+                                              >
+                                                <Network className="w-2.5 h-2.5" />
+                                                Chain
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      )}
+
+                    </div>
+                  </>
                 )}
               </div>
             )}
