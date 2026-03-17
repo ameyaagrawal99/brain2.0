@@ -44,7 +44,7 @@ export type SortKey =
   | 'num-asc'
   | 'num-desc'
 
-export type ViewMode = 'card' | 'table' | 'board'
+export type ViewMode = 'card' | 'table' | 'board' | 'graph'
 
 export interface SpecialDay {
   id: string

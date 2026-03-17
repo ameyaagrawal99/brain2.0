@@ -7,6 +7,7 @@ import { Sidebar }            from './Sidebar'
 import { CardView }           from '@/components/views/CardView'
 import { TableView }          from '@/components/views/TableView'
 import { TaskBoard }          from '@/components/views/TaskBoard'
+import { GraphView }          from '@/components/views/GraphView'
 import { DetailModal }        from '@/components/modal/DetailModal'
 import { NewRowModal }        from '@/components/modal/NewRowModal'
 import { MilestoneModal }     from '@/components/modal/MilestoneModal'
@@ -172,6 +173,7 @@ export function AppShell() {
           {viewMode === 'card'  && <CardView />}
           {viewMode === 'table' && <TableView />}
           {viewMode === 'board' && <TaskBoard />}
+          {viewMode === 'graph' && <GraphView />}
         </main>
       </div>
       <BottomNav />
