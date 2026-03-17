@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import {
   X, Wand2, Zap, Brain, Tag, CheckSquare, FileText, Sparkles,
   Key, Download, ChevronDown, ChevronUp, RotateCcw, Heading, StopCircle, MousePointerClick, Network, ExternalLink,
+  Link2, Check, Trash2,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { InstructionsBox } from '@/components/ui/InstructionsBox'
@@ -14,9 +15,47 @@ import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { BrainRow } from '@/types/sheet'
 
-type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'relate' | 'export'
+type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'relate' | 'links' | 'export'
 
 interface RelatedEntry { row: BrainRow; reason: string }
+
+interface LinkSuggestion {
+  a:      BrainRow
+  b:      BrainRow
+  reason: string
+}
+
+/* ─── Linked-context helpers ─────────────────────────────────────────── */
+
+/** Resolve [[Title]] references in all text fields of a row and return the linked BrainRows. */
+function resolveLinkedRows(row: BrainRow, allRows: BrainRow[]): BrainRow[] {
+  const titleMap = new Map<string, BrainRow>()
+  allRows.forEach((r) => { if (r.title?.trim()) titleMap.set(r.title.toLowerCase().trim(), r) })
+  const found = new Map<number, BrainRow>()
+  const WIKI = /\[\[([^\]]+)\]\]/g
+  const allText = [row.links, row.original, row.rewritten, row.actionItems].join('\n')
+  let m: RegExpExecArray | null
+  while ((m = WIKI.exec(allText)) !== null) {
+    const linked = titleMap.get(m[1].trim().toLowerCase())
+    if (linked && linked._rowIndex !== row._rowIndex) found.set(linked._rowIndex, linked)
+  }
+  return [...found.values()]
+}
+
+/** Expand a list of rows by one hop of links (deduped). */
+function expandWithLinked(rows: BrainRow[], allRows: BrainRow[]): BrainRow[] {
+  const seen = new Set(rows.map((r) => r._rowIndex))
+  const expanded = [...rows]
+  rows.forEach((r) => {
+    resolveLinkedRows(r, allRows).forEach((linked) => {
+      if (!seen.has(linked._rowIndex)) {
+        seen.add(linked._rowIndex)
+        expanded.push(linked)
+      }
+    })
+  })
+  return expanded
+}
 
 /* ─── Bulk enhance options ───────────────────────────────────────────── */
 
@@ -126,6 +165,7 @@ export function AIPanel() {
   const { saveRow, undoBulk, setLastBulkRows } = useSheetSync()
   const { run: runAI, loading: aiLoading, abort: abortAI } = useAI()
   const { run: runRelate, loading: relateLoading }         = useAI()
+  const { run: runLinks,  loading: linksLoading }          = useAI()
   const stopRef = useRef(false)
   const { filteredRows } = useFilters()
 
@@ -138,6 +178,7 @@ export function AIPanel() {
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
   const [relateQuery, setRelateQuery] = useState('')
   const [relateResults, setRelateResults] = useState<RelatedEntry[]>([])
+  const [linkSuggestions, setLinkSuggestions] = useState<LinkSuggestion[]>([])
 
   // Bulk options (component-level state — no need to persist)
   const [bulkFieldOptions, setBulkFieldOptions] = useState<BulkFieldOptions>({
@@ -255,12 +296,15 @@ export function AIPanel() {
 
   /* ── Digest ── */
   async function handleGenerateDigest() {
-    const sample = filteredRows.slice(0, 20)
-    if (!sample.length) { toast.error('No entries to summarize'); return }
+    const base = filteredRows.slice(0, 20)
+    if (!base.length) { toast.error('No entries to summarize'); return }
+    // Expand context with linked entries (one hop)
+    const sample = expandWithLinked(base, rows).slice(0, 30)
     const context = sample.map((r, i) =>
       `${i + 1}. [${r.category}] ${r.title}: ${(r.rewritten || r.original || '').slice(0, 200)}`
     ).join('\n')
-    const prompt = `You are a personal assistant. Here are recent journal entries:\n\n${context}\n\nWrite a thoughtful weekly digest (3-5 sentences): key themes, accomplishments, patterns, and suggested focus for the week.`
+    const linkedCount = sample.length - base.length
+    const prompt = `You are a personal assistant. Here are recent journal entries${linkedCount > 0 ? ` (including ${linkedCount} linked entries for context)` : ''}:\n\n${context}\n\nWrite a thoughtful weekly digest (3-5 sentences): key themes, accomplishments, patterns, and suggested focus for the week.`
     const result = await runAI('rewrite', prompt, {
       systemInstruction: aiInstructions.digest,
     })
@@ -280,7 +324,10 @@ export function AIPanel() {
       const score = words.reduce((s, w) => s + (text.split(w).length - 1), 0)
       return { r, score }
     }).sort((a, b) => b.score - a.score)
-    const context = scored.slice(0, 25).map(({ r }) =>
+    // Expand top results with their linked entries (treat clusters as one unit)
+    const topRows = scored.slice(0, 15).map(({ r }) => r)
+    const contextRows = expandWithLinked(topRows, rows).slice(0, 30)
+    const context = contextRows.map((r) =>
       `[${r.category || 'General'}] ${r.title}: ${(r.rewritten || r.original || '').slice(0, 200)}`
     ).join('\n')
     const titles = rows.map((r) => r.title).filter(Boolean).slice(0, 50).join(', ')
@@ -346,6 +393,71 @@ Output only valid JSON, no other text.`
     }
   }
 
+  /* ── Link Suggestions ── */
+  async function handleGenerateLinkSuggestions() {
+    const candidates = rows.filter((r) => r.title?.trim() && (r.original || r.rewritten)).slice(0, 80)
+    if (candidates.length < 2) { toast.error('Need at least 2 entries with content'); return }
+
+    setLinkSuggestions([])
+
+    const entryList = candidates.map((r, i) =>
+      `${i + 1}. [${r.category || 'General'}] "${r.title}" — ${(r.rewritten || r.original || '').slice(0, 100)}`
+    ).join('\n')
+
+    const prompt = `You are analyzing a personal knowledge base. Find 15 pairs of entries that would benefit from being wiki-linked together (they share themes, topics, people, or context).
+
+Entries:
+${entryList}
+
+Return ONLY a valid JSON array (no explanation, no markdown):
+[{"a":"exact title A","b":"exact title B","reason":"one sentence why they should be linked"}]`
+
+    const result = await runLinks('rewrite', prompt, { maxTokens: 1200 })
+    const raw = result.rewritten || ''
+    try {
+      const match = raw.match(/\[[\s\S]*\]/)
+      if (!match) throw new Error()
+      const parsed = JSON.parse(match[0]) as { a: string; b: string; reason: string }[]
+      const titleMap = new Map(rows.map((r) => [r.title?.toLowerCase().trim(), r]))
+      const suggestions: LinkSuggestion[] = parsed.flatMap((item) => {
+        const rowA = titleMap.get(item.a?.toLowerCase().trim())
+        const rowB = titleMap.get(item.b?.toLowerCase().trim())
+        if (!rowA || !rowB || rowA._rowIndex === rowB._rowIndex) return []
+        // Skip pairs that are already explicitly linked
+        const aLinks = rowA.links || ''
+        if (aLinks.includes(`[[${rowB.title}]]`) || (rowB.links || '').includes(`[[${rowA.title}]]`)) return []
+        return [{ a: rowA, b: rowB, reason: item.reason || '' }]
+      })
+      if (!suggestions.length) { toast('All suggested pairs are already linked!'); return }
+      setLinkSuggestions(suggestions)
+    } catch {
+      toast.error('Could not parse AI response')
+    }
+  }
+
+  async function handleAcceptLinkSuggestion(idx: number) {
+    const s = linkSuggestions[idx]
+    if (!s) return
+    const addLink = (row: BrainRow, target: BrainRow) => {
+      const current = (row.links || '').trim()
+      const ref = `[[${target.title}]]`
+      if (current.includes(ref)) return current
+      return [current, ref].filter(Boolean).join('\n')
+    }
+    try {
+      await saveRow(s.a._rowIndex, { links: addLink(s.a, s.b) }, 'AI: Link suggestion')
+      await saveRow(s.b._rowIndex, { links: addLink(s.b, s.a) }, 'AI: Link suggestion')
+      toast.success(`Linked "${s.a.title}" ↔ "${s.b.title}"`)
+      setLinkSuggestions((prev) => prev.filter((_, i) => i !== idx))
+    } catch {
+      toast.error('Failed to save link')
+    }
+  }
+
+  function handleSkipLinkSuggestion(idx: number) {
+    setLinkSuggestions((prev) => prev.filter((_, i) => i !== idx))
+  }
+
   /* ── Export ── */
   function handleExport() {
     const data = exportScope === 'all' ? rows : filteredRows
@@ -365,6 +477,7 @@ Output only valid JSON, no other text.`
     { key: 'digest', label: 'Digest',        icon: FileText },
     { key: 'chat',   label: 'Chat',          icon: Brain },
     { key: 'relate', label: 'Find Related',  icon: Network },
+    { key: 'links',  label: 'Link Suggest', icon: Link2 },
     { key: 'export', label: 'Export',        icon: Download },
   ]
 
@@ -882,6 +995,96 @@ Output only valid JSON, no other text.`
 
                 {!relateResults.length && !relateLoading && relateQuery.trim() && (
                   <p className="text-xs text-ink3 text-center py-4">Run a search above to find related entries</p>
+                )}
+              </div>
+            )}
+
+            {/* ── LINK SUGGEST ── */}
+            {mode === 'links' && (
+              <div className="space-y-4">
+                <p className="text-xs text-ink2">
+                  AI scans all your entries and suggests pairs that should be linked together. Accept to save bidirectional wiki links.
+                </p>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  <div className="bg-surface2 rounded-xl p-3">
+                    <div className="text-2xl font-bold text-ink">{rows.filter((r) => r.title && (r.original || r.rewritten)).length}</div>
+                    <div className="text-xs text-ink3 mt-0.5">Entries to scan</div>
+                  </div>
+                  <div className="bg-surface2 rounded-xl p-3">
+                    <div className="text-2xl font-bold text-brand">{linkSuggestions.length}</div>
+                    <div className="text-xs text-ink3 mt-0.5">Pending suggestions</div>
+                  </div>
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleGenerateLinkSuggestions}
+                  loading={linksLoading}
+                  className="w-full justify-center"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  {linkSuggestions.length > 0 ? 'Refresh suggestions' : 'Find link suggestions'}
+                </Button>
+
+                {linkSuggestions.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide">
+                      {linkSuggestions.length} suggestion{linkSuggestions.length !== 1 ? 's' : ''} — accept to create bidirectional links
+                    </p>
+                    {linkSuggestions.map((s, idx) => (
+                      <div
+                        key={`${s.a._rowIndex}-${s.b._rowIndex}`}
+                        className="bg-surface2 border border-border rounded-xl p-3 space-y-2"
+                      >
+                        {/* Pair */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => useBrainStore.getState().openModal(s.a)}
+                            className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
+                          >
+                            {s.a.title}
+                          </button>
+                          <Link2 className="w-3 h-3 text-ink3 shrink-0" />
+                          <button
+                            onClick={() => useBrainStore.getState().openModal(s.b)}
+                            className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
+                          >
+                            {s.b.title}
+                          </button>
+                        </div>
+                        {/* Reason */}
+                        <p className="text-[11px] text-ink3 leading-relaxed">{s.reason}</p>
+                        {/* Actions */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAcceptLinkSuggestion(idx)}
+                            className="flex items-center gap-1 text-xs font-medium text-white bg-brand rounded-lg px-2.5 py-1 hover:bg-brand/90 transition-colors"
+                          >
+                            <Check className="w-3 h-3" />
+                            Link them
+                          </button>
+                          <button
+                            onClick={() => handleSkipLinkSuggestion(idx)}
+                            className="flex items-center gap-1 text-xs font-medium text-ink3 bg-surface border border-border rounded-lg px-2.5 py-1 hover:text-ink hover:bg-hover transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Skip
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!linkSuggestions.length && !linksLoading && (
+                  <div className="text-center py-8 text-ink3 text-xs space-y-2">
+                    <Link2 className="w-8 h-8 mx-auto opacity-20" />
+                    <p>Click "Find link suggestions" to discover connections AI thinks should be linked.</p>
+                    <p className="text-ink3/60">Tip: also open any entry and use "Find related" to link individual entries.</p>
+                  </div>
                 )}
               </div>
             )}

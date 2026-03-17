@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   BookOpen, Plus, RefreshCw, Settings, LayoutGrid, Table2, Sun, Moon,
-  Wand2, Kanban, PanelLeft, Sparkles, ChevronDown, Star, X,
+  Wand2, Kanban, PanelLeft, Sparkles, ChevronDown, Star, X, Network,
 } from 'lucide-react'
 import { differenceInYears, differenceInMonths } from 'date-fns'
 import { useBrainStore } from '@/store/useBrainStore'
@@ -13,6 +13,7 @@ const VIEW_MODES: { mode: ViewMode; Icon: typeof LayoutGrid; label: string }[] =
   { mode: 'card',  Icon: LayoutGrid, label: 'Card view' },
   { mode: 'table', Icon: Table2,     label: 'Table view' },
   { mode: 'board', Icon: Kanban,     label: 'Task board' },
+  { mode: 'graph', Icon: Network,    label: 'Graph view' },
 ]
 
 function getElapsedShort(dateStr: string) {
