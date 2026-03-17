@@ -15,9 +15,10 @@ import { EditableFields } from '@/types/sheet'
 import {
   Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare,
   ExternalLink, Calendar, Hash, Image, Undo2, Redo2, Copy, Heading,
-  Users, UserPlus,
+  Users, UserPlus, Link2, Network, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import type { BrainRow } from '@/types/sheet'
 
 function isFormula(v: string): boolean {
   if (!v) return false
@@ -32,8 +33,11 @@ function cleanVal(v: string): string {
 const DEFAULT_CATEGORIES = ['', 'Journal', 'Work', 'Learning', 'Health', 'Finance', 'Ideas', 'Personal', 'Other']
 const STATUS_OPTIONS      = ['', 'Pending', 'In Progress', 'In Review', 'Done', 'Blocked']
 
+interface RelatedEntry { row: BrainRow; reason: string }
+
 export function DetailModal() {
   const selectedRow          = useBrainStore((s) => s.selectedRow)
+  const openModal            = useBrainStore((s) => s.openModal)
   const closeModal           = useBrainStore((s) => s.closeModal)
   const settings             = useBrainStore((s) => s.settings)
   const customCats           = useBrainStore((s) => s.customCategories)
@@ -45,13 +49,16 @@ export function DetailModal() {
   const contacts             = useBrainStore((s) => s.contacts)
 
   const { saveRow, removeRow, undoRow, redoRow } = useSheetSync()
-  const { run: runAI, loading: aiLoading, error: aiError } = useAI()
+  const { run: runAI, loading: aiLoading, error: aiError }       = useAI()
+  const { run: runRelated, loading: relatedLoading }             = useAI()
 
   const [editing, setEditing]       = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showAI, setShowAI]         = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
   const [fields, setFields]         = useState<Partial<EditableFields>>({})
+  const [relatedEntries, setRelatedEntries] = useState<RelatedEntry[]>([])
+  const [showRelated, setShowRelated]       = useState(false)
 
   const row        = selectedRow
   const histSteps  = row ? (entryHistory[row._rowIndex]?.length  ?? 0) : 0
@@ -65,6 +72,18 @@ export function DetailModal() {
     contacts.forEach((c) => set.add(c.name))
     return [...set].sort()
   }, [allRows, contacts])
+
+  // Backlinks: other entries that reference this one via [[Title]] in any text field
+  // ⚠️ Must be BEFORE any conditional return to satisfy Rules of Hooks
+  const backlinks = useMemo(() => {
+    if (!selectedRow?.title?.trim()) return []
+    const escaped = selectedRow.title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(`\\[\\[\\s*${escaped}\\s*\\]\\]`, 'i')
+    return allRows.filter((r) => {
+      if (r._rowIndex === selectedRow._rowIndex) return false
+      return pattern.test([r.original, r.rewritten, r.actionItems, r.links].join('\n'))
+    })
+  }, [allRows, selectedRow])
 
   // Keyboard shortcuts: Cmd+Z / Cmd+Shift+Z only when modal is open
   useEffect(() => {
@@ -96,10 +115,22 @@ export function DetailModal() {
   const links       = cleanVal(merged.links)
   const mediaUrl    = cleanVal(merged.mediaUrl)
 
+  // Separate HTTP links from [[entry refs]] in the links field
+  const linkLines  = links.split('\n').map((l) => l.trim()).filter(Boolean)
+  const httpLinks  = linkLines.filter((l) => l.startsWith('http'))
+  const entryRefs  = linkLines
+    .filter((l) => /^\[\[.+\]\]$/.test(l))
+    .map((l) => l.slice(2, -2).trim())
+
   const CATEGORY_OPTIONS = ['', ...new Set([
     ...DEFAULT_CATEGORIES.slice(1),
     ...customCats,
   ])].sort((a, b) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b))
+
+  const hasImage   = mediaUrl && isImageUrl(mediaUrl)
+  const peopleTags = parsePeople(cleanVal(merged.people ?? ''))
+
+  const inputCls = 'w-full text-sm px-3 py-2 bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-2 focus:ring-brand/40'
 
   function patchField(key: keyof EditableFields, val: string) {
     setFields((f) => ({ ...f, [key]: val }))
@@ -140,17 +171,71 @@ export function DetailModal() {
     }
   }
 
+  async function handleFindRelated() {
+    if (!row) return
+    const thisContent = original || rewritten || merged.title
+    if (!thisContent.trim()) { toast.error('No content to find related entries for'); return }
+
+    setRelatedEntries([])
+    setShowRelated(true)
+
+    // Keyword-score the other rows for better context selection
+    const words = thisContent.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
+    const scored = allRows
+      .filter((r) => r._rowIndex !== row._rowIndex)
+      .map((r) => {
+        const text = [r.title, r.category, r.tags, r.rewritten, r.original].join(' ').toLowerCase()
+        const score = words.reduce((s, w) => s + (text.split(w).length - 1), 0)
+        return { r, score }
+      })
+      .sort((a, b) => b.score - a.score)
+
+    // Top 35 most keyword-relevant as AI context
+    const pool = scored.slice(0, 35).map(({ r }) => r)
+    const context = pool.map((r, i) =>
+      `${i + 1}. Title: "${r.title}" | Category: ${r.category || 'general'} | Snippet: ${(r.rewritten || r.original || '').slice(0, 120)}`
+    ).join('\n')
+
+    const prompt = `Current entry: "${merged.title}"\nContent: ${thisContent.slice(0, 300)}\n\nKnowledge base (${pool.length} entries):\n${context}\n\nFind the 5 most semantically related entries. Return ONLY valid JSON array:\n[{"title":"exact entry title","reason":"brief 1-sentence why related"}]\nJSON only, no other text.`
+
+    try {
+      const result = await runRelated('rewrite', prompt, { maxTokens: 500 })
+      const json = (result.rewritten || '').trim()
+      const match = json.match(/\[[\s\S]*\]/)
+      if (match) {
+        const parsed = JSON.parse(match[0]) as { title: string; reason: string }[]
+        const matched = parsed.flatMap((item) => {
+          const found = allRows.find((r) =>
+            r.title?.toLowerCase().trim() === item.title.toLowerCase().trim()
+          )
+          return found ? [{ row: found, reason: item.reason || '' }] : []
+        })
+        setRelatedEntries(matched)
+        if (!matched.length) toast('No closely related entries found')
+      } else {
+        toast.error('Could not parse AI response')
+      }
+    } catch {
+      toast.error('Failed to find related entries')
+    }
+  }
+
+  function linkToEntry(r: BrainRow) {
+    const currentLinks = (fields.links ?? selectedRow.links ?? '').trim()
+    const newRef = `[[${r.title}]]`
+    if (currentLinks.includes(newRef)) { toast('Already linked'); return }
+    patchField('links', [currentLinks, newRef].filter(Boolean).join('\n'))
+    setEditing(true)
+    toast.success('Linked — click Save to keep')
+  }
+
   const actionLines = actionItems
     .split('\n')
     .filter(Boolean)
     .map((l) => l.replace(/^\d+\.\s*/, '').trim())
     .filter((l) => l.length > 0)
 
-  const linkLines  = links.split('\n').filter((l) => l.trim().startsWith('http'))
-  const hasImage   = mediaUrl && isImageUrl(mediaUrl)
-  const peopleTags = parsePeople(cleanVal(merged.people ?? ''))
-
-  const inputCls = 'w-full text-sm px-3 py-2 bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-2 focus:ring-brand/40'
+  const showRelatedSection = backlinks.length > 0 || relatedEntries.length > 0 || relatedLoading
 
   return (
     <>
@@ -191,6 +276,16 @@ export function DetailModal() {
                   <span className="flex items-center gap-0.5 text-[11px] text-ink3">
                     <Hash className="w-3 h-3" />{merged.srNo}
                   </span>
+                )}
+                {/* Backlinks badge */}
+                {backlinks.length > 0 && (
+                  <button
+                    onClick={() => setShowRelated((v) => !v)}
+                    className="flex items-center gap-0.5 text-[11px] text-brand hover:underline"
+                  >
+                    <Link2 className="w-3 h-3" />
+                    {backlinks.length} backlink{backlinks.length !== 1 ? 's' : ''}
+                  </button>
                 )}
               </div>
             </div>
@@ -261,16 +356,27 @@ export function DetailModal() {
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-xs font-medium text-brand">AI:</span>
                     {([
-                      { a: 'title'   as const, l: 'Generate title', icon: Heading },
-                      { a: 'rewrite' as const, l: 'Rewrite',        icon: Wand2 },
-                      { a: 'tags'    as const, l: 'Tags',            icon: Tag },
-                      { a: 'actions' as const, l: 'Actions',         icon: CheckSquare },
-                      { a: 'all'     as const, l: 'Enhance all',     icon: Wand2 },
+                      { a: 'title'   as const, l: 'Title',     icon: Heading },
+                      { a: 'rewrite' as const, l: 'Rewrite',   icon: Wand2 },
+                      { a: 'tags'    as const, l: 'Tags',       icon: Tag },
+                      { a: 'actions' as const, l: 'Actions',    icon: CheckSquare },
+                      { a: 'all'     as const, l: 'Enhance all', icon: Wand2 },
                     ] as const).map(({ a, l, icon: Icon }) => (
-                      <Button key={a} size="sm" variant="outline" onClick={() => runAIAction(a)} loading={aiLoading}>
+                      <Button key={a} size="sm" variant="outline" onClick={() => runAIAction(a)} loading={aiLoading && !relatedLoading}>
                         <Icon className="w-3 h-3" />{l}
                       </Button>
                     ))}
+                    <div className="w-px h-4 bg-border/60" />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleFindRelated}
+                      loading={relatedLoading}
+                      className="border-brand/30 text-brand hover:bg-brand/5"
+                    >
+                      <Network className="w-3 h-3" />
+                      Find related
+                    </Button>
                     {aiError && <span className="text-xs text-red-500 ml-1">{aiError}</span>}
                   </div>
                 </>
@@ -405,21 +511,54 @@ export function DetailModal() {
               <MetaField label="Sub-category" editing={editing} value={cleanVal(merged.subCategory)} onChange={(v) => patchField('subCategory', v)} />
               <MetaField label="Status"       editing={editing} value={cleanVal(merged.taskStatus)}  onChange={(v) => patchField('taskStatus', v)}  type="select" options={STATUS_OPTIONS} />
               <MetaField label="Due date"     editing={editing} value={cleanVal(merged.dueDate)}     onChange={(v) => patchField('dueDate', v)}     type="date" />
+
+              {/* Links: HTTP + entry refs */}
               {(links || editing) && (
                 <div className="sm:col-span-2">
                   {editing ? (
-                    <MetaField label="Links" editing={editing} value={links} onChange={(v) => patchField('links', v)} className="sm:col-span-2" />
-                  ) : linkLines.length > 0 ? (
                     <div>
                       <SectionLabel>Links</SectionLabel>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {linkLines.map((l, i) => (
+                      <div className="mt-1.5">
+                        <WikiTextarea
+                          value={links}
+                          onChange={(v) => patchField('links', v)}
+                          rows={3}
+                          placeholder={"https://example.com\n[[Other Entry Title]]"}
+                          allRows={allRows}
+                        />
+                        <p className="text-[10px] text-ink3 mt-1">
+                          One per line — HTTP URLs or <code>[[Entry Title]]</code> to link entries
+                        </p>
+                      </div>
+                    </div>
+                  ) : (httpLinks.length > 0 || entryRefs.length > 0) ? (
+                    <div>
+                      <SectionLabel icon={<Link2 className="w-3.5 h-3.5" />}>Links</SectionLabel>
+                      <div className="flex flex-wrap gap-2 mt-1.5">
+                        {httpLinks.map((l, i) => (
                           <a key={i} href={l} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-xs text-brand hover:underline">
-                            <ExternalLink className="w-3 h-3" />
-                            {l.length > 50 ? l.slice(0, 50) + '...' : l}
+                            className="flex items-center gap-1.5 text-xs bg-surface2 border border-border rounded-lg px-2.5 py-1 text-brand hover:bg-brand/5 hover:border-brand/30 transition-colors">
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                            <span className="truncate max-w-[200px]">{l.length > 45 ? l.slice(0, 45) + '…' : l}</span>
                           </a>
                         ))}
+                        {entryRefs.map((title, i) => {
+                          const found = allRows.find((r) => r.title?.toLowerCase().trim() === title.toLowerCase().trim())
+                          return found ? (
+                            <button
+                              key={i}
+                              onClick={() => openModal(found)}
+                              className="flex items-center gap-1.5 text-xs bg-brand/5 border border-brand/20 rounded-lg px-2.5 py-1 text-brand hover:bg-brand/10 transition-colors font-medium"
+                            >
+                              <Link2 className="w-3 h-3 shrink-0" />
+                              {title}
+                            </button>
+                          ) : (
+                            <span key={i} className="text-xs text-red-400 line-through flex items-center gap-1">
+                              <Link2 className="w-3 h-3" />{title}
+                            </span>
+                          )
+                        })}
                       </div>
                     </div>
                   ) : null}
@@ -481,6 +620,116 @@ export function DetailModal() {
                 )}
               </div>
             </div>
+
+            {/* ── Related Entries ── */}
+            {(showRelatedSection || showRelated) && (
+              <div className="border border-border rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setShowRelated((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-surface2/50 hover:bg-hover transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Network className="w-3.5 h-3.5 text-brand" />
+                    <span className="text-[11px] font-semibold text-ink2 uppercase tracking-wider">
+                      Related Entries
+                    </span>
+                    {(backlinks.length > 0 || relatedEntries.length > 0) && (
+                      <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold">
+                        {backlinks.length + relatedEntries.length}
+                      </span>
+                    )}
+                  </div>
+                  {showRelated ? <ChevronUp className="w-3.5 h-3.5 text-ink3" /> : <ChevronDown className="w-3.5 h-3.5 text-ink3" />}
+                </button>
+
+                {showRelated && (
+                  <div className="px-4 py-3 space-y-4">
+                    {/* Backlinks */}
+                    {backlinks.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider mb-2">
+                          Linked from ({backlinks.length})
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {backlinks.map((r) => (
+                            <button
+                              key={r._rowIndex}
+                              onClick={() => openModal(r)}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-surface2 border border-border rounded-lg text-xs hover:border-brand/30 hover:bg-brand/5 transition-colors"
+                            >
+                              <Link2 className="w-3 h-3 text-brand shrink-0" />
+                              <span className="text-ink font-medium truncate max-w-[160px]">{r.title}</span>
+                              {r.category && <span className="text-ink3 shrink-0">{r.category}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* AI-suggested related entries */}
+                    {relatedLoading && (
+                      <div className="flex items-center gap-2 text-xs text-ink3 py-2">
+                        <div className="flex gap-1">
+                          <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-1.5 h-1.5 bg-brand rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                        Finding related entries…
+                      </div>
+                    )}
+
+                    {relatedEntries.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider mb-2">
+                          AI suggested
+                        </p>
+                        <div className="space-y-2">
+                          {relatedEntries.map(({ row: r, reason }) => (
+                            <div
+                              key={r._rowIndex}
+                              className="flex items-center gap-2 p-2.5 bg-surface2 border border-border rounded-lg"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <button
+                                  onClick={() => openModal(r)}
+                                  className="text-sm font-medium text-brand hover:underline text-left truncate block max-w-full"
+                                >
+                                  {r.title}
+                                </button>
+                                {reason && (
+                                  <p className="text-[11px] text-ink3 mt-0.5 line-clamp-1">{reason}</p>
+                                )}
+                              </div>
+                              <div className="flex gap-1.5 shrink-0">
+                                <button
+                                  onClick={() => openModal(r)}
+                                  className="text-[10px] px-2 py-1 bg-brand/5 text-brand border border-brand/20 rounded-lg hover:bg-brand/10 transition-colors font-medium"
+                                >
+                                  Open
+                                </button>
+                                <button
+                                  onClick={() => linkToEntry(r)}
+                                  className="text-[10px] px-2 py-1 bg-surface text-ink2 border border-border rounded-lg hover:bg-hover transition-colors font-medium flex items-center gap-1"
+                                >
+                                  <Link2 className="w-2.5 h-2.5" />
+                                  Link
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!relatedLoading && relatedEntries.length === 0 && backlinks.length === 0 && (
+                      <p className="text-xs text-ink3 italic py-2">
+                        No related entries yet. Click "Find related" in the AI bar to discover connections.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Footer timestamps */}
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink3 pt-2 border-t border-border">

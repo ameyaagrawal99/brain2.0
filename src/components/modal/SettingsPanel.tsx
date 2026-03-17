@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/Button'
 import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
 import { useAuth } from '@/hooks/useAuth'
 import { appendConfigCategory, appendConfigTag, deleteConfigItem, saveColorConfig, deleteColorConfig } from '@/lib/sheetsConfig'
-import { fetchGoogleContacts } from '@/lib/contacts'
+import { fetchGoogleContacts, ContactsError } from '@/lib/contacts'
 import { requestContactsAccess } from '@/lib/gsi'
 import { cn, COLOR_PALETTE } from '@/lib/utils'
 import { requestNotificationPermission, getNotificationPermission } from '@/hooks/useNotifications'
@@ -159,6 +159,20 @@ export function SettingsPanel() {
     }
   }
 
+  async function doFetchContacts(token: string, toastId: string) {
+    const fetched = await fetchGoogleContacts(token)
+    setContacts(fetched)
+    setContactsConnected(true)
+    if (fetched.length === 0) {
+      toast.error(
+        '0 contacts loaded. Make sure Google People API is enabled and you have contacts in your Google account.',
+        { id: toastId, duration: 7000 },
+      )
+    } else {
+      toast.success(`Connected — ${fetched.length.toLocaleString()} contacts loaded`, { id: toastId })
+    }
+  }
+
   async function handleConnectContacts() {
     if (!clientId) { toast.error('Google Client ID not configured'); return }
     setConnectingContacts(true)
@@ -167,13 +181,13 @@ export function SettingsPanel() {
       clientId,
       async (token) => {
         try {
-          toast.loading('Loading contacts — this may take a moment for large contact lists…', { id: loadingToast })
-          const fetched = await fetchGoogleContacts(token)
-          setContacts(fetched)
-          setContactsConnected(true)
-          toast.success(`Connected — ${fetched.length} contact${fetched.length !== 1 ? 's' : ''} loaded`, { id: loadingToast })
-        } catch {
-          toast.error('Failed to load contacts', { id: loadingToast })
+          toast.loading('Loading contacts — may take a moment for large contact lists…', { id: loadingToast })
+          await doFetchContacts(token, loadingToast)
+        } catch (err) {
+          const msg = err instanceof ContactsError
+            ? err.message
+            : 'Failed to load contacts'
+          toast.error(msg, { id: loadingToast, duration: 8000 })
         } finally {
           setConnectingContacts(false)
         }
@@ -193,12 +207,10 @@ export function SettingsPanel() {
       clientId,
       async (token) => {
         try {
-          const fetched = await fetchGoogleContacts(token)
-          setContacts(fetched)
-          setContactsConnected(true)
-          toast.success(`Refreshed — ${fetched.length} contact${fetched.length !== 1 ? 's' : ''} loaded`, { id: loadingToast })
-        } catch {
-          toast.error('Failed to refresh contacts', { id: loadingToast })
+          await doFetchContacts(token, loadingToast)
+        } catch (err) {
+          const msg = err instanceof ContactsError ? err.message : 'Failed to refresh contacts'
+          toast.error(msg, { id: loadingToast, duration: 8000 })
         } finally {
           setConnectingContacts(false)
         }
@@ -559,9 +571,15 @@ export function SettingsPanel() {
                   <Link2 className="w-3.5 h-3.5" />
                   Connect Google Contacts
                 </Button>
-                <p className="text-[11px] text-ink3">
-                  Requires approving "read contacts" permission in Google's consent screen.
-                </p>
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800 rounded-lg space-y-1.5">
+                  <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">Setup required in Google Cloud Console</p>
+                  <ol className="text-[11px] text-amber-700 dark:text-amber-400 space-y-1 list-decimal list-inside leading-relaxed">
+                    <li>Open Google Cloud Console → APIs & Services → Library</li>
+                    <li>Search for <strong>"People API"</strong> and enable it</li>
+                    <li>Go to OAuth consent screen → Scopes → Add <code className="bg-amber-100 dark:bg-amber-900/40 px-0.5 rounded">contacts.readonly</code></li>
+                    <li>Return here and click Connect</li>
+                  </ol>
+                </div>
               </div>
             )}
           </Section>
