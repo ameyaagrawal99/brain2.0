@@ -193,7 +193,11 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
                       <Link2 className="w-2.5 h-2.5" />{entryRefs}
                     </span>
                   )}
-                  {httpLinks > 0 && <ExternalLink className="w-3 h-3 text-ink3" title={`${httpLinks} external link${httpLinks === 1 ? '' : 's'}`} />}
+                  {httpLinks > 0 && (
+                    <span title={`${httpLinks} external link${httpLinks === 1 ? '' : 's'}`}>
+                      <ExternalLink className="w-3 h-3 text-ink3" />
+                    </span>
+                  )}
                 </>
               )
             })()}
