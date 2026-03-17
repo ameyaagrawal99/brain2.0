@@ -85,20 +85,20 @@ export function Sidebar() {
   const rows           = useBrainStore((s) => s.rows)
   const openModal      = useBrainStore((s) => s.openModal)
   const filters        = useBrainStore((s) => s.filters)
-  const setSearch      = useBrainStore((s) => s.setSearch)
-  const setCategory    = useBrainStore((s) => s.setCategory)
-  const setSubCategory = useBrainStore((s) => s.setSubCategory)
-  const setStatus      = useBrainStore((s) => s.setStatus)
-  const setSortBy      = useBrainStore((s) => s.setSortBy)
-  const clearFilters   = useBrainStore((s) => s.clearFilters)
-  const demoMode       = useBrainStore((s) => s.settings.demoMode)
+  const setSearch        = useBrainStore((s) => s.setSearch)
+  const toggleCategory   = useBrainStore((s) => s.toggleCategory)
+  const toggleSubCategory = useBrainStore((s) => s.toggleSubCategory)
+  const toggleStatus     = useBrainStore((s) => s.toggleStatus)
+  const togglePerson     = useBrainStore((s) => s.togglePerson)
+  const setSortBy        = useBrainStore((s) => s.setSortBy)
+  const clearFilters     = useBrainStore((s) => s.clearFilters)
+  const demoMode         = useBrainStore((s) => s.settings.demoMode)
 
   const specialDays          = useBrainStore((s) => s.specialDays)
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
   const setShowNewMilestone  = useBrainStore((s) => s.setShowNewMilestone)
 
-  const setPerson    = useBrainStore((s) => s.setPerson)
-  const personFilter = useBrainStore((s) => s.filters.person)
+  const personsFilter = useBrainStore((s) => s.filters.persons)
   const contacts     = useBrainStore((s) => s.contacts)
 
   const { saveRow } = useSheetSync()
@@ -249,12 +249,14 @@ export function Sidebar() {
     try {
       const qf: QuickFilter = {
         name,
-        search:      filters.search,
-        category:    filters.category,
-        subCategory: filters.subCategory,
-        status:      filters.status,
-        selectedTags: filters.selectedTags,
-        sortBy:      filters.sortBy,
+        search:        filters.search,
+        categories:    filters.categories,
+        subCategories: filters.subCategories,
+        statuses:      filters.statuses,
+        persons:       filters.persons,
+        selectedTags:  filters.selectedTags,
+        tagMatchMode:  filters.tagMatchMode,
+        sortBy:        filters.sortBy,
       }
       await saveQuickFilter(qf)
       setQuickFilters(prev => {
@@ -285,9 +287,10 @@ export function Sidebar() {
   function handleApplyFilter(qf: QuickFilter) {
     clearFilters()
     setSearch(qf.search || '')
-    setCategory(qf.category || '')
-    setSubCategory(qf.subCategory || '')
-    setStatus(qf.status || '')
+    qf.categories?.forEach(toggleCategory)
+    qf.subCategories?.forEach(toggleSubCategory)
+    qf.statuses?.forEach(toggleStatus)
+    qf.persons?.forEach(togglePerson)
     setSortBy((qf.sortBy || 'date-desc') as Parameters<typeof setSortBy>[0])
     toast.success(`Applied "${qf.name}"`)
     setShowSidebar(false)
@@ -775,10 +778,11 @@ export function Sidebar() {
                 {/* Current filter preview */}
                 <div className="text-[10px] text-ink3 space-y-0.5">
                   {filters.search && <p>Search: "{filters.search}"</p>}
-                  {filters.category && <p>Category: {filters.category}</p>}
-                  {filters.status && <p>Status: {filters.status}</p>}
+                  {filters.categories.length > 0 && <p>Category: {filters.categories.join(', ')}</p>}
+                  {filters.statuses.length > 0 && <p>Status: {filters.statuses.join(', ')}</p>}
+                  {filters.persons.length > 0 && <p>People: {filters.persons.join(', ')}</p>}
                   {filters.selectedTags.length > 0 && <p>Tags: {filters.selectedTags.join(', ')}</p>}
-                  {!filters.search && !filters.category && !filters.status && !filters.selectedTags.length && (
+                  {!filters.search && !filters.categories.length && !filters.statuses.length && !filters.selectedTags.length && !filters.persons.length && (
                     <p className="text-ink3 italic">No filters active</p>
                   )}
                 </div>
@@ -806,7 +810,11 @@ export function Sidebar() {
                         >
                           <p className="text-xs font-medium text-ink truncate">{qf.name}</p>
                           <p className="text-[10px] text-ink3 truncate">
-                            {[qf.category, qf.status, qf.search && `"${qf.search}"`].filter(Boolean).join(' · ') || 'All entries'}
+                            {[
+                              qf.categories?.join(', '),
+                              qf.statuses?.join(', '),
+                              qf.search && `"${qf.search}"`,
+                            ].filter(Boolean).join(' · ') || 'All entries'}
                           </p>
                         </button>
                         <button
@@ -839,9 +847,9 @@ export function Sidebar() {
                   <p className="text-sm font-bold text-ink">People</p>
                   <p className="text-[11px] text-ink3">{peopleStats.length} contact{peopleStats.length !== 1 ? 's' : ''} tagged in entries</p>
                 </div>
-                {personFilter && (
+                {personsFilter.length > 0 && (
                   <button
-                    onClick={() => { setPerson(''); setShowSidebar(false) }}
+                    onClick={() => personsFilter.forEach((p) => togglePerson(p))}
                     className="flex items-center gap-1 text-xs text-brand hover:underline"
                   >
                     <X className="w-3 h-3" />
@@ -850,10 +858,10 @@ export function Sidebar() {
                 )}
               </div>
 
-              {personFilter && (
+              {personsFilter.length > 0 && (
                 <div className="bg-brand/5 border border-brand/15 rounded-xl px-3 py-2 flex items-center gap-2">
                   <Users className="w-3.5 h-3.5 text-brand shrink-0" />
-                  <p className="text-xs text-brand font-medium flex-1">Filtering by: {personFilter}</p>
+                  <p className="text-xs text-brand font-medium flex-1">Filtering: {personsFilter.join(', ')}</p>
                 </div>
               )}
 
@@ -866,12 +874,12 @@ export function Sidebar() {
               ) : (
                 <div className="space-y-2">
                   {peopleStats.map(([name, count]) => {
-                    const isActive = personFilter === name
+                    const isActive = personsFilter.includes(name)
                     return (
                       <button
                         key={name}
                         onClick={() => {
-                          setPerson(isActive ? '' : name)
+                          togglePerson(name)
                           setShowSidebar(false)
                         }}
                         className={cn(

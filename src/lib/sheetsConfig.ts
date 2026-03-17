@@ -2,13 +2,15 @@ import { SHEET_ID, SHEETS_BASE, CONFIG_SHEET_NAME, CONFIG_RANGE, CONFIG_TYPES } 
 import type { SpecialDay } from '@/types/sheet'
 
 export interface QuickFilter {
-  name:        string
-  search:      string
-  category:    string
-  subCategory: string
-  status:      string
-  selectedTags: string[]
-  sortBy:      string
+  name:          string
+  search:        string
+  categories:    string[]
+  subCategories: string[]
+  statuses:      string[]
+  persons:       string[]
+  selectedTags:  string[]
+  tagMatchMode:  'and' | 'or'
+  sortBy:        string
 }
 import { sheetsFetch } from './sheets'
 

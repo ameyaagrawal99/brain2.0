@@ -51,29 +51,31 @@ interface AuthState {
 }
 
 interface FilterState {
-  search:       string
-  category:     string
-  subCategory:  string
-  status:       string
-  selectedTags: string[]
-  sortBy:       SortKey
-  showToday:    boolean
-  dateFrom:     string | null
-  dateTo:       string | null
-  person:       string   // filter by person name in the `people` field
+  search:        string
+  categories:    string[]
+  subCategories: string[]
+  statuses:      string[]
+  persons:       string[]
+  selectedTags:  string[]
+  tagMatchMode:  'and' | 'or'
+  sortBy:        SortKey
+  showToday:     boolean
+  dateFrom:      string | null
+  dateTo:        string | null
 }
 
 const DEFAULT_FILTERS: FilterState = {
-  search:       '',
-  category:     '',
-  subCategory:  '',
-  status:       '',
-  selectedTags: [],
-  sortBy:       'date-desc',
-  showToday:    false,
-  dateFrom:     null,
-  dateTo:       null,
-  person:       '',
+  search:        '',
+  categories:    [],
+  subCategories: [],
+  statuses:      [],
+  persons:       [],
+  selectedTags:  [],
+  tagMatchMode:  'and',
+  sortBy:        'date-desc',
+  showToday:     false,
+  dateFrom:      null,
+  dateTo:        null,
 }
 
 const MAX_HISTORY = 20
@@ -96,17 +98,18 @@ interface BrainStore {
   viewMode:    ViewMode
   setViewMode: (m: ViewMode) => void
 
-  filters:        FilterState
-  setSearch:      (q: string) => void
-  setCategory:    (c: string) => void
-  setSubCategory: (s: string) => void
-  setStatus:      (s: string) => void
-  toggleTag:      (t: string) => void
-  setSortBy:      (k: SortKey) => void
-  setShowToday:   (v: boolean) => void
-  setDateRange:   (from: string | null, to: string | null) => void
-  setPerson:      (name: string) => void
-  clearFilters:   () => void
+  filters:           FilterState
+  setSearch:         (q: string) => void
+  toggleCategory:    (c: string) => void
+  toggleSubCategory: (c: string) => void
+  toggleStatus:      (s: string) => void
+  togglePerson:      (name: string) => void
+  toggleTag:         (t: string) => void
+  setTagMatchMode:   (m: 'and' | 'or') => void
+  setSortBy:         (k: SortKey) => void
+  setShowToday:      (v: boolean) => void
+  setDateRange:      (from: string | null, to: string | null) => void
+  clearFilters:      () => void
 
   // Google Contacts (fetched after auth if user has granted contacts scope)
   contacts:              Contact[]
@@ -224,22 +227,47 @@ export const useBrainStore = create<BrainStore>()(
       setViewMode: (viewMode) => set({ viewMode }),
 
       filters: DEFAULT_FILTERS,
-      setSearch:      (search)      => set((s) => ({ filters: { ...s.filters, search } })),
-      setCategory:    (category)    => set((s) => ({ filters: { ...s.filters, category } })),
-      setSubCategory: (subCategory) => set((s) => ({ filters: { ...s.filters, subCategory } })),
-      setStatus:      (status)      => set((s) => ({ filters: { ...s.filters, status } })),
+      setSearch:   (search) => set((s) => ({ filters: { ...s.filters, search } })),
+      toggleCategory: (c) =>
+        set((s) => {
+          const categories = s.filters.categories.includes(c)
+            ? s.filters.categories.filter((x) => x !== c)
+            : [...s.filters.categories, c]
+          return { filters: { ...s.filters, categories } }
+        }),
+      toggleSubCategory: (c) =>
+        set((s) => {
+          const subCategories = s.filters.subCategories.includes(c)
+            ? s.filters.subCategories.filter((x) => x !== c)
+            : [...s.filters.subCategories, c]
+          return { filters: { ...s.filters, subCategories } }
+        }),
+      toggleStatus: (s_) =>
+        set((s) => {
+          const statuses = s.filters.statuses.includes(s_)
+            ? s.filters.statuses.filter((x) => x !== s_)
+            : [...s.filters.statuses, s_]
+          return { filters: { ...s.filters, statuses } }
+        }),
+      togglePerson: (name) =>
+        set((s) => {
+          const persons = s.filters.persons.includes(name)
+            ? s.filters.persons.filter((x) => x !== name)
+            : [...s.filters.persons, name]
+          return { filters: { ...s.filters, persons } }
+        }),
       toggleTag: (t) =>
         set((s) => {
-          const tags = s.filters.selectedTags.includes(t)
+          const selectedTags = s.filters.selectedTags.includes(t)
             ? s.filters.selectedTags.filter((x) => x !== t)
             : [...s.filters.selectedTags, t]
-          return { filters: { ...s.filters, selectedTags: tags } }
+          return { filters: { ...s.filters, selectedTags } }
         }),
-      setSortBy:    (sortBy) => set((s) => ({ filters: { ...s.filters, sortBy } })),
-      setShowToday: (showToday) => set((s) => ({ filters: { ...s.filters, showToday } })),
-      setDateRange: (dateFrom, dateTo) => set((s) => ({ filters: { ...s.filters, dateFrom, dateTo, showToday: false } })),
-      setPerson:    (person) => set((s) => ({ filters: { ...s.filters, person } })),
-      clearFilters: ()       => set({ filters: DEFAULT_FILTERS }),
+      setTagMatchMode: (tagMatchMode) => set((s) => ({ filters: { ...s.filters, tagMatchMode } })),
+      setSortBy:       (sortBy)       => set((s) => ({ filters: { ...s.filters, sortBy } })),
+      setShowToday:    (showToday)    => set((s) => ({ filters: { ...s.filters, showToday } })),
+      setDateRange:    (dateFrom, dateTo) => set((s) => ({ filters: { ...s.filters, dateFrom, dateTo, showToday: false } })),
+      clearFilters:    ()             => set({ filters: DEFAULT_FILTERS }),
 
       contacts:             [],
       setContacts:          (contacts) => set({ contacts }),
