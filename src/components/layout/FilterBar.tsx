@@ -108,6 +108,37 @@ function SectionHead({
   )
 }
 
+/* ── Mini search inside a section ───────────────────────────────── */
+function SectionSearch({
+  value, onChange, placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  return (
+    <div className="relative mb-1.5">
+      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-ink3 pointer-events-none" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? 'Search…'}
+        className="w-full h-6 pl-6 pr-6 text-[11px] bg-surface2 border border-border rounded-md
+          text-ink placeholder:text-ink3 focus:outline-none focus:ring-1 focus:ring-brand/30 focus:border-brand"
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink"
+        >
+          <X className="w-2.5 h-2.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 /* ── Active filter chip ──────────────────────────────────────────── */
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
@@ -165,12 +196,26 @@ export function FilterBar() {
     })
   }
 
+  /* ── Per-section search queries ──────────────────────────────── */
+  const SEARCH_THRESHOLD = 6
+  const [catSearch,    setCatSearch]    = useState('')
+  const [subCatSearch, setSubCatSearch] = useState('')
+  const [tagSearch,    setTagSearch]    = useState('')
+  const [peopleSearch, setPeopleSearch] = useState('')
+
+  function resetSectionSearches() {
+    setCatSearch(''); setSubCatSearch(''); setTagSearch(''); setPeopleSearch('')
+  }
+
   useFilterKeys(searchRef, () => setShowFilters(true))
 
   /* ── Close panel on outside click ───────────────────────────── */
   useEffect(() => {
     function click(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setShowFilters(false)
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setShowFilters(false)
+        resetSectionSearches()
+      }
     }
     document.addEventListener('mousedown', click)
     return () => document.removeEventListener('mousedown', click)
@@ -299,7 +344,7 @@ export function FilterBar() {
                     </button>
                   )}
                   <button
-                    onClick={() => setShowFilters(false)}
+                    onClick={() => { setShowFilters(false); resetSectionSearches() }}
                     className="w-6 h-6 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover hover:text-ink transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -320,16 +365,26 @@ export function FilterBar() {
                       onToggle={() => toggleSection('category')}
                     />
                     {openSections.has('category') && (
-                      <div className="space-y-0.5 max-h-36 overflow-y-auto pr-1">
-                        {categories.map((cat) => (
-                          <CheckRow
-                            key={cat}
-                            label={cat}
-                            checked={filters.categories.includes(cat)}
-                            onChange={() => toggleCategory(cat)}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        {categories.length >= SEARCH_THRESHOLD && (
+                          <SectionSearch value={catSearch} onChange={setCatSearch} placeholder="Search categories…" />
+                        )}
+                        <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
+                          {categories
+                            .filter((c) => !catSearch || c.toLowerCase().includes(catSearch.toLowerCase()))
+                            .map((cat) => (
+                              <CheckRow
+                                key={cat}
+                                label={cat}
+                                checked={filters.categories.includes(cat)}
+                                onChange={() => toggleCategory(cat)}
+                              />
+                            ))}
+                          {catSearch && categories.filter((c) => c.toLowerCase().includes(catSearch.toLowerCase())).length === 0 && (
+                            <p className="text-[11px] text-ink3 px-2 py-1.5">No match</p>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -344,16 +399,26 @@ export function FilterBar() {
                       onToggle={() => toggleSection('subcategory')}
                     />
                     {openSections.has('subcategory') && (
-                      <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
-                        {subCategories.map((sc) => (
-                          <CheckRow
-                            key={sc}
-                            label={sc}
-                            checked={filters.subCategories.includes(sc)}
-                            onChange={() => toggleSubCategory(sc)}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        {subCategories.length >= SEARCH_THRESHOLD && (
+                          <SectionSearch value={subCatSearch} onChange={setSubCatSearch} placeholder="Search sub-categories…" />
+                        )}
+                        <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
+                          {subCategories
+                            .filter((s) => !subCatSearch || s.toLowerCase().includes(subCatSearch.toLowerCase()))
+                            .map((sc) => (
+                              <CheckRow
+                                key={sc}
+                                label={sc}
+                                checked={filters.subCategories.includes(sc)}
+                                onChange={() => toggleSubCategory(sc)}
+                              />
+                            ))}
+                          {subCatSearch && subCategories.filter((s) => s.toLowerCase().includes(subCatSearch.toLowerCase())).length === 0 && (
+                            <p className="text-[11px] text-ink3 px-2 py-1.5">No match</p>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -422,16 +487,26 @@ export function FilterBar() {
                       </div>
                     </div>
                     {openSections.has('tags') && (
-                      <div className="space-y-0.5 max-h-36 overflow-y-auto pr-1">
-                        {topTags.map((tag) => (
-                          <CheckRow
-                            key={tag}
-                            label={`#${tag}`}
-                            checked={filters.selectedTags.includes(tag)}
-                            onChange={() => toggleTag(tag)}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        {topTags.length >= SEARCH_THRESHOLD && (
+                          <SectionSearch value={tagSearch} onChange={setTagSearch} placeholder="Search tags…" />
+                        )}
+                        <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
+                          {topTags
+                            .filter((t) => !tagSearch || t.toLowerCase().includes(tagSearch.toLowerCase()))
+                            .map((tag) => (
+                              <CheckRow
+                                key={tag}
+                                label={`#${tag}`}
+                                checked={filters.selectedTags.includes(tag)}
+                                onChange={() => toggleTag(tag)}
+                              />
+                            ))}
+                          {tagSearch && topTags.filter((t) => t.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
+                            <p className="text-[11px] text-ink3 px-2 py-1.5">No match</p>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -446,16 +521,26 @@ export function FilterBar() {
                       onToggle={() => toggleSection('people')}
                     />
                     {openSections.has('people') && (
-                      <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
-                        {allPeople.map((person) => (
-                          <CheckRow
-                            key={person}
-                            label={person}
-                            checked={filters.persons.includes(person)}
-                            onChange={() => togglePerson(person)}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        {allPeople.length >= SEARCH_THRESHOLD && (
+                          <SectionSearch value={peopleSearch} onChange={setPeopleSearch} placeholder="Search people…" />
+                        )}
+                        <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
+                          {allPeople
+                            .filter((p) => !peopleSearch || p.toLowerCase().includes(peopleSearch.toLowerCase()))
+                            .map((person) => (
+                              <CheckRow
+                                key={person}
+                                label={person}
+                                checked={filters.persons.includes(person)}
+                                onChange={() => togglePerson(person)}
+                              />
+                            ))}
+                          {peopleSearch && allPeople.filter((p) => p.toLowerCase().includes(peopleSearch.toLowerCase())).length === 0 && (
+                            <p className="text-[11px] text-ink3 px-2 py-1.5">No match</p>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -565,7 +650,7 @@ export function FilterBar() {
                 </span>
                 {hasActiveFilters && (
                   <button
-                    onClick={() => setShowFilters(false)}
+                    onClick={() => { setShowFilters(false); resetSectionSearches() }}
                     className="h-7 px-3 bg-brand text-white text-xs font-medium rounded-lg hover:opacity-90 transition-opacity"
                   >
                     Done
