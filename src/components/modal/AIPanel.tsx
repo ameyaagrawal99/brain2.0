@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
 import {
   X, Wand2, Zap, Brain, Tag, CheckSquare, FileText, Sparkles,
-  Key, Download, ChevronDown, ChevronUp, RotateCcw, Heading, StopCircle, MousePointerClick,
+  Key, Download, ChevronDown, ChevronUp, RotateCcw, Heading, StopCircle, MousePointerClick, Network, ExternalLink,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { InstructionsBox } from '@/components/ui/InstructionsBox'
+import { WikiLinkedText } from '@/components/ui/WikiLinkedText'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
 import { useFilters } from '@/hooks/useFilters'
@@ -13,7 +14,9 @@ import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { BrainRow } from '@/types/sheet'
 
-type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'export'
+type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'relate' | 'export'
+
+interface RelatedEntry { row: BrainRow; reason: string }
 
 /* ─── Bulk enhance options ───────────────────────────────────────────── */
 
@@ -122,6 +125,7 @@ export function AIPanel() {
   const clearCardSelection  = useBrainStore((s) => s.clearCardSelection)
   const { saveRow, undoBulk, setLastBulkRows } = useSheetSync()
   const { run: runAI, loading: aiLoading, abort: abortAI } = useAI()
+  const { run: runRelate, loading: relateLoading }         = useAI()
   const stopRef = useRef(false)
   const { filteredRows } = useFilters()
 
@@ -132,6 +136,8 @@ export function AIPanel() {
   const [digest, setDigest]           = useState<string | null>(null)
   const [chatInput, setChatInput]     = useState('')
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
+  const [relateQuery, setRelateQuery] = useState('')
+  const [relateResults, setRelateResults] = useState<RelatedEntry[]>([])
 
   // Bulk options (component-level state — no need to persist)
   const [bulkFieldOptions, setBulkFieldOptions] = useState<BulkFieldOptions>({
@@ -267,14 +273,77 @@ export function AIPanel() {
     const userMsg = chatInput
     setChatInput('')
     setChatHistory((h) => [...h, { role: 'user', text: userMsg }])
-    const context = rows.slice(0, 30).map((r) =>
-      `[${r.category}] ${r.title}: ${(r.rewritten || r.original || '').slice(0, 150)}`
+    // Keyword-score to find most relevant context entries
+    const words = userMsg.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
+    const scored = rows.map((r) => {
+      const text = [r.title, r.category, r.tags, r.rewritten, r.original].join(' ').toLowerCase()
+      const score = words.reduce((s, w) => s + (text.split(w).length - 1), 0)
+      return { r, score }
+    }).sort((a, b) => b.score - a.score)
+    const context = scored.slice(0, 25).map(({ r }) =>
+      `[${r.category || 'General'}] ${r.title}: ${(r.rewritten || r.original || '').slice(0, 200)}`
     ).join('\n')
-    const prompt = `You are an AI assistant with access to the user's personal knowledge base. Context:\n${context}\n\nUser question: ${userMsg}\n\nAnswer helpfully and specifically based on their notes.`
+    const titles = rows.map((r) => r.title).filter(Boolean).slice(0, 50).join(', ')
+    const prompt = `You are an AI assistant with access to the user's personal knowledge base.
+
+IMPORTANT: When referencing specific entries from the user's notes, always wrap the entry title in double brackets like [[Entry Title]]. This makes them clickable.
+
+Available entry titles (for reference): ${titles}
+
+Most relevant entries for this question:
+${context}
+
+User question: ${userMsg}
+
+Answer helpfully and specifically. Reference relevant entries using [[Entry Title]] format when applicable.`
     const result = await runAI('rewrite', prompt, {
       systemInstruction: aiInstructions.chat,
     })
     setChatHistory((h) => [...h, { role: 'ai', text: result.rewritten || 'No response' }])
+  }
+
+  /* ── Relate ── */
+  async function handleRelate() {
+    if (!relateQuery.trim()) return
+    // Keyword-pre-score entries and take top 30 as candidates
+    const words = relateQuery.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
+    const candidates = words.length
+      ? rows.map((r) => {
+          const text = [r.title, r.category, r.tags, r.rewritten, r.original].join(' ').toLowerCase()
+          const score = words.reduce((s, w) => s + (text.split(w).length - 1), 0)
+          return { r, score }
+        }).sort((a, b) => b.score - a.score).slice(0, 30).map(({ r }) => r)
+      : rows.slice(0, 30)
+
+    const pool = candidates.map((r, i) =>
+      `${i + 1}. "${r.title}" [${r.category || 'General'}]: ${(r.rewritten || r.original || '').slice(0, 120)}`
+    ).join('\n')
+
+    const prompt = `The user wants to find entries related to the following query: "${relateQuery}"
+
+Here are candidate entries from the knowledge base:
+${pool}
+
+Return a JSON array of the most related entries (up to 8). Format:
+[{"title":"exact title from list","reason":"1 short sentence why it's related"}]
+
+Output only valid JSON, no other text.`
+
+    const result = await runRelate('rewrite', prompt)
+    const raw = result.rewritten || ''
+    try {
+      const jsonMatch = raw.match(/\[[\s\S]*\]/)
+      if (!jsonMatch) throw new Error('No JSON')
+      const parsed = JSON.parse(jsonMatch[0]) as { title: string; reason: string }[]
+      const titleMap = new Map(rows.map((r) => [r.title?.toLowerCase().trim(), r]))
+      const matched: RelatedEntry[] = parsed
+        .map((item) => ({ row: titleMap.get(item.title?.toLowerCase().trim() ?? ''), reason: item.reason }))
+        .filter((x): x is RelatedEntry => !!x.row)
+      setRelateResults(matched)
+      if (!matched.length) toast.error('No matching entries found')
+    } catch {
+      toast.error('Could not parse AI response')
+    }
   }
 
   /* ── Export ── */
@@ -295,6 +364,7 @@ export function AIPanel() {
     { key: 'bulk',   label: 'Bulk Enhance',  icon: Sparkles },
     { key: 'digest', label: 'Digest',        icon: FileText },
     { key: 'chat',   label: 'Chat',          icon: Brain },
+    { key: 'relate', label: 'Find Related',  icon: Network },
     { key: 'export', label: 'Export',        icon: Download },
   ]
 
@@ -724,7 +794,10 @@ export function AIPanel() {
                           ? 'bg-brand text-white rounded-br-sm'
                           : 'bg-surface2 text-ink rounded-bl-sm'
                       )}>
-                        {msg.text}
+                        {msg.role === 'ai'
+                          ? <WikiLinkedText text={msg.text} className="whitespace-pre-wrap leading-relaxed" />
+                          : msg.text
+                        }
                       </div>
                     </div>
                   ))}
@@ -750,6 +823,66 @@ export function AIPanel() {
                   />
                   <Button variant="primary" size="sm" onClick={handleChat} loading={aiLoading}>Send</Button>
                 </div>
+              </div>
+            )}
+
+            {/* ── FIND RELATED ── */}
+            {mode === 'relate' && (
+              <div className="space-y-4">
+                <p className="text-xs text-ink2">
+                  Describe a topic or paste text — AI will find the most related entries in your brain.
+                </p>
+                <textarea
+                  className="w-full bg-surface2 border border-border rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/40 resize-none"
+                  rows={4}
+                  value={relateQuery}
+                  onChange={(e) => setRelateQuery(e.target.value)}
+                  placeholder="e.g. machine learning projects, meetings with Sarah, investment decisions…"
+                />
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleRelate}
+                  loading={relateLoading}
+                  className="w-full justify-center"
+                >
+                  <Network className="w-3.5 h-3.5" />
+                  Find Related Entries
+                </Button>
+
+                {relateResults.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-ink2 uppercase tracking-wide">{relateResults.length} related entries found</p>
+                    {relateResults.map(({ row, reason }) => (
+                      <div
+                        key={row._rowIndex}
+                        className="bg-surface2 border border-border rounded-xl p-3 space-y-1.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-ink leading-tight">{row.title}</p>
+                          <button
+                            type="button"
+                            onClick={() => useBrainStore.getState().openModal(row)}
+                            className="shrink-0 flex items-center gap-1 text-xs text-brand hover:underline font-medium"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Open
+                          </button>
+                        </div>
+                        {row.category && (
+                          <span className="inline-block text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded font-medium">
+                            {row.category}
+                          </span>
+                        )}
+                        <p className="text-xs text-ink2 leading-relaxed">{reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!relateResults.length && !relateLoading && relateQuery.trim() && (
+                  <p className="text-xs text-ink3 text-center py-4">Run a search above to find related entries</p>
+                )}
               </div>
             )}
 
