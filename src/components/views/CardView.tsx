@@ -33,7 +33,7 @@ export function CardView() {
 
   if (isSyncing && !rows.length) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-3 sm:p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 p-4 sm:p-5">
         {Array.from({ length: 8 }).map((_, i) => <CardSkeleton key={i} />)}
       </div>
     )
@@ -67,7 +67,7 @@ export function CardView() {
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={filteredRows.map((r) => r._rowIndex)} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-3 sm:p-4 stagger">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 p-4 sm:p-5 stagger">
           {filteredRows.map((row) => (
             <SortableCard key={row._rowIndex} row={row} />
           ))}

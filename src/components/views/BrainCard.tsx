@@ -1,8 +1,10 @@
 import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
-import { parseTags, formatDate, formatRelative, dynamicCategoryColor, dynamicCategoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight, parseActionItems } from '@/lib/utils'
-import { cn } from '@/lib/utils'
-import { CheckSquare, ExternalLink, Calendar, Check, Link2, Clock } from 'lucide-react'
+import {
+  parseTags, formatRelative, parseActionItems,
+  isImageUrl, highlight, cn,
+} from '@/lib/utils'
+import { CheckSquare2, ExternalLink, Calendar, Check, Link2, Clock, Sparkles } from 'lucide-react'
 import { stripMarkdown } from '@/lib/markdown'
 
 function isFormula(v: string): boolean {
@@ -11,12 +13,61 @@ function isFormula(v: string): boolean {
   return s.startsWith('=AI(') || s.startsWith('=IF(') || s.startsWith('=IFERROR(') || s.startsWith('=ARRAYFORMULA(')
 }
 
-function readingTimeMinutes(text: string): number {
-  const words = text.trim().split(/\s+/).length
-  return Math.max(1, Math.ceil(words / 200))
+/* Category → top-bar color mapping */
+const CAT_COLORS: Record<string, { bar: string; dot: string; label: string }> = {
+  reflection:            { bar: 'bg-violet-500',  dot: 'bg-violet-400',  label: 'text-violet-600 dark:text-violet-400' },
+  journal:               { bar: 'bg-violet-500',  dot: 'bg-violet-400',  label: 'text-violet-600 dark:text-violet-400' },
+  'professional develo': { bar: 'bg-blue-500',    dot: 'bg-blue-400',    label: 'text-blue-600 dark:text-blue-400' },
+  'professional d':      { bar: 'bg-blue-500',    dot: 'bg-blue-400',    label: 'text-blue-600 dark:text-blue-400' },
+  work:                  { bar: 'bg-blue-500',    dot: 'bg-blue-400',    label: 'text-blue-600 dark:text-blue-400' },
+  social:                { bar: 'bg-pink-500',    dot: 'bg-pink-400',    label: 'text-pink-600 dark:text-pink-400' },
+  'social media':        { bar: 'bg-pink-500',    dot: 'bg-pink-400',    label: 'text-pink-600 dark:text-pink-400' },
+  career:                { bar: 'bg-indigo-500',  dot: 'bg-indigo-400',  label: 'text-indigo-600 dark:text-indigo-400' },
+  observation:           { bar: 'bg-teal-500',    dot: 'bg-teal-400',    label: 'text-teal-600 dark:text-teal-400' },
+  education:             { bar: 'bg-emerald-500', dot: 'bg-emerald-400', label: 'text-emerald-600 dark:text-emerald-400' },
+  learning:              { bar: 'bg-emerald-500', dot: 'bg-emerald-400', label: 'text-emerald-600 dark:text-emerald-400' },
+  finance:               { bar: 'bg-amber-500',   dot: 'bg-amber-400',   label: 'text-amber-600 dark:text-amber-400' },
+  health:                { bar: 'bg-rose-500',    dot: 'bg-rose-400',    label: 'text-rose-600 dark:text-rose-400' },
+  ideas:                 { bar: 'bg-orange-500',  dot: 'bg-orange-400',  label: 'text-orange-600 dark:text-orange-400' },
+  personal:              { bar: 'bg-fuchsia-500', dot: 'bg-fuchsia-400', label: 'text-fuchsia-600 dark:text-fuchsia-400' },
+  meetings:              { bar: 'bg-cyan-500',    dot: 'bg-cyan-400',    label: 'text-cyan-600 dark:text-cyan-400' },
+  media:                 { bar: 'bg-rose-400',    dot: 'bg-rose-300',    label: 'text-rose-600 dark:text-rose-400' },
+  'business idea':       { bar: 'bg-green-500',   dot: 'bg-green-400',   label: 'text-green-600 dark:text-green-400' },
+  productivity:          { bar: 'bg-sky-500',     dot: 'bg-sky-400',     label: 'text-sky-600 dark:text-sky-400' },
+  agriculture:           { bar: 'bg-lime-600',    dot: 'bg-lime-400',    label: 'text-lime-700 dark:text-lime-400' },
+  'self-reflection':     { bar: 'bg-violet-600',  dot: 'bg-violet-400',  label: 'text-violet-600 dark:text-violet-400' },
 }
 
-const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+function getCatTheme(cat: string, categoryColors: Record<string, string>) {
+  const key = cat?.toLowerCase()
+  if (!key) return null
+
+  // Check custom category colors first
+  const customColor = categoryColors[key]
+  if (customColor) {
+    const colorMap: Record<string, { bar: string; dot: string; label: string }> = {
+      violet: { bar: 'bg-violet-500',  dot: 'bg-violet-400',  label: 'text-violet-600 dark:text-violet-400' },
+      blue:   { bar: 'bg-blue-500',    dot: 'bg-blue-400',    label: 'text-blue-600 dark:text-blue-400' },
+      green:  { bar: 'bg-green-500',   dot: 'bg-green-400',   label: 'text-green-600 dark:text-green-400' },
+      rose:   { bar: 'bg-rose-500',    dot: 'bg-rose-400',    label: 'text-rose-600 dark:text-rose-400' },
+      amber:  { bar: 'bg-amber-500',   dot: 'bg-amber-400',   label: 'text-amber-600 dark:text-amber-400' },
+      orange: { bar: 'bg-orange-500',  dot: 'bg-orange-400',  label: 'text-orange-600 dark:text-orange-400' },
+      pink:   { bar: 'bg-pink-500',    dot: 'bg-pink-400',    label: 'text-pink-600 dark:text-pink-400' },
+      teal:   { bar: 'bg-teal-500',    dot: 'bg-teal-400',    label: 'text-teal-600 dark:text-teal-400' },
+      cyan:   { bar: 'bg-cyan-500',    dot: 'bg-cyan-400',    label: 'text-cyan-600 dark:text-cyan-400' },
+      indigo: { bar: 'bg-indigo-500',  dot: 'bg-indigo-400',  label: 'text-indigo-600 dark:text-indigo-400' },
+      lime:   { bar: 'bg-lime-500',    dot: 'bg-lime-400',    label: 'text-lime-700 dark:text-lime-400' },
+    }
+    return colorMap[customColor] ?? null
+  }
+
+  // Exact or prefix match
+  return CAT_COLORS[key]
+    ?? Object.entries(CAT_COLORS).find(([k]) => key.startsWith(k))?.[1]
+    ?? null
+}
+
+const STATUS_META: Record<string, { label: string; cls: string }> = {
   'Done':        { label: 'Done',        cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
   'In Progress': { label: 'In Progress', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   'Pending':     { label: 'Pending',     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
@@ -30,39 +81,32 @@ interface BrainCardProps {
 }
 
 export function BrainCard({ row, dragHandle }: BrainCardProps) {
-  const openModal            = useBrainStore((s) => s.openModal)
-  const searchQuery          = useBrainStore((s) => s.filters.search)
-  const categoryColors       = useBrainStore((s) => s.categoryColors)
-  const selectionMode        = useBrainStore((s) => s.selectionMode)
-  const selectedCardIndices  = useBrainStore((s) => s.selectedCardIndices)
-  const toggleCardSelection  = useBrainStore((s) => s.toggleCardSelection)
-  const catClass             = dynamicCategoryColor(row.category, categoryColors)
-  const catBorder            = dynamicCategoryBorderColor(row.category, categoryColors)
-  const statusTint           = statusBgTint(row.taskStatus)
-  const statusDot            = getStatusDot(row.taskStatus)
-  const isSelected           = selectedCardIndices.includes(row._rowIndex)
+  const openModal           = useBrainStore((s) => s.openModal)
+  const searchQuery         = useBrainStore((s) => s.filters.search)
+  const categoryColors      = useBrainStore((s) => s.categoryColors)
+  const selectionMode       = useBrainStore((s) => s.selectionMode)
+  const selectedCardIndices = useBrainStore((s) => s.selectedCardIndices)
+  const toggleCardSelection = useBrainStore((s) => s.toggleCardSelection)
+  const isSelected          = selectedCardIndices.includes(row._rowIndex)
+
+  const theme = getCatTheme(row.category, categoryColors)
 
   const rawText = row.rewritten || row.original || ''
   const preview = (() => {
     if (isFormula(rawText)) return ''
-    return stripMarkdown(rawText).slice(0, 220)
+    return stripMarkdown(rawText).slice(0, 180)
   })()
 
-  const actionItemsParsed = (() => {
+  const actionItems = (() => {
     if (!row.actionItems || isFormula(row.actionItems)) return []
     return parseActionItems(row.actionItems)
   })()
 
-  const firstAction = (() => {
-    const pending = actionItemsParsed.find(i => !i.done)
-    return (pending ?? actionItemsParsed[0])?.text ?? ''
-  })()
-
-  const taskProgress = actionItemsParsed.length > 0
-    ? { done: actionItemsParsed.filter(i => i.done).length, total: actionItemsParsed.length }
+  const taskProgress = actionItems.length > 0
+    ? { done: actionItems.filter(i => i.done).length, total: actionItems.length }
     : null
 
-  const tags    = parseTags(row.tags).slice(0, 2)
+  const tags     = parseTags(row.tags).slice(0, 3)
   const hasImage = row.mediaUrl && isImageUrl(row.mediaUrl)
   const hasSearch = !!searchQuery?.trim()
 
@@ -70,99 +114,125 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
   const previewHtml = hasSearch ? highlight(preview, searchQuery) : ''
 
   const statusInfo = row.taskStatus && !isFormula(row.taskStatus)
-    ? STATUS_LABELS[row.taskStatus]
+    ? STATUS_META[row.taskStatus]
     : null
 
-  const readTime = preview.trim().split(/\s+/).length > 30
-    ? readingTimeMinutes(preview)
-    : null
+  const isAIEnhanced = !!row.rewritten && !isFormula(row.rewritten)
+  const isOverdue    = (() => {
+    if (!row.dueDate || row.taskStatus === 'Done') return false
+    return row.dueDate < new Date().toISOString().slice(0, 10)
+  })()
+
+  const linkCount = (() => {
+    if (!row.links || isFormula(row.links)) return { refs: 0, http: 0 }
+    const lines = row.links.split('\n').map(l => l.trim()).filter(Boolean)
+    return {
+      refs: lines.filter(l => /^\[\[.+\]\]$/.test(l)).length,
+      http: lines.filter(l => l.startsWith('http')).length,
+    }
+  })()
 
   function handleClick(e: React.MouseEvent) {
-    if (selectionMode) {
-      e.stopPropagation()
-      toggleCardSelection(row._rowIndex)
-    } else {
-      openModal(row)
-    }
+    if (selectionMode) { e.stopPropagation(); toggleCardSelection(row._rowIndex) }
+    else openModal(row)
   }
 
   return (
     <div
-      className={cn(
-        'brain-card group bg-surface border border-border border-l-[3px] rounded-xl overflow-hidden cursor-pointer relative',
-        catBorder,
-        statusTint,
-        selectionMode && isSelected && 'ring-2 ring-brand border-brand/50',
-        selectionMode && !isSelected && 'opacity-70',
-      )}
       onClick={handleClick}
+      className={cn(
+        'brain-card group relative bg-surface border border-border rounded-xl overflow-hidden cursor-pointer',
+        'shadow-[var(--shadow-xs)]',
+        isSelected && 'ring-2 ring-brand',
+        selectionMode && !isSelected && 'opacity-60',
+        isOverdue && 'border-red-200 dark:border-red-800',
+      )}
     >
-      {/* Selection overlay */}
+      {/* Category color bar — top */}
+      {theme && (
+        <div className={cn('h-[3px] w-full', theme.bar)} />
+      )}
+
+      {/* Selection checkbox */}
       {selectionMode && (
         <div
-          className={cn(
-            'absolute top-2.5 left-2.5 z-10 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shadow-sm',
-            isSelected
-              ? 'bg-brand border-brand'
-              : 'bg-surface border-border2 hover:border-brand/60',
-          )}
           onClick={(e) => { e.stopPropagation(); toggleCardSelection(row._rowIndex) }}
-        >
+          className={cn(
+            'absolute top-3 left-3 z-10 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shadow-sm',
+            isSelected ? 'bg-brand border-brand' : 'bg-surface border-border2 hover:border-brand/60',
+          )}>
           {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
         </div>
       )}
 
       {/* Drag handle */}
       {dragHandle && (
-        <div className="absolute top-2.5 right-2.5 z-10 opacity-0 group-hover:opacity-60 transition-opacity">
+        <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-50 transition-opacity">
           {dragHandle}
         </div>
       )}
 
       {/* Cover image */}
       {hasImage && (
-        <div className="w-full h-40 overflow-hidden bg-surface2">
+        <div className="w-full h-36 overflow-hidden bg-surface2">
           <img
             src={row.mediaUrl}
             alt={row.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
             loading="lazy"
             onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
           />
         </div>
       )}
 
-      <div className={cn('p-4 flex flex-col gap-2.5', selectionMode && 'pl-9')}>
+      {/* Content */}
+      <div className={cn('p-4 flex flex-col gap-2', selectionMode && 'pl-10')}>
 
-        {/* Top row: category badge + status pill */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+        {/* Header row: category + status */}
+        <div className="flex items-center justify-between gap-2 min-h-[18px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {theme && (
+              <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', theme.dot)} />
+            )}
             {row.category && !isFormula(row.category) && (
-              <span className={cn('text-[11px] font-semibold px-2 py-0.5 rounded-md shrink-0', catClass)}>
+              <span className={cn(
+                'text-[11px] font-semibold truncate',
+                theme ? theme.label : 'text-ink3'
+              )}>
                 {row.category}
+                {row.subCategory && !isFormula(row.subCategory) && (
+                  <span className="text-ink3 font-normal"> · {row.subCategory}</span>
+                )}
               </span>
             )}
-            {row.subCategory && !isFormula(row.subCategory) && (
-              <span className="text-[11px] text-ink3 truncate max-w-[90px]">· {row.subCategory}</span>
-            )}
           </div>
-          {statusInfo ? (
-            <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 whitespace-nowrap', statusInfo.cls)}>
-              {statusInfo.label}
-            </span>
-          ) : row.taskStatus && !isFormula(row.taskStatus) ? (
-            <span className={cn('w-2 h-2 rounded-full shrink-0 mt-1', statusDot)} title={row.taskStatus} />
-          ) : null}
+
+          <div className="flex items-center gap-1 shrink-0">
+            {isAIEnhanced && (
+              <Sparkles className="w-3 h-3 text-brand/50" title="AI enhanced" />
+            )}
+            {statusInfo ? (
+              <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap leading-tight', statusInfo.cls)}>
+                {statusInfo.label}
+              </span>
+            ) : row.taskStatus && !isFormula(row.taskStatus) ? (
+              <span className={cn(
+                'w-2 h-2 rounded-full',
+                row.taskStatus.toLowerCase().includes('done') ? 'bg-green-500' :
+                row.taskStatus.toLowerCase().includes('progress') ? 'bg-blue-500' :
+                row.taskStatus.toLowerCase().includes('blocked') ? 'bg-red-500' :
+                'bg-amber-400'
+              )} title={row.taskStatus} />
+            ) : null}
+          </div>
         </div>
 
         {/* Title */}
         {hasSearch ? (
-          <h3
-            className="text-sm font-semibold text-ink leading-snug line-clamp-2 -mt-0.5"
-            dangerouslySetInnerHTML={{ __html: titleHtml || 'Untitled' }}
-          />
+          <h3 className="text-[14px] font-semibold text-ink leading-snug line-clamp-2"
+            dangerouslySetInnerHTML={{ __html: titleHtml || 'Untitled' }} />
         ) : (
-          <h3 className="text-sm font-semibold text-ink leading-snug line-clamp-2 -mt-0.5">
+          <h3 className="text-[14px] font-semibold text-ink leading-snug line-clamp-2">
             {row.title || 'Untitled'}
           </h3>
         )}
@@ -170,84 +240,71 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
         {/* Preview */}
         {preview && (
           hasSearch ? (
-            <p
-              className="text-xs text-ink2 leading-relaxed line-clamp-3"
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
-            />
+            <p className="text-[12px] text-ink2 leading-relaxed line-clamp-3 font-normal"
+              dangerouslySetInnerHTML={{ __html: previewHtml }} />
           ) : (
-            <p className="text-xs text-ink2 leading-relaxed line-clamp-3">{preview}</p>
+            <p className="text-[12px] text-ink2 leading-relaxed line-clamp-3 font-normal">{preview}</p>
           )
         )}
 
-        {/* Action items */}
-        {firstAction && (
-          <div className="flex items-start gap-2 bg-surface2 rounded-lg px-2.5 py-2">
-            <CheckSquare className="w-3 h-3 text-brand shrink-0 mt-0.5" />
-            <span className="text-[11px] text-ink2 leading-snug line-clamp-2 flex-1">{firstAction}</span>
-            {taskProgress && (
-              <div className="shrink-0 flex flex-col items-end gap-1">
-                <span className={cn(
-                  'text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none',
-                  taskProgress.done === taskProgress.total
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                    : 'bg-surface text-ink3',
-                )}>
-                  {taskProgress.done}/{taskProgress.total}
-                </span>
-                {taskProgress.total > 1 && (
-                  <div className="w-12 h-1 bg-border rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-brand rounded-full transition-all"
-                      style={{ width: `${(taskProgress.done / taskProgress.total) * 100}%` }}
-                    />
-                  </div>
+        {/* Task progress bar */}
+        {taskProgress && taskProgress.total > 0 && (
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex-1 h-1 bg-surface2 rounded-full overflow-hidden">
+              <div
+                className={cn('h-full rounded-full transition-all',
+                  taskProgress.done === taskProgress.total ? 'bg-green-500' : 'bg-brand'
                 )}
-              </div>
-            )}
+                style={{ width: `${(taskProgress.done / taskProgress.total) * 100}%` }}
+              />
+            </div>
+            <span className={cn(
+              'text-[10px] font-semibold shrink-0',
+              taskProgress.done === taskProgress.total ? 'text-green-600 dark:text-green-400' : 'text-ink3'
+            )}>
+              {taskProgress.done}/{taskProgress.total}
+            </span>
           </div>
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-2 pt-0.5">
-          <div className="flex items-center gap-1.5 min-w-0 overflow-hidden flex-wrap">
+        <div className="flex items-center justify-between gap-2 mt-auto pt-1 border-t border-border/50">
+
+          {/* Tags */}
+          <div className="flex items-center gap-1 min-w-0 overflow-hidden">
             {tags.map((t) => (
-              <span key={t} className="text-[10px] text-ink3 bg-surface2 px-1.5 py-0.5 rounded-md shrink-0">
+              <span key={t} className="text-[10px] text-ink3 bg-surface2 px-1.5 py-0.5 rounded-md shrink-0 max-w-[80px] truncate">
                 #{t}
               </span>
             ))}
-            {parseTags(row.tags).length > 2 && (
-              <span className="text-[10px] text-ink3">+{parseTags(row.tags).length - 2}</span>
+            {parseTags(row.tags).length > 3 && (
+              <span className="text-[10px] text-ink3 shrink-0">+{parseTags(row.tags).length - 3}</span>
             )}
           </div>
 
+          {/* Meta: links, due date, time */}
           <div className="flex items-center gap-2 shrink-0 text-ink3">
-            {readTime && (
-              <span className="flex items-center gap-0.5 text-[10px]">
-                <Clock className="w-2.5 h-2.5" />{readTime}m
+            {linkCount.refs > 0 && (
+              <span className="flex items-center gap-0.5 text-[10px]" title={`${linkCount.refs} linked`}>
+                <Link2 className="w-2.5 h-2.5" />{linkCount.refs}
               </span>
             )}
-            {row.links && !isFormula(row.links) && (() => {
-              const lines     = row.links.split('\n').map(l => l.trim()).filter(Boolean)
-              const entryRefs = lines.filter(l => /^\[\[.+\]\]$/.test(l)).length
-              const httpLinks = lines.filter(l => l.startsWith('http')).length
-              return (
-                <>
-                  {entryRefs > 0 && (
-                    <span className="flex items-center gap-0.5 text-[10px]" title={`${entryRefs} linked entr${entryRefs === 1 ? 'y' : 'ies'}`}>
-                      <Link2 className="w-2.5 h-2.5" />{entryRefs}
-                    </span>
-                  )}
-                  {httpLinks > 0 && (
-                    <ExternalLink className="w-3 h-3" title={`${httpLinks} link${httpLinks === 1 ? '' : 's'}`} />
-                  )}
-                </>
-              )
-            })()}
-            <span className="text-[10px]">
-              {row.dueDate && !isFormula(row.dueDate)
-                ? <span className="flex items-center gap-0.5 text-amber-500"><Calendar className="w-2.5 h-2.5" />{formatDate(row.dueDate)}</span>
-                : row.createdAt ? formatRelative(row.createdAt) : ''}
-            </span>
+            {linkCount.http > 0 && (
+              <ExternalLink className="w-2.5 h-2.5" title={`${linkCount.http} link(s)`} />
+            )}
+            {row.dueDate && !isFormula(row.dueDate) ? (
+              <span className={cn(
+                'flex items-center gap-0.5 text-[10px] font-medium',
+                isOverdue ? 'text-red-500' : 'text-amber-500'
+              )}>
+                <Calendar className="w-2.5 h-2.5" />
+                {new Date(row.dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            ) : row.createdAt ? (
+              <span className="text-[10px]">
+                <Clock className="w-2.5 h-2.5 inline mr-0.5" />{formatRelative(row.createdAt)}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>

@@ -77,39 +77,40 @@ export function BottomNav() {
         </>
       )}
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface/95 backdrop-blur-sm border-t border-border safe-bottom flex items-center">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface/95 backdrop-blur-md border-t border-border safe-bottom flex items-center px-2 h-[60px]">
         {TABS.map(({ mode, Icon, label }) => (
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
-            className={cn(
-              'flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors',
-              viewMode === mode ? 'text-brand' : 'text-ink3'
-            )}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors py-1"
           >
-            <Icon className="w-5 h-5" />
-            <span className="text-[10px] font-medium">{label}</span>
+            <div className={cn(
+              'w-9 h-6 rounded-full flex items-center justify-center transition-all duration-200',
+              viewMode === mode ? 'bg-brand/12' : ''
+            )}>
+              <Icon className={cn('w-4.5 h-4.5 transition-colors', viewMode === mode ? 'text-brand' : 'text-ink3')} />
+            </div>
+            <span className={cn('text-[10px] font-medium transition-colors', viewMode === mode ? 'text-brand' : 'text-ink3')}>{label}</span>
           </button>
         ))}
 
         {/* New button — opens menu with Entry + Milestone */}
         <button
           onClick={() => setShowNewMenu((v) => !v)}
-          className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 relative"
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 relative"
         >
           <div className={cn(
-            'w-7 h-7 rounded-full flex items-center justify-center transition-transform',
-            showNewMenu ? 'bg-ink scale-95' : 'bg-brand',
+            'w-9 h-6 rounded-full flex items-center justify-center transition-all duration-200',
+            showNewMenu ? 'bg-ink/10' : 'bg-brand',
           )}>
             {showNewMenu
-              ? <X className="w-4 h-4 text-white" />
-              : <Plus className="w-4 h-4 text-white" />
+              ? <X className="w-3.5 h-3.5 text-ink" />
+              : <Plus className="w-3.5 h-3.5 text-white" />
             }
           </div>
           <span className="text-[10px] font-medium text-ink3">New</span>
-          {/* Memories badge */}
           {specialCount > 0 && !showNewMenu && (
-            <span className="absolute top-1.5 right-[calc(50%-10px)] w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center leading-none animate-pulse pointer-events-none">
+            <span className="absolute top-0.5 right-[calc(50%-14px)] w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[8px] font-bold flex items-center justify-center leading-none pointer-events-none">
               {specialCount}
             </span>
           )}

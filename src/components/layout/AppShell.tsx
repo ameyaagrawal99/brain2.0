@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Header }             from './Header'
+import { NavRail }            from './NavRail'
 import { FilterBar }          from './FilterBar'
 import { StatsBar }           from './StatsBar'
 import { BottomNav }          from './BottomNav'
@@ -43,41 +44,31 @@ function MilestoneBanner() {
   const extra  = allSpecial.length - 1
 
   return (
-    <div className="relative overflow-hidden animate-slideUp">
-      {/* Gradient background */}
+    <div className="relative overflow-hidden animate-slideDown sm:ml-14">
       <div className="absolute inset-0 bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 opacity-90" />
       <div className="milestone-shimmer absolute inset-0" />
-
-      <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-3">
-        <span className="text-xl shrink-0 select-none drop-shadow">
-          {isAnni ? '🎂' : '🎉'}
-        </span>
-        <button
-          onClick={() => setSelectedMilestone(first)}
-          className="flex-1 flex items-center gap-2 text-left min-w-0"
-        >
+      <div className="relative z-10 px-3 sm:px-4 py-2.5 flex items-center gap-3">
+        <span className="text-xl shrink-0 select-none drop-shadow">{isAnni ? '🎂' : '🎉'}</span>
+        <button onClick={() => setSelectedMilestone(first)}
+          className="flex-1 flex items-center gap-2 text-left min-w-0">
           <div className="min-w-0">
             <span className="text-sm font-bold text-white drop-shadow-sm">
               {isAnni ? 'Anniversary: ' : 'Today: '}
               <span className="font-extrabold">{first.title}</span>
             </span>
-            {extra > 0 && (
-              <span className="ml-2 text-xs text-white/70">+{extra} more</span>
-            )}
+            {extra > 0 && <span className="ml-2 text-xs text-white/70">+{extra} more</span>}
           </div>
           <ChevronRight className="w-4 h-4 text-white/70 shrink-0" />
         </button>
-        <button
-          onClick={() => setDismissed(true)}
-          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
-          title="Dismiss"
-        >
+        <button onClick={() => setDismissed(true)}
+          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>
   )
 }
+
 
 export function AppShell() {
   const viewMode            = useBrainStore((s) => s.viewMode)
@@ -95,7 +86,6 @@ export function AppShell() {
   const selectedMilestone   = useBrainStore((s) => s.selectedMilestone)
   const showNewMilestone    = useBrainStore((s) => s.showNewMilestone)
   const setShowNewMilestone = useBrainStore((s) => s.setShowNewMilestone)
-
   const setContacts         = useBrainStore((s) => s.setContacts)
   const setContactsConnected = useBrainStore((s) => s.setContactsConnected)
 
@@ -105,23 +95,16 @@ export function AppShell() {
   useConfettiCheck()
   useNotifications()
 
-  // Attempt to silently fetch Google Contacts once after data is loaded.
-  // Succeeds only if the user's token already covers the contacts.readonly scope.
-  // Silent: no error shown if it doesn't work (user can grant access in Settings).
   useEffect(() => {
     if (demoMode) return
     const token = getAccessToken()
     if (!token) return
     fetchGoogleContacts(token).then((contacts) => {
-      if (contacts.length > 0) {
-        setContacts(contacts)
-        setContactsConnected(true)
-      }
+      if (contacts.length > 0) { setContacts(contacts); setContactsConnected(true) }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode])
 
-  // Handle PWA shortcut URLs (e.g. ?action=new-entry from manifest shortcuts)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const action = params.get('action')
@@ -129,29 +112,19 @@ export function AppShell() {
     if (action === 'new-entry')     setShowNewRow(true)
     if (action === 'new-milestone') setShowNewMilestone(true)
     if (view === 'board')           useBrainStore.getState().setViewMode('board')
-    if (action || view) {
-      // Clean the URL without reloading
-      window.history.replaceState({}, '', window.location.pathname)
-    }
+    if (action || view)             window.history.replaceState({}, '', window.location.pathname)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    if (demoMode) {
-      setRows(DEMO_ROWS)
-      hasLoadedRef.current = true
-      return
-    }
+    if (demoMode) { setRows(DEMO_ROWS); hasLoadedRef.current = true; return }
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true
-      const t = setTimeout(() => {
-        Promise.all([refresh(), refreshConfig()]).catch(() => {})
-      }, 100)
+      const t = setTimeout(() => { Promise.all([refresh(), refreshConfig()]).catch(() => {}) }, 100)
       return () => clearTimeout(t)
     }
   }, [demoMode, refresh, refreshConfig, setRows])
 
-  // Lock body scroll when any modal is open
   useEffect(() => {
     const isDesktop = window.innerWidth >= 640
     const aiLocks   = showAIPanel && !isDesktop
@@ -161,43 +134,57 @@ export function AppShell() {
   }, [selectedRow, showNewRow, showSettings, showAIPanel, selectedMilestone, showNewMilestone])
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
+    <div className="min-h-screen bg-bg">
+      {/* Desktop nav rail */}
+      <NavRail />
+
+      {/* Sticky header */}
       <Header />
+
+      {/* Announcement banner */}
       <PWAInstallBanner />
       <MilestoneBanner />
+
+      {/* Filter / search bar */}
       <FilterBar />
-      <StatsBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 w-full max-w-7xl mx-auto overflow-x-auto pb-16 sm:pb-0 min-w-0">
-          {viewMode === 'card'  && <CardView />}
-          {viewMode === 'table' && <TableView />}
-          {viewMode === 'board' && <TaskBoard />}
-          {viewMode === 'graph' && <GraphView />}
-        </main>
+
+      {/* Stats strip */}
+      <div className="sm:ml-14">
+        <StatsBar />
       </div>
+
+      {/* Sidebar panel (overlay) */}
+      <Sidebar />
+
+      {/* Main content */}
+      <main className="sm:ml-14 pb-20 sm:pb-8 min-h-[calc(100vh-200px)]">
+        {viewMode === 'card'  && <CardView />}
+        {viewMode === 'table' && <TableView />}
+        {viewMode === 'board' && <TaskBoard />}
+        {viewMode === 'graph' && <GraphView />}
+      </main>
+
+      {/* Mobile bottom nav */}
       <BottomNav />
 
-      {/* Selection mode floating action bar */}
+      {/* Selection toolbar */}
       {selectionMode && (
-        <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-ink text-white rounded-2xl px-4 py-3 shadow-2xl">
+        <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50
+          flex items-center gap-3
+          bg-ink text-white rounded-2xl px-4 py-3 shadow-2xl
+          animate-slideUp">
           <span className="text-sm font-medium whitespace-nowrap">
             {selectedCardIndices.length} {selectedCardIndices.length === 1 ? 'card' : 'cards'} selected
           </span>
           {selectedCardIndices.length > 0 && (
-            <button
-              onClick={() => { setShowAIPanel(true) }}
-              className="flex items-center gap-1.5 bg-brand text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-brand/90 transition-colors"
-            >
+            <button onClick={() => setShowAIPanel(true)}
+              className="flex items-center gap-1.5 bg-brand text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-brand/90 transition-colors">
               <Sparkles className="w-3.5 h-3.5" />
               Enhance selected
             </button>
           )}
-          <button
-            onClick={clearCardSelection}
-            className="flex items-center justify-center w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-            title="Exit selection mode"
-          >
+          <button onClick={clearCardSelection}
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

@@ -411,19 +411,18 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Backdrop — all screen sizes */}
       <div
-        className="fixed inset-0 z-30 bg-black/40 sm:hidden"
+        className="fixed inset-0 z-30 bg-black/30 backdrop-blur-[2px]"
         onClick={() => setShowSidebar(false)}
       />
 
-      {/* Sidebar panel */}
+      {/* Sidebar panel — always a fixed overlay, offset for nav rail on desktop */}
       <aside className={cn(
-        'fixed sm:relative z-40 sm:z-auto',
+        'fixed z-40 inset-y-0 left-0 sm:left-14',
         'bg-surface border-r border-border flex flex-col',
-        'w-72 h-full sm:h-auto sm:min-h-0',
-        'inset-y-0 left-0',
-        'sm:flex-shrink-0',
+        'w-[300px] shadow-xl',
+        'animate-slideInLeft',
       )}>
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
@@ -435,7 +434,7 @@ export function Sidebar() {
           </div>
           <button
             onClick={() => setShowSidebar(false)}
-            className="sm:hidden w-7 h-7 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover hover:text-ink transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover hover:text-ink transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
