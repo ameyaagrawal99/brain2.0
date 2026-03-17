@@ -426,7 +426,7 @@ export function Sidebar() {
         'sm:flex-shrink-0',
       )}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border shrink-0 bg-surface2/50">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-brand/15 flex items-center justify-center">
               <BarChart2 className="w-3.5 h-3.5 text-brand" />
@@ -441,58 +441,41 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Tabs — 2 rows of 4+3 to avoid cramping */}
+        {/* Tabs — single scrollable row */}
         <div className="shrink-0 border-b border-border bg-surface">
-          {/* Row 1: first 4 tabs */}
-          <div className="flex">
-            {TABS.slice(0, 4).map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={cn(
-                  'relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors whitespace-nowrap flex-1 tracking-wide',
-                  tab === key
-                    ? 'text-brand bg-brand/5 border-b-2 border-brand'
-                    : 'text-ink3 hover:text-ink hover:bg-hover border-b-2 border-transparent'
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-                {key === 'tasks' && pendingTaskCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 bg-brand text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
-                    {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-          {/* Row 2: last 3 tabs */}
-          <div className="flex border-t border-border/50">
-            {TABS.slice(4).map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={cn(
-                  'relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors whitespace-nowrap flex-1 tracking-wide',
-                  tab === key
-                    ? 'text-brand bg-brand/5 border-b-2 border-brand'
-                    : 'text-ink3 hover:text-ink hover:bg-hover border-b-2 border-transparent'
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-                {key === 'milestones' && (() => {
-                  const today = new Date().toISOString().slice(0, 10)
-                  const todayMD = today.slice(5)
-                  const special = specialDays.filter(d => d.date === today || (d.date !== today && d.date.slice(5) === todayMD))
-                  return special.length > 0 ? (
-                    <span className="absolute top-1.5 right-1.5 bg-rose-500 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none animate-pulse">
-                      🎉
+          <div className="flex overflow-x-auto scrollbar-hide px-1 py-1 gap-0.5">
+            {TABS.map(({ key, label, icon: Icon }) => {
+              const isActive = tab === key
+              const todayStr = new Date().toISOString().slice(0, 10)
+              const todayMD  = todayStr.slice(5)
+              const milestoneAlert = key === 'milestones' &&
+                specialDays.some(d => d.date === todayStr || (d.date !== todayStr && d.date.slice(5) === todayMD))
+              const taskBadge = key === 'tasks' && pendingTaskCount > 0
+
+              return (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={cn(
+                    'relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap shrink-0',
+                    isActive
+                      ? 'bg-brand/10 text-brand shadow-sm'
+                      : 'text-ink3 hover:text-ink hover:bg-hover',
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  {label}
+                  {taskBadge && (
+                    <span className="bg-brand text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                      {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
                     </span>
-                  ) : null
-                })()}
-              </button>
-            ))}
+                  )}
+                  {milestoneAlert && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -505,14 +488,17 @@ export function Sidebar() {
               {/* Summary row */}
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: 'Total', value: rows.length, color: 'text-ink', bg: 'bg-surface2' },
-                  { label: 'Enhanced', value: enhancedCount, color: 'text-brand', bg: 'bg-brand/5' },
-                  { label: 'Tasks', value: rows.filter(r => r.taskStatus).length, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/15' },
-                  { label: 'Done', value: rows.filter(r => r.taskStatus === 'Done').length, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/15' },
-                ].map(({ label, value, color, bg }) => (
-                  <div key={label} className={cn('rounded-xl p-3 text-center border border-border/60', bg)}>
-                    <div className={cn('text-2xl font-bold tracking-tight', color)}>{value}</div>
-                    <div className="text-[11px] text-ink3 mt-0.5 font-medium">{label}</div>
+                  { label: 'Total entries', value: rows.length,                                     color: 'text-ink',       bg: 'bg-surface2 border-border/60',                             dot: 'bg-ink3' },
+                  { label: 'AI enhanced',   value: enhancedCount,                                   color: 'text-brand',     bg: 'bg-brand/5 border-brand/15',                               dot: 'bg-brand' },
+                  { label: 'With tasks',    value: rows.filter(r => r.taskStatus).length,           color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/15 border-amber-200/50',     dot: 'bg-amber-500' },
+                  { label: 'Completed',     value: rows.filter(r => r.taskStatus === 'Done').length, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/15 border-green-200/50', dot: 'bg-green-500' },
+                ].map(({ label, value, color, bg, dot }) => (
+                  <div key={label} className={cn('rounded-xl p-3 border flex flex-col gap-1', bg)}>
+                    <div className={cn('text-2xl font-bold tracking-tight leading-none', color)}>{value}</div>
+                    <div className="flex items-center gap-1.5">
+                      <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', dot)} />
+                      <span className="text-[10px] text-ink3 font-medium">{label}</span>
+                    </div>
                   </div>
                 ))}
               </div>

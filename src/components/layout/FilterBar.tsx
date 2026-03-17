@@ -5,6 +5,20 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState } from 'react'
 
+function useSearchFocus(inputRef: React.RefObject<HTMLInputElement | null>) {
+  useEffect(() => {
+    function handle(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      }
+    }
+    document.addEventListener('keydown', handle)
+    return () => document.removeEventListener('keydown', handle)
+  }, [inputRef])
+}
+
 export function FilterBar() {
   const filters        = useBrainStore((s) => s.filters)
   const setSearch      = useBrainStore((s) => s.setSearch)
@@ -21,6 +35,9 @@ export function FilterBar() {
   const [localSearch, setLocalSearch] = useState(filters.search)
   const debounced = useDebounce(localSearch, 250)
   useEffect(() => { setSearch(debounced) }, [debounced, setSearch])
+
+  const searchRef = useRef<HTMLInputElement>(null)
+  useSearchFocus(searchRef)
 
   const [showDatePicker, setShowDatePicker] = useState(false)
   const datePickerRef = useRef<HTMLDivElement>(null)
@@ -111,19 +128,24 @@ export function FilterBar() {
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink3 pointer-events-none" />
             <input
+              ref={searchRef}
               type="search"
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
-              placeholder="Search..."
-              className="w-full h-8 pl-8 pr-8 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition-colors"
+              placeholder="Search…"
+              className="w-full h-8 pl-8 pr-16 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition-colors"
             />
-            {localSearch && (
+            {localSearch ? (
               <button
                 onClick={() => { setLocalSearch(''); setSearch('') }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink p-0.5"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
+            ) : (
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] text-ink3 bg-surface border border-border rounded px-1 py-0.5 pointer-events-none leading-none">
+                ⌘K
+              </span>
             )}
           </div>
 

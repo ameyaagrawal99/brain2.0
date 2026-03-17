@@ -1,56 +1,77 @@
-import { BookOpen, Sparkles, Shield, Smartphone } from 'lucide-react'
+import { BookOpen, Sparkles, Shield, Smartphone, ArrowRight, Brain } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+
+const FEATURES = [
+  { icon: Brain,       label: 'Knowledge graph',  desc: 'Connect ideas visually' },
+  { icon: Sparkles,    label: 'AI-powered',        desc: 'Enhance & summarise' },
+  { icon: Shield,      label: 'Private & secure',  desc: 'Your data, your Sheet' },
+  { icon: Smartphone,  label: 'Works offline',     desc: 'Installable PWA' },
+]
 
 export function LoginScreen() {
   const { signIn } = useAuth()
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6 relative overflow-hidden">
 
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center mb-4">
-            <BookOpen className="w-7 h-7 text-brand" />
+      {/* Ambient background orbs */}
+      <div className="pointer-events-none absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-500/8 blur-3xl" />
+      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-brand/4 blur-3xl" />
+
+      <div className="w-full max-w-md relative z-10 animate-fadeIn">
+
+        {/* Logo + hero */}
+        <div className="flex flex-col items-center mb-10 text-center">
+          <div className="relative mb-5">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand/20 to-purple-500/20 border border-brand/20 flex items-center justify-center shadow-xl shadow-brand/10">
+              <BookOpen className="w-10 h-10 text-brand" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-brand to-purple-500 flex items-center justify-center shadow-sm">
+              <Sparkles className="w-3 h-3 text-white" />
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Brain 2.0</h1>
-          <p className="text-sm text-ink2 mt-1.5">Your personal knowledge base</p>
+          <h1 className="text-3xl font-bold text-ink tracking-tight">Brain 2.0</h1>
+          <p className="text-base text-ink2 mt-2 max-w-xs leading-relaxed">
+            Your personal knowledge base — tasks, notes, and ideas, beautifully organised.
+          </p>
         </div>
 
-        {/* Feature pills */}
-        <div className="flex flex-wrap justify-center gap-2 mb-8">
-          {[
-            { icon: Sparkles, label: 'AI-powered' },
-            { icon: Shield,   label: 'Private & secure' },
-            { icon: Smartphone, label: 'Works offline' },
-          ].map(({ icon: Icon, label }) => (
-            <span key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface border border-border text-xs text-ink2 shadow-sm">
-              <Icon className="w-3 h-3 text-brand" />
-              {label}
-            </span>
+        {/* Feature grid */}
+        <div className="grid grid-cols-2 gap-3 mb-8">
+          {FEATURES.map(({ icon: Icon, label, desc }) => (
+            <div
+              key={label}
+              className="flex items-start gap-3 p-3.5 rounded-2xl bg-surface border border-border shadow-sm hover:border-brand/30 transition-colors"
+            >
+              <div className="w-8 h-8 rounded-xl bg-brand/10 flex items-center justify-center shrink-0 mt-0.5">
+                <Icon className="w-4 h-4 text-brand" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-ink leading-snug">{label}</p>
+                <p className="text-[11px] text-ink3 mt-0.5 leading-snug">{desc}</p>
+              </div>
+            </div>
           ))}
         </div>
 
-        {/* Google sign-in */}
-        <div id="g_id_signin_btn" className="flex justify-center" />
-
-        {/* Manual sign-in button fallback */}
+        {/* Sign-in button */}
         <button
           onClick={signIn}
-          className="w-full mt-4 flex items-center justify-center gap-3 h-11 px-4 bg-surface border border-border rounded-xl text-sm font-medium text-ink hover:bg-hover transition-colors shadow-sm"
+          className="w-full group flex items-center justify-center gap-3 h-12 px-5 bg-surface border border-border rounded-2xl text-sm font-semibold text-ink hover:border-brand/40 hover:bg-brand/5 transition-all shadow-sm hover:shadow-md"
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="20" height="20" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
             <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
             <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
             <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
           </svg>
           Continue with Google
+          <ArrowRight className="w-4 h-4 text-ink3 group-hover:text-brand group-hover:translate-x-0.5 transition-all ml-auto" />
         </button>
 
         <p className="text-center text-[11px] text-ink3 mt-5 leading-relaxed">
-          Your data stays in your Google Sheet.{' '}
-          <br />No account needed beyond your Google account.
+          Your data lives in your own Google Sheet — no external database, no vendor lock-in.
         </p>
       </div>
     </div>
