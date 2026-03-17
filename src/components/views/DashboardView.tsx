@@ -258,7 +258,7 @@ export function DashboardView() {
                       </span>
                     </div>
                     <p className="text-lg font-bold leading-snug">{ms.title}</p>
-                    {ms.note && <p className="text-sm opacity-80 mt-0.5 line-clamp-1">{ms.note}</p>}
+                    {ms.description && <p className="text-sm opacity-80 mt-0.5 line-clamp-1">{ms.description}</p>}
                   </div>
                 </button>
               )

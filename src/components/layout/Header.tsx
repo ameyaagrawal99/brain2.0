@@ -20,7 +20,7 @@ function getElapsedShort(dateStr: string) {
 
 export function Header() {
   const isSyncing           = useBrainStore((s) => s.isSyncing)
-  const lastSynced          = useBrainStore((s) => s.lastSynced)
+  const lastSynced          = useBrainStore((s) => s.lastSyncedAt)
   const setShowNewRow       = useBrainStore((s) => s.setShowNewRow)
   const setShowNewMilestone = useBrainStore((s) => s.setShowNewMilestone)
   const setShowSettings     = useBrainStore((s) => s.setShowSettings)
@@ -64,7 +64,7 @@ export function Header() {
   const specialCount  = todayMs.length + anniversaryMs.length
 
   const syncAgo = lastSynced ? (() => {
-    const diff = Math.floor((Date.now() - lastSynced) / 60000)
+    const diff = Math.floor((Date.now() - lastSynced.getTime()) / 60000)
     if (diff < 1) return 'just now'
     if (diff < 60) return `${diff}m ago`
     return `${Math.floor(diff / 60)}h ago`

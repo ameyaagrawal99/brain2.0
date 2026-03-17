@@ -1,11 +1,3 @@
-export type LinkType =
-  | 'references'
-  | 'related'
-  | 'supports'
-  | 'contradicts'
-  | 'partOf'
-  | 'untyped'
-
 export interface ParsedLink {
   title: string
   type: LinkType
