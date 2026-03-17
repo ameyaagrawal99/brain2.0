@@ -46,6 +46,33 @@ export type SortKey =
 
 export type ViewMode = 'card' | 'table' | 'board' | 'graph' | 'stats'
 
+/** Relationship type for typed wiki-links [[Title|type]] */
+export type LinkType =
+  | 'references'
+  | 'related'
+  | 'supports'
+  | 'contradicts'
+  | 'partOf'
+  | 'untyped'
+
+export const LINK_TYPE_LABELS: Record<LinkType, string> = {
+  references:  'References',
+  related:     'Related to',
+  supports:    'Supports',
+  contradicts: 'Contradicts',
+  partOf:      'Part of',
+  untyped:     'Linked',
+}
+
+export const LINK_TYPE_COLORS: Record<LinkType, string> = {
+  references:  '#6366f1',
+  related:     '#8b5cf6',
+  supports:    '#10b981',
+  contradicts: '#ef4444',
+  partOf:      '#f59e0b',
+  untyped:     '#94a3b8',
+}
+
 export interface SpecialDay {
   id: string
   title: string

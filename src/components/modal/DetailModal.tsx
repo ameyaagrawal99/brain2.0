@@ -13,10 +13,12 @@ import { parsePeople } from '@/lib/contacts'
 import { renderMarkdown } from '@/lib/markdown'
 import { cn } from '@/lib/utils'
 import { EditableFields } from '@/types/sheet'
+import { LinkPicker, type LinkSelection } from '@/components/ui/LinkPicker'
+import { serializeLink } from '@/lib/linkGraph'
 import {
   Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare,
   ExternalLink, Calendar, Hash, Image, Undo2, Redo2, Copy, Heading,
-  Users, UserPlus, Link2, Network, ChevronDown, ChevronUp,
+  Users, UserPlus, Link2, Network, ChevronDown, ChevronUp, ListPlus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { BrainRow } from '@/types/sheet'
@@ -72,6 +74,7 @@ export function DetailModal() {
   const [activeConnTab, setActiveConnTab]     = useState<ConnectionTab>('suggested')
   const [relateQuery, setRelateQuery]         = useState('')
   const [relateFilter, setRelateFilter]       = useState<'all' | 'unlinked' | 'linked'>('all')
+  const [showLinkPicker, setShowLinkPicker]   = useState(false)
 
   const row        = selectedRow
   const histSteps  = row ? (entryHistory[row._rowIndex]?.length  ?? 0) : 0
@@ -615,8 +618,18 @@ export function DetailModal() {
                 <div className="sm:col-span-2">
                   {editing ? (
                     <div>
-                      <SectionLabel>Links</SectionLabel>
-                      <div className="mt-1.5">
+                      <div className="flex items-center justify-between">
+                        <SectionLabel>Links</SectionLabel>
+                        <button
+                          type="button"
+                          onClick={() => setShowLinkPicker(true)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-brand hover:text-brand/70 transition-colors mb-1"
+                        >
+                          <ListPlus className="w-3 h-3" />
+                          Pick entries
+                        </button>
+                      </div>
+                      <div className="mt-1">
                         <WikiTextarea
                           value={links}
                           onChange={(v) => patchField('links', v)}
@@ -625,7 +638,7 @@ export function DetailModal() {
                           allRows={allRows}
                         />
                         <p className="text-[10px] text-ink3 mt-1">
-                          One per line — HTTP URLs or <code>[[Entry Title]]</code> to link entries
+                          One per line — HTTP URLs or <code>[[Title|type]]</code> / <code>[[Title]]</code>
                         </p>
                       </div>
                     </div>
@@ -1036,6 +1049,22 @@ export function DetailModal() {
           </div>
         </div>
       </Modal>
+
+      {/* ── LinkPicker overlay ── */}
+      {showLinkPicker && (
+        <div className="fixed inset-0 z-[65] bg-black/50 flex items-center justify-center p-4">
+          <LinkPicker
+            excludeRowIndex={selectedRow._rowIndex}
+            onConfirm={(selections: LinkSelection[]) => {
+              const newRefs = selections.map((s) => serializeLink(s.row.title, s.type)).join('\n')
+              const current = (fields.links ?? selectedRow?.links ?? '').trim()
+              patchField('links', [current, newRefs].filter(Boolean).join('\n'))
+              setShowLinkPicker(false)
+            }}
+            onCancel={() => setShowLinkPicker(false)}
+          />
+        </div>
+      )}
 
       {/* Lightbox */}
       {showLightbox && hasImage && (

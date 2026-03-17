@@ -7,8 +7,9 @@ import { fetchGoogleContacts, ContactsError } from '@/lib/contacts'
 import { requestContactsAccess } from '@/lib/gsi'
 import { cn, COLOR_PALETTE } from '@/lib/utils'
 import { requestNotificationPermission, getNotificationPermission } from '@/hooks/useNotifications'
-import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2 } from 'lucide-react'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2, Bot } from 'lucide-react'
 import { useState } from 'react'
+import type { AIProvider } from '@/store/useBrainStore'
 import toast from 'react-hot-toast'
 
 const BUILT_IN_CATEGORIES = ['journal', 'work', 'learning', 'health', 'finance', 'ideas', 'personal']
@@ -36,7 +37,10 @@ export function SettingsPanel() {
   const contactsConnected  = useBrainStore((s) => s.contactsConnected)
   const setContactsConnected = useBrainStore((s) => s.setContactsConnected)
 
+  const aiInstructions    = useBrainStore((s) => s.aiInstructions)
+  const updateAiInstructions = useBrainStore((s) => s.updateAiInstructions)
   const [showKey, setShowKey] = useState(false)
+  const [showClaudeKey, setShowClaudeKey] = useState(false)
   const [newCat,  setNewCat]  = useState('')
   const [newTag,  setNewTag]  = useState('')
   const [savingCat, setSavingCat] = useState(false)
@@ -336,24 +340,68 @@ export function SettingsPanel() {
           </div>
         </Section>
 
-        {/* OpenAI Key */}
-        <Section title="OpenAI API key" icon={<span className="text-xs">🤖</span>}>
-          <div className="relative">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={settings.openAiKey}
-              onChange={(e) => updateSettings({ openAiKey: e.target.value })}
-              className="w-full px-3 py-2.5 pr-10 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 font-mono"
-              placeholder="sk-..."
-            />
-            <button
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink"
-            >
-              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
+        {/* AI Provider */}
+        <Section title="AI provider" icon={<Bot className="w-3.5 h-3.5" />}>
+          {/* Provider toggle */}
+          <div className="flex gap-2 mb-3">
+            {(['openai', 'claude'] as AIProvider[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => updateSettings({ aiProvider: p })}
+                className={cn(
+                  'flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors',
+                  settings.aiProvider === p
+                    ? 'bg-brand text-white border-brand'
+                    : 'bg-surface2 text-ink2 border-border hover:bg-hover'
+                )}
+              >
+                {p === 'openai' ? 'OpenAI (GPT)' : 'Claude (Anthropic)'}
+              </button>
+            ))}
           </div>
-          <p className="text-xs text-ink3 mt-1.5">Stored locally in your browser. Used for AI features only.</p>
+
+          {/* OpenAI key */}
+          {settings.aiProvider === 'openai' && (
+            <div className="relative mb-2">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={settings.openAiKey}
+                onChange={(e) => updateSettings({ openAiKey: e.target.value })}
+                className="w-full px-3 py-2.5 pr-10 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 font-mono"
+                placeholder="sk-..."
+              />
+              <button onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink">
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+
+          {/* Claude key */}
+          {settings.aiProvider === 'claude' && (
+            <div className="relative mb-2">
+              <input
+                type={showClaudeKey ? 'text' : 'password'}
+                value={settings.claudeApiKey}
+                onChange={(e) => updateSettings({ claudeApiKey: e.target.value })}
+                className="w-full px-3 py-2.5 pr-10 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 font-mono"
+                placeholder="sk-ant-..."
+              />
+              <button onClick={() => setShowClaudeKey(!showClaudeKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink">
+                {showClaudeKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+          <p className="text-xs text-ink3 mb-3">Stored locally in your browser. Used for all AI features.</p>
+
+          {/* Global AI instructions */}
+          <p className="text-xs font-medium text-ink2 mb-1">Global AI instructions (prepended to every AI call)</p>
+          <textarea
+            value={aiInstructions.global}
+            onChange={(e) => updateAiInstructions({ global: e.target.value })}
+            rows={3}
+            placeholder="e.g. Always respond concisely. My name is Alex. Focus on actionable insights."
+            className="w-full px-3 py-2 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 resize-none"
+          />
         </Section>
 
         {/* Custom Categories & Tags — only in live mode */}

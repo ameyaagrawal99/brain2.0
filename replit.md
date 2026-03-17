@@ -8,7 +8,8 @@ A personal knowledge base PWA built with React 19, Vite 6, TypeScript, and Tailw
 - **State Management**: Zustand (`src/store/useBrainStore.ts`)
 - **Data Backend**: Google Sheets API (`src/lib/sheets.ts`)
 - **Auth**: Google Sign-In (GSI) via `src/hooks/useAuth.ts`
-- **AI features**: OpenAI via `src/hooks/useAI.ts`
+- **AI features**: OpenAI + Claude via `src/hooks/useAI.ts`
+- **MCP Server**: Node.js JSON-RPC 2.0 server at `server/mcp.ts` (Claude Desktop integration)
 - **Drag & Drop**: @dnd-kit
 - **PWA**: vite-plugin-pwa with workbox
 

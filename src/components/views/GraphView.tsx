@@ -18,11 +18,13 @@
  *   • "Reset" button restores default transform.
  */
 
-import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
-import { Network, ZoomIn, ZoomOut, Maximize2, Eye, EyeOff } from 'lucide-react'
-import type { BrainRow } from '@/types/sheet'
+import { Network, ZoomIn, ZoomOut, Maximize2, Eye, EyeOff, Target } from 'lucide-react'
+import type { BrainRow, LinkType } from '@/types/sheet'
+import { LINK_TYPE_COLORS, LINK_TYPE_LABELS } from '@/types/sheet'
+import { extractParsedLinks } from '@/lib/linkGraph'
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -36,22 +38,13 @@ interface SimNode {
 }
 
 interface GraphEdge {
-  source: number  // _rowIndex
-  target: number  // _rowIndex
+  source: number
+  target: number
   kind:   'explicit' | 'mention'
+  type:   LinkType
 }
 
 /* ── Link extraction ────────────────────────────────────────────────────── */
-
-const WIKI_RE = /\[\[([^\]]+)\]\]/g
-
-function extractWikiTitles(text: string): string[] {
-  const out: string[] = []
-  let m: RegExpExecArray | null
-  const re = new RegExp(WIKI_RE.source, 'g')
-  while ((m = re.exec(text)) !== null) out.push(m[1].trim().toLowerCase())
-  return out
-}
 
 function buildEdges(rows: BrainRow[]): GraphEdge[] {
   const titleMap = new Map<string, number>()
@@ -59,33 +52,29 @@ function buildEdges(rows: BrainRow[]): GraphEdge[] {
     if (r.title?.trim()) titleMap.set(r.title.toLowerCase().trim(), r._rowIndex)
   })
 
-  const seen = new Set<string>()
+  const seen = new Map<string, LinkType>()
   const edges: GraphEdge[] = []
 
-  function addEdge(src: number, tgt: number, kind: GraphEdge['kind']) {
+  function addEdge(src: number, tgt: number, kind: GraphEdge['kind'], type: LinkType) {
     if (src === tgt) return
     const key = src < tgt ? `${src}-${tgt}` : `${tgt}-${src}`
-    // 'explicit' wins over 'mention'
     if (kind === 'explicit' || !seen.has(key)) {
-      seen.add(key)
-      edges.push({ source: src, target: tgt, kind })
+      seen.set(key, type)
+      edges.push({ source: src, target: tgt, kind, type })
     }
   }
 
   rows.forEach((row) => {
-    // Explicit: [[Title]] in the dedicated links field
-    extractWikiTitles(row.links || '').forEach((t) => {
-      const tgt = titleMap.get(t)
-      if (tgt !== undefined) addEdge(row._rowIndex, tgt, 'explicit')
-    })
-    // Mention: [[Title]] anywhere in text content
-    const textTitles = extractWikiTitles(
-      [row.original, row.rewritten, row.actionItems].join('\n')
-    )
-    textTitles.forEach((t) => {
-      const tgt = titleMap.get(t)
-      if (tgt !== undefined) addEdge(row._rowIndex, tgt, 'mention')
-    })
+    // Typed explicit links from the links field
+    for (const link of extractParsedLinks(row.links || '')) {
+      const tgt = titleMap.get(link.title.toLowerCase())
+      if (tgt !== undefined) addEdge(row._rowIndex, tgt, 'explicit', link.type)
+    }
+    // Mentions in body text
+    for (const link of extractParsedLinks([row.original, row.rewritten, row.actionItems].join('\n'))) {
+      const tgt = titleMap.get(link.title.toLowerCase())
+      if (tgt !== undefined) addEdge(row._rowIndex, tgt, 'mention', link.type)
+    }
   })
 
   return edges
@@ -121,7 +110,7 @@ function buildImplicitEdges(rows: BrainRow[], existingEdges: GraphEdge[]): Graph
       const wordRe = new RegExp(`\\b${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
       if (wordRe.test(bodyText)) {
         seen.add(key)
-        implied.push({ source: src, target: tgt, kind: 'mention' })
+        implied.push({ source: src, target: tgt, kind: 'mention', type: 'untyped' })
       }
     })
   })
@@ -228,6 +217,8 @@ export function GraphView() {
   const [hoveredId,    setHoveredId]    = useState<number | null>(null)
   const [showImplicit, setShowImplicit] = useState(false)
   const [showOrphans,  setShowOrphans]  = useState(true)
+  const [focusNodeId,  setFocusNodeId]  = useState<number | null>(null)
+  const [contextMenu,  setContextMenu]  = useState<{ x: number; y: number; node: SimNode } | null>(null)
   const dragging = useRef<{ startX: number; startY: number; tx: number; ty: number } | null>(null)
 
   // Build edges from wiki links
@@ -304,6 +295,27 @@ export function GraphView() {
   const allNodes = useMemo(() => [...simNodes, ...orphanNodes], [simNodes, orphanNodes])
   const nodeById = useMemo(() => new Map(allNodes.map((n) => [n.id, n])), [allNodes])
 
+  // Focus cluster: only show the focused node and its direct neighbours
+  const focusNeighbours = useMemo(() => {
+    if (focusNodeId === null) return null
+    const ids = new Set<number>([focusNodeId])
+    allEdges.forEach((e) => {
+      if (e.source === focusNodeId) ids.add(e.target)
+      if (e.target === focusNodeId) ids.add(e.source)
+    })
+    return ids
+  }, [focusNodeId, allEdges])
+
+  const visibleNodes = useMemo(() =>
+    focusNeighbours ? allNodes.filter((n) => focusNeighbours.has(n.id)) : allNodes,
+  [allNodes, focusNeighbours])
+
+  const visibleEdges = useMemo(() =>
+    focusNeighbours
+      ? allEdges.filter((e) => focusNeighbours.has(e.source) && focusNeighbours.has(e.target))
+      : allEdges,
+  [allEdges, focusNeighbours])
+
   /* ── Pan / zoom ── */
 
   const onWheel = useCallback((e: React.WheelEvent) => {
@@ -347,19 +359,32 @@ export function GraphView() {
     setTooltip(null)
   }
 
+  function handleNodeDblClick(e: React.MouseEvent, node: SimNode) {
+    e.stopPropagation()
+    setFocusNodeId((prev) => prev === node.id ? null : node.id)
+    setContextMenu(null)
+  }
+
+  function handleNodeContextMenu(e: React.MouseEvent, node: SimNode) {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({ x: e.clientX, y: e.clientY, node })
+    setTooltip(null)
+  }
+
   /* ── Key edges for hovered node ── */
 
   const hoveredEdges = useMemo(() => {
     if (hoveredId === null) return new Set<string>()
     const s = new Set<string>()
-    allEdges.forEach((e) => {
+    visibleEdges.forEach((e) => {
       if (e.source === hoveredId || e.target === hoveredId) {
         const key = e.source < e.target ? `${e.source}-${e.target}` : `${e.target}-${e.source}`
         s.add(key)
       }
     })
     return s
-  }, [hoveredId, allEdges])
+  }, [hoveredId, visibleEdges])
 
   if (rows.length === 0) {
     return (
@@ -442,21 +467,42 @@ export function GraphView() {
       </div>
 
       {/* ── Legend ── */}
-      <div className="absolute top-3 right-3 z-20 bg-surface/90 backdrop-blur-sm border border-border rounded-xl px-3 py-2 shadow text-[11px] text-ink2 space-y-1">
-        <div className="flex items-center gap-2">
-          <svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="var(--brand)" strokeWidth="2" /></svg>
-          <span>Explicit link</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg width="24" height="4">
-            <line x1="0" y1="2" x2="24" y2="2" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 3" />
-          </svg>
-          <span>Text mention</span>
+      <div className="absolute top-3 right-3 z-20 bg-surface/90 backdrop-blur-sm border border-border rounded-xl px-3 py-2 shadow text-[11px] text-ink2 space-y-1 max-w-[160px]">
+        {(Object.entries(LINK_TYPE_COLORS) as [import('@/types/sheet').LinkType, string][])
+          .filter(([type]) => type !== 'untyped')
+          .map(([type, color]) => (
+            <div key={type} className="flex items-center gap-1.5">
+              <svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke={color} strokeWidth="2" /></svg>
+              <span className="truncate">{LINK_TYPE_LABELS[type]}</span>
+            </div>
+          ))}
+        <div className="flex items-center gap-1.5">
+          <svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+          <span>Untyped / mention</span>
         </div>
         <div className="mt-1 pt-1 border-t border-border text-ink3">
-          Drag to pan · Scroll to zoom
+          Drag · Scroll · Dbl-click focus
         </div>
       </div>
+
+      {/* ── Focus cluster banner ── */}
+      {focusNodeId !== null && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20">
+          <div className="flex items-center gap-2 bg-surface border border-brand/30 rounded-full px-4 py-2 shadow-lg">
+            <Target className="w-3.5 h-3.5 text-brand" />
+            <span className="text-xs font-medium text-ink">
+              Focused: {nodeById.get(focusNodeId)?.row.title?.slice(0, 30) ?? 'node'}
+              {' · '}{(focusNeighbours?.size ?? 1) - 1} neighbours
+            </span>
+            <button
+              onClick={() => setFocusNodeId(null)}
+              className="text-xs text-brand hover:text-brand/70 font-semibold ml-1"
+            >
+              Show all
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Empty-state hint ── */}
       {noLinks && (
@@ -497,7 +543,7 @@ export function GraphView() {
         <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`}>
 
           {/* ── Edges ── */}
-          {allEdges.map((edge) => {
+          {visibleEdges.map((edge) => {
             const s = nodeById.get(edge.source)
             const t = nodeById.get(edge.target)
             if (!s || !t) return null
@@ -505,31 +551,33 @@ export function GraphView() {
             const edgeKey = edge.source < edge.target ? key : `${edge.target}-${edge.source}`
             const isHovered = hoveredEdges.has(edgeKey)
             const isExplicit = edge.kind === 'explicit'
+            const color = isExplicit ? LINK_TYPE_COLORS[edge.type] : '#94a3b8'
             return (
               <line
                 key={`e-${key}`}
                 x1={s.x} y1={s.y}
                 x2={t.x} y2={t.y}
-                stroke={isExplicit ? 'var(--brand)' : '#94a3b8'}
+                stroke={color}
                 strokeWidth={isHovered ? 2.5 : (isExplicit ? 1.5 : 1)}
                 strokeDasharray={isExplicit ? undefined : '5 4'}
-                strokeOpacity={hoveredId !== null ? (isHovered ? 1 : 0.2) : (isExplicit ? 0.7 : 0.35)}
+                strokeOpacity={hoveredId !== null ? (isHovered ? 1 : 0.2) : (isExplicit ? 0.72 : 0.35)}
                 style={{ transition: 'stroke-opacity 0.15s' }}
               />
             )
           })}
 
           {/* ── Nodes ── */}
-          {allNodes.map((node) => {
+          {visibleNodes.map((node) => {
             const color      = catColor(node.row.category, categoryColors)
             const isHovered  = hoveredId === node.id
+            const isFocused  = focusNodeId === node.id
             const isRelated  = hoveredId !== null && hoveredEdges.size > 0 && (() => {
               const k1 = hoveredId < node.id ? `${hoveredId}-${node.id}` : `${node.id}-${hoveredId}`
               return hoveredEdges.has(k1)
             })()
             const dimmed     = hoveredId !== null && !isHovered && !isRelated
             const isOrphan   = !connectedIds.has(node.id)
-            const r          = isHovered ? 12 : (isOrphan ? 7 : 9)
+            const r          = isHovered ? 12 : isFocused ? 13 : (isOrphan ? 7 : 9)
 
             return (
               <g
@@ -537,6 +585,8 @@ export function GraphView() {
                 transform={`translate(${node.x},${node.y})`}
                 style={{ cursor: 'pointer', opacity: dimmed ? 0.25 : 1, transition: 'opacity 0.15s' }}
                 onClick={() => openModal(node.row)}
+                onDoubleClick={(e) => handleNodeDblClick(e, node)}
+                onContextMenu={(e) => handleNodeContextMenu(e, node)}
                 onMouseEnter={(e) => handleNodeEnter(e, node)}
                 onMouseLeave={handleNodeLeave}
               >
@@ -600,9 +650,42 @@ export function GraphView() {
                 {(tooltip.node.row.rewritten || tooltip.node.row.original || '').slice(0, 120)}
               </p>
             )}
-            <p className="text-[10px] text-ink3 mt-1.5 italic">Click to open</p>
+            <p className="text-[10px] text-ink3 mt-1.5 italic">Click · Dbl-click focus · Right-click menu</p>
           </div>
         </div>
+      )}
+
+      {/* ── Context menu ── */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-50 bg-surface border border-border rounded-xl shadow-2xl py-1 min-w-[160px] animate-fadeIn"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <div className="px-3 py-1.5 border-b border-border mb-1">
+              <p className="text-xs font-semibold text-ink truncate max-w-[140px]">
+                {contextMenu.node.row.title || 'Untitled'}
+              </p>
+            </div>
+            <button
+              onClick={() => { openModal(contextMenu.node.row); setContextMenu(null) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-hover transition-colors"
+            >
+              Open entry
+            </button>
+            <button
+              onClick={() => {
+                setFocusNodeId((prev) => prev === contextMenu.node.id ? null : contextMenu.node.id)
+                setContextMenu(null)
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-hover transition-colors"
+            >
+              <Target className="w-3.5 h-3.5 text-brand" />
+              {focusNodeId === contextMenu.node.id ? 'Exit focus' : 'Focus cluster'}
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

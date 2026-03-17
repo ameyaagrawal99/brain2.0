@@ -7,11 +7,15 @@ export type ThemeMode  = 'light' | 'dark' | 'system'
 export type ThemeColor = 'indigo' | 'warm' | 'green' | 'rose'
 export type FontMode   = 'sans' | 'serif'
 
+export type AIProvider = 'openai' | 'claude'
+
 export interface AppSettings {
   themeMode:      ThemeMode
   themeColor:     ThemeColor
   fontMode:       FontMode
   openAiKey:      string
+  claudeApiKey:   string
+  aiProvider:     AIProvider
   demoMode:       boolean
   notifyDueSoon:  boolean
   notifyNewEntry: boolean
@@ -22,12 +26,15 @@ const DEFAULT_SETTINGS: AppSettings = {
   themeColor:     'indigo',
   fontMode:       'sans',
   openAiKey:      '',
+  claudeApiKey:   '',
+  aiProvider:     'openai',
   demoMode:       false,
   notifyDueSoon:  true,
   notifyNewEntry: false,
 }
 
 export interface AIInstructions {
+  global: string
   quick:  string
   bulk:   string
   digest: string
@@ -36,6 +43,7 @@ export interface AIInstructions {
 }
 
 const DEFAULT_AI_INSTRUCTIONS: AIInstructions = {
+  global: '',
   quick:  '',
   bulk:   '',
   digest: '',
