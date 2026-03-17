@@ -3,22 +3,23 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { MarkdownToolbar } from '@/components/ui/MarkdownToolbar'
 import { InstructionsBox } from '@/components/ui/InstructionsBox'
-import { WikiLinkedText, WikiTextarea } from '@/components/ui/WikiLinkedText'
+import { WikiTextarea } from '@/components/ui/WikiLinkedText'
+import { LinkPicker, LinkTypeBadge } from '@/components/ui/LinkPicker'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
 import { parseTags, formatDate, formatRelative, isImageUrl } from '@/lib/utils'
-import { expandChain } from '@/lib/linkGraph'
+import { expandChain, extractTypedLinks, formatLink } from '@/lib/linkGraph'
 import { parsePeople } from '@/lib/contacts'
 import { renderMarkdown } from '@/lib/markdown'
 import { cn } from '@/lib/utils'
 import { EditableFields } from '@/types/sheet'
-import { LinkPicker, type LinkSelection } from '@/components/ui/LinkPicker'
-import { serializeLink } from '@/lib/linkGraph'
+import type { LinkType } from '@/types/sheet'
 import {
   Edit2, Save, X, Trash2, Tag, Wand2, CheckSquare,
   ExternalLink, Calendar, Hash, Image, Undo2, Redo2, Copy, Heading,
-  Users, UserPlus, Link2, Network, ChevronDown, ChevronUp, ListPlus,
+  Users, UserPlus, Link2, Network, ChevronDown, ChevronUp, Plus,
+} from 'lucide-react'
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { BrainRow } from '@/types/sheet'
@@ -94,7 +95,7 @@ export function DetailModal() {
   const backlinks = useMemo(() => {
     if (!selectedRow?.title?.trim()) return []
     const escaped = selectedRow.title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const pattern = new RegExp(`\\[\\[\\s*${escaped}\\s*\\]\\]`, 'i')
+    const pattern = new RegExp(`\\[\\[\\s*${escaped}\\s*(\\|[^\\]]+)?\\]\\]`, 'i')
     return allRows.filter((r) => {
       if (r._rowIndex === selectedRow._rowIndex) return false
       return pattern.test([r.original, r.rewritten, r.actionItems, r.links].join('\n'))
@@ -139,9 +140,8 @@ export function DetailModal() {
   // Separate HTTP links from [[entry refs]] in the links field
   const linkLines  = links.split('\n').map((l) => l.trim()).filter(Boolean)
   const httpLinks  = linkLines.filter((l) => l.startsWith('http'))
-  const entryRefs  = linkLines
-    .filter((l) => /^\[\[.+\]\]$/.test(l))
-    .map((l) => l.slice(2, -2).trim())
+  const typedEntryRefs = extractTypedLinks(links)
+  const entryRefs  = typedEntryRefs.map((l) => l.title)
 
   const CATEGORY_OPTIONS = ['', ...new Set([
     ...DEFAULT_CATEGORIES.slice(1),
@@ -204,9 +204,7 @@ export function DetailModal() {
     // Build set of already-linked entry titles for deduplication
     const currentLinksText = (fields.links ?? selectedRow?.links ?? '')
     const existingLinkTitles = new Set(
-      currentLinksText.split('\n')
-        .filter((l) => /^\[\[.+\]\]$/.test(l.trim()))
-        .map((l) => l.trim().slice(2, -2).toLowerCase())
+      extractTypedLinks(currentLinksText).map((l) => l.title.toLowerCase())
     )
 
     // Keyword-score the other rows for better context selection
@@ -266,9 +264,9 @@ export function DetailModal() {
 
   function linkToEntry(r: BrainRow) {
     const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
-    const newRef = `[[${r.title}]]`
-    if (currentLinks.includes(newRef)) { toast('Already linked'); return }
-    patchField('links', [currentLinks, newRef].filter(Boolean).join('\n'))
+    const existingTitles = new Set(extractTypedLinks(currentLinks).map((l) => l.title.toLowerCase()))
+    if (existingTitles.has(r.title.toLowerCase())) { toast('Already linked'); return }
+    patchField('links', [currentLinks, `[[${r.title}]]`].filter(Boolean).join('\n'))
     setEditing(true)
     toast.success('Linked — click Save to keep')
   }
@@ -278,9 +276,10 @@ export function DetailModal() {
       .filter(({ row: r }) => selectedRelated.has(r._rowIndex))
       .map(({ row: r }) => r)
     const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
+    const existingTitles = new Set(extractTypedLinks(currentLinks).map((l) => l.title.toLowerCase()))
     const newRefs = toLink
+      .filter((r) => !existingTitles.has(r.title.toLowerCase()))
       .map((r) => `[[${r.title}]]`)
-      .filter((ref) => !currentLinks.includes(ref))
     if (!newRefs.length) { toast('All selected entries already linked'); return }
     patchField('links', [currentLinks, ...newRefs].filter(Boolean).join('\n'))
     setEditing(true)
@@ -291,9 +290,10 @@ export function DetailModal() {
   function handleLinkChain(r: BrainRow) {
     const chain = expandChain([r], allRows, 3)
     const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
+    const existingTitles = new Set(extractTypedLinks(currentLinks).map((l) => l.title.toLowerCase()))
     const newRefs = [r, ...chain]
+      .filter((c) => !existingTitles.has(c.title.toLowerCase()))
       .map((c) => `[[${c.title}]]`)
-      .filter((ref) => !currentLinks.includes(ref))
     if (!newRefs.length) { toast('Entire chain already linked'); return }
     patchField('links', [currentLinks, ...newRefs].filter(Boolean).join('\n'))
     setEditing(true)
@@ -308,11 +308,33 @@ export function DetailModal() {
     const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
     const newLinks = currentLinks
       .split('\n')
-      .filter((l) => l.trim() !== `[[${title}]]`)
+      .filter((l) => {
+        const t = l.trim()
+        if (!t.startsWith('[[')) return true
+        const inner = t.slice(2, -2)
+        const pipeIdx = inner.indexOf('|')
+        const linkTitle = pipeIdx === -1 ? inner.trim() : inner.slice(0, pipeIdx).trim()
+        return linkTitle.toLowerCase() !== title.toLowerCase()
+      })
       .join('\n')
     patchField('links', newLinks)
     setEditing(true)
     toast.success('Unlinked — click Save to keep')
+  }
+
+  function handleLinkPickerConfirm(links: { title: string; type: LinkType }[]) {
+    const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
+    const existingTitles = new Set(
+      extractTypedLinks(currentLinks).map((l) => l.title.toLowerCase())
+    )
+    const newRefs = links
+      .filter((l) => !existingTitles.has(l.title.toLowerCase()))
+      .map((l) => formatLink(l.title, l.type))
+    if (!newRefs.length) { toast('All selected entries already linked'); return }
+    patchField('links', [currentLinks, ...newRefs].filter(Boolean).join('\n'))
+    setEditing(true)
+    setShowLinkPicker(false)
+    toast.success(`${newRefs.length} link${newRefs.length !== 1 ? 's' : ''} added — click Save to keep`)
   }
 
   const actionLines = actionItems
@@ -613,68 +635,102 @@ export function DetailModal() {
               <MetaField label="Status"       editing={editing} value={cleanVal(merged.taskStatus)}  onChange={(v) => patchField('taskStatus', v)}  type="select" options={STATUS_OPTIONS} />
               <MetaField label="Due date"     editing={editing} value={cleanVal(merged.dueDate)}     onChange={(v) => patchField('dueDate', v)}     type="date" />
 
-              {/* Links: HTTP + entry refs */}
-              {(links || editing) && (
-                <div className="sm:col-span-2">
-                  {editing ? (
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <SectionLabel>Links</SectionLabel>
-                        <button
-                          type="button"
-                          onClick={() => setShowLinkPicker(true)}
-                          className="flex items-center gap-1 text-[11px] font-medium text-brand hover:text-brand/70 transition-colors mb-1"
-                        >
-                          <ListPlus className="w-3 h-3" />
-                          Pick entries
-                        </button>
-                      </div>
-                      <div className="mt-1">
-                        <WikiTextarea
-                          value={links}
-                          onChange={(v) => patchField('links', v)}
-                          rows={3}
-                          placeholder={"https://example.com\n[[Other Entry Title]]"}
-                          allRows={allRows}
-                        />
-                        <p className="text-[10px] text-ink3 mt-1">
-                          One per line — HTTP URLs or <code>[[Title|type]]</code> / <code>[[Title]]</code>
-                        </p>
-                      </div>
+              {/* Links: HTTP + entry refs — structured panel */}
+              <div className="sm:col-span-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <SectionLabel icon={<Link2 className="w-3.5 h-3.5" />}>Links</SectionLabel>
+                    <button
+                      type="button"
+                      onClick={() => setShowLinkPicker((v) => !v)}
+                      className="flex items-center gap-1 text-[10px] text-brand hover:underline font-medium"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add link
+                    </button>
+                  </div>
+
+                  {/* Link picker popover */}
+                  {showLinkPicker && (
+                    <div className="mb-2 border border-border rounded-xl overflow-hidden bg-surface shadow-lg">
+                      <LinkPicker
+                        onConfirm={handleLinkPickerConfirm}
+                        onClose={() => setShowLinkPicker(false)}
+                        currentLinks={links}
+                        excludeRowIndex={row?._rowIndex}
+                      />
                     </div>
-                  ) : (httpLinks.length > 0 || entryRefs.length > 0) ? (
-                    <div>
-                      <SectionLabel icon={<Link2 className="w-3.5 h-3.5" />}>Links</SectionLabel>
-                      <div className="flex flex-wrap gap-2 mt-1.5">
-                        {httpLinks.map((l, i) => (
-                          <a key={i} href={l} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-xs bg-surface2 border border-border rounded-lg px-2.5 py-1 text-brand hover:bg-brand/5 hover:border-brand/30 transition-colors">
-                            <ExternalLink className="w-3 h-3 shrink-0" />
-                            <span className="truncate max-w-[200px]">{l.length > 45 ? l.slice(0, 45) + '…' : l}</span>
-                          </a>
-                        ))}
-                        {entryRefs.map((title, i) => {
-                          const found = allRows.find((r) => r.title?.toLowerCase().trim() === title.toLowerCase().trim())
-                          return found ? (
+                  )}
+
+                  {/* HTTP links */}
+                  {httpLinks.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {httpLinks.map((l, i) => (
+                        <a key={i} href={l} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs bg-surface2 border border-border rounded-lg px-2.5 py-1 text-brand hover:bg-brand/5 hover:border-brand/30 transition-colors">
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                          <span className="truncate max-w-[200px]">{l.length > 45 ? l.slice(0, 45) + '…' : l}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Entry links — structured chips with type badge */}
+                  {typedEntryRefs.length > 0 && (
+                    <div className="space-y-1.5">
+                      {typedEntryRefs.map((link, i) => {
+                        const found = allRows.find((r) => r.title?.toLowerCase().trim() === link.title.toLowerCase().trim())
+                        return (
+                          <div key={i} className="flex items-center gap-2 p-2 bg-surface2 border border-border rounded-lg">
+                            <Link2 className="w-3 h-3 text-brand shrink-0" />
+                            {found ? (
+                              <button
+                                type="button"
+                                onClick={() => openModal(found)}
+                                className="text-sm font-medium text-brand hover:underline text-left truncate flex-1 min-w-0"
+                              >
+                                {link.title}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-red-400 line-through flex-1 truncate">{link.title}</span>
+                            )}
+                            <LinkTypeBadge type={link.type} />
                             <button
-                              key={i}
-                              onClick={() => openModal(found)}
-                              className="flex items-center gap-1.5 text-xs bg-brand/5 border border-brand/20 rounded-lg px-2.5 py-1 text-brand hover:bg-brand/10 transition-colors font-medium"
+                              type="button"
+                              onClick={() => unlinkEntry(link.title)}
+                              className="text-ink3 hover:text-red-500 transition-colors shrink-0 ml-1"
+                              title="Remove link"
                             >
-                              <Link2 className="w-3 h-3 shrink-0" />
-                              {title}
+                              <X className="w-3 h-3" />
                             </button>
-                          ) : (
-                            <span key={i} className="text-xs text-red-400 line-through flex items-center gap-1">
-                              <Link2 className="w-3 h-3" />{title}
-                            </span>
-                          )
-                        })}
-                      </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                  ) : null}
+                  )}
+
+                  {/* Raw wiki/URL editing mode */}
+                  {editing && (
+                    <div className="mt-2">
+                      <p className="text-[10px] text-ink3 mb-1">Raw edit (one per line):</p>
+                      <WikiTextarea
+                        value={links}
+                        onChange={(v) => patchField('links', v)}
+                        rows={3}
+                        placeholder={"https://example.com\n[[Other Entry Title]]\n[[Entry|supports]]"}
+                        allRows={allRows}
+                      />
+                      <p className="text-[10px] text-ink3 mt-1">
+                        HTTP URLs or <code>[[Title]]</code> / <code>[[Title|type]]</code> for typed links
+                      </p>
+                    </div>
+                  )}
+
+                  {!editing && httpLinks.length === 0 && typedEntryRefs.length === 0 && !showLinkPicker && (
+                    <p className="text-xs text-ink3 italic">No links yet — click "Add link" to connect entries</p>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Tags */}

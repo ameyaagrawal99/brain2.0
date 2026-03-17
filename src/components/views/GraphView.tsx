@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
 import { Network, ZoomIn, ZoomOut, Maximize2, Eye, EyeOff, Target } from 'lucide-react'
 import type { BrainRow, LinkType } from '@/types/sheet'
 import { LINK_TYPE_COLORS, LINK_TYPE_LABELS } from '@/types/sheet'
-import { extractParsedLinks } from '@/lib/linkGraph'
+import { extractWikiLinks, extractTypedLinks } from '@/lib/linkGraph'
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -38,13 +38,13 @@ interface SimNode {
 }
 
 interface GraphEdge {
-  source: number
-  target: number
-  kind:   'explicit' | 'mention'
-  type:   LinkType
+  source:   number  // _rowIndex
+  target:   number  // _rowIndex
+  kind:     'explicit' | 'mention'
+  linkType: LinkType  // relationship type (untyped for mention edges)
 }
 
-/* ── Link extraction ────────────────────────────────────────────────────── */
+/* ── Edge building ──────────────────────────────────────────────────────── */
 
 function buildEdges(rows: BrainRow[]): GraphEdge[] {
   const titleMap = new Map<string, number>()
@@ -55,26 +55,30 @@ function buildEdges(rows: BrainRow[]): GraphEdge[] {
   const seen = new Map<string, LinkType>()
   const edges: GraphEdge[] = []
 
-  function addEdge(src: number, tgt: number, kind: GraphEdge['kind'], type: LinkType) {
+  function addEdge(src: number, tgt: number, kind: GraphEdge['kind'], linkType: LinkType) {
     if (src === tgt) return
     const key = src < tgt ? `${src}-${tgt}` : `${tgt}-${src}`
+    // 'explicit' wins over 'mention'; explicit with a type wins over untyped explicit
     if (kind === 'explicit' || !seen.has(key)) {
-      seen.set(key, type)
-      edges.push({ source: src, target: tgt, kind, type })
+      seen.set(key, linkType)
+      edges.push({ source: src, target: tgt, kind, linkType })
     }
   }
 
   rows.forEach((row) => {
-    // Typed explicit links from the links field
-    for (const link of extractParsedLinks(row.links || '')) {
-      const tgt = titleMap.get(link.title.toLowerCase())
+    // Explicit typed links from the dedicated links field ([[Title|type]] or [[Title]])
+    extractTypedLinks(row.links || '').forEach((link) => {
+      const tgt = titleMap.get(link.title.toLowerCase().trim())
       if (tgt !== undefined) addEdge(row._rowIndex, tgt, 'explicit', link.type)
-    }
-    // Mentions in body text
-    for (const link of extractParsedLinks([row.original, row.rewritten, row.actionItems].join('\n'))) {
-      const tgt = titleMap.get(link.title.toLowerCase())
-      if (tgt !== undefined) addEdge(row._rowIndex, tgt, 'mention', link.type)
-    }
+    })
+    // Mention: [[Title]] anywhere in body text (always untyped)
+    const textTitles = extractWikiLinks(
+      [row.original, row.rewritten, row.actionItems].join('\n')
+    )
+    textTitles.forEach((t) => {
+      const tgt = titleMap.get(t.toLowerCase().trim())
+      if (tgt !== undefined) addEdge(row._rowIndex, tgt, 'mention', 'untyped')
+    })
   })
 
   return edges
@@ -110,7 +114,7 @@ function buildImplicitEdges(rows: BrainRow[], existingEdges: GraphEdge[]): Graph
       const wordRe = new RegExp(`\\b${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
       if (wordRe.test(bodyText)) {
         seen.add(key)
-        implied.push({ source: src, target: tgt, kind: 'mention', type: 'untyped' })
+        implied.push({ source: src, target: tgt, kind: 'mention', linkType: 'untyped' })
       }
     })
   })
@@ -551,7 +555,7 @@ export function GraphView() {
             const edgeKey = edge.source < edge.target ? key : `${edge.target}-${edge.source}`
             const isHovered = hoveredEdges.has(edgeKey)
             const isExplicit = edge.kind === 'explicit'
-            const color = isExplicit ? LINK_TYPE_COLORS[edge.type] : '#94a3b8'
+            const color = isExplicit ? LINK_TYPE_COLORS[edge.linkType] : '#94a3b8'
             return (
               <line
                 key={`e-${key}`}

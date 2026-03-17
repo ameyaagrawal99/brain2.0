@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
 import {
@@ -6,6 +7,11 @@ import {
 } from '@/lib/utils'
 import { CheckSquare2, ExternalLink, Calendar, Check, Link2, Clock, Sparkles } from 'lucide-react'
 import { stripMarkdown } from '@/lib/markdown'
+import { LinkPicker } from '@/components/ui/LinkPicker'
+import { useSheetSync } from '@/hooks/useSheetSync'
+import { formatLink, extractTypedLinks } from '@/lib/linkGraph'
+import type { LinkType } from '@/types/sheet'
+import toast from 'react-hot-toast'
 
 function isFormula(v: string): boolean {
   if (!v) return false
@@ -42,7 +48,6 @@ function getCatTheme(cat: string, categoryColors: Record<string, string>) {
   const key = cat?.toLowerCase()
   if (!key) return null
 
-  // Check custom category colors first
   const customColor = categoryColors[key]
   if (customColor) {
     const colorMap: Record<string, { bar: string; dot: string; label: string }> = {
@@ -61,7 +66,6 @@ function getCatTheme(cat: string, categoryColors: Record<string, string>) {
     return colorMap[customColor] ?? null
   }
 
-  // Exact or prefix match
   return CAT_COLORS[key]
     ?? Object.entries(CAT_COLORS).find(([k]) => key.startsWith(k))?.[1]
     ?? null
@@ -88,6 +92,23 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
   const selectedCardIndices = useBrainStore((s) => s.selectedCardIndices)
   const toggleCardSelection = useBrainStore((s) => s.toggleCardSelection)
   const isSelected          = selectedCardIndices.includes(row._rowIndex)
+
+  const { saveRow } = useSheetSync()
+
+  const [showLinkPicker, setShowLinkPicker] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showLinkPicker) return
+    function handler(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowLinkPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showLinkPicker])
 
   const theme = getCatTheme(row.category, categoryColors)
 
@@ -135,6 +156,24 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
   function handleClick(e: React.MouseEvent) {
     if (selectionMode) { e.stopPropagation(); toggleCardSelection(row._rowIndex) }
     else openModal(row)
+  }
+
+  async function handleLinkPickerConfirm(links: { title: string; type: LinkType }[]) {
+    const currentLinks = (row.links ?? '').trim()
+    const existing = new Set(extractTypedLinks(currentLinks).map((l) => l.title.toLowerCase()))
+    const newRefs = links
+      .filter((l) => !existing.has(l.title.toLowerCase()))
+      .map((l) => formatLink(l.title, l.type))
+    if (!newRefs.length) { toast('All selected entries already linked'); setShowLinkPicker(false); return }
+    const updatedLinks = [currentLinks, ...newRefs].filter(Boolean).join('\n')
+    setSaving(true)
+    try {
+      await saveRow(row._rowIndex, { links: updatedLinks }, 'Link')
+      toast.success(`${newRefs.length} link${newRefs.length !== 1 ? 's' : ''} added`)
+    } finally {
+      setSaving(false)
+      setShowLinkPicker(false)
+    }
   }
 
   return (
@@ -282,7 +321,7 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
             )}
           </div>
 
-          {/* Meta: links, due date, time */}
+          {/* Meta: links, due date, time + inline link button */}
           <div className="flex items-center gap-2 shrink-0 text-ink3">
             {linkCount.refs > 0 && (
               <span className="flex items-center gap-0.5 text-[10px]" title={`${linkCount.refs} linked`}>
@@ -305,6 +344,44 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
                 <Clock className="w-2.5 h-2.5 inline mr-0.5" />{formatRelative(row.createdAt)}
               </span>
             ) : null}
+
+            {/* Inline link button */}
+            {!selectionMode && (
+              <div className="relative" ref={pickerRef}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowLinkPicker((v) => !v)
+                  }}
+                  title="Link to another entry"
+                  className={cn(
+                    'opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded-md hover:bg-hover',
+                    saving && 'opacity-100 cursor-wait',
+                  )}
+                >
+                  <Link2 className="w-3 h-3" />
+                </button>
+
+                {showLinkPicker && (
+                  <div
+                    className="absolute right-0 bottom-full mb-2 z-50 w-80 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-3 py-2 border-b border-border bg-surface2/60 flex items-center gap-1.5">
+                      <Link2 className="w-3 h-3 text-brand shrink-0" />
+                      <span className="text-[11px] font-semibold text-ink2">Link to entry</span>
+                    </div>
+                    <LinkPicker
+                      onConfirm={handleLinkPickerConfirm}
+                      onClose={() => setShowLinkPicker(false)}
+                      currentLinks={row.links ?? ''}
+                      excludeRowIndex={row._rowIndex}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

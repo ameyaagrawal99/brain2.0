@@ -57,6 +57,33 @@ src/
     globals.css        - Design tokens, animations, utility classes
 ```
 
+## Rich Linking & Typed Relationships (Task 2)
+
+### LinkType enum (`src/types/sheet.ts`)
+`references | related | supports | contradicts | partOf | untyped` — stored as `[[Title|type]]` in the `links` field (col L). Plain `[[Title]]` is backwards-compatible as `untyped`.
+
+### linkGraph.ts
+- `parseLinkToken(inner)` — parses `[[Title|type]]` inner content into `{ title, type, raw }`
+- `extractTypedLinks(text)` — returns `ParsedLink[]` from any text
+- `formatLink(title, type)` — serializes back to `[[Title|type]]` or `[[Title]]`
+- `linkTypeLabel(type)` — human-readable label
+
+### LinkPicker component (`src/components/ui/LinkPicker.tsx`)
+Reusable popover: full-text search (title + tags + original + rewritten), multi-checkbox selection, per-entry relationship type dropdown, BFS chain preview (max 3 hops, 20 entries). Used from NewEntryModal, DetailModal, and BrainCard.
+
+### NewEntryModal (`src/components/modal/NewEntryModal.tsx`)
+- Collapsible "Details" section: Category/Sub-category autocomplete from existing values, Status, Due date, Tags (chip input with autocomplete), People (chip input with autocomplete from all entries + contacts)
+- Collapsible "Linked Entries" section using LinkPicker with typed relationships
+
+### DetailModal (`src/components/modal/DetailModal.tsx`)
+- Links panel replaced with structured chips showing title + `LinkTypeBadge` + × remove
+- "Add link" button opens `LinkPicker` inline
+- Raw `[[Title|type]]` editing preserved in WikiTextarea
+
+### BrainCard (`src/components/views/BrainCard.tsx`)
+- "Link" icon button in footer (visible on hover) opens `LinkPicker` popover
+- Saves immediately via `saveRow` to sheet
+
 ## Category Color Mapping
 
 Lives in `src/components/views/BrainCard.tsx` (`CAT_COLORS`). Supports prefix matching. Each category gets a 3px top accent bar and a colored dot label.

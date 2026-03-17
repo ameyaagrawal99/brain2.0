@@ -1,74 +1,141 @@
-import type { BrainRow, LinkType } from '@/types/sheet'
+import type { BrainRow } from '@/types/sheet'
+import type { LinkType, ParsedLink } from '@/types/sheet'
 
-export interface ParsedLink {
-  title: string
-  type:  LinkType
-  raw:   string   // the original [[Title]] or [[Title|type]] string
+const LINK_TYPE_MAP: Record<string, LinkType> = {
+  references:   'references',
+  reference:    'references',
+  ref:          'references',
+  related:      'related',
+  'related to': 'related',
+  supports:     'supports',
+  support:      'supports',
+  contradicts:  'contradicts',
+  contradict:   'contradicts',
+  'is part of': 'partOf',
+  'part of':    'partOf',
+  partof:       'partOf',
 }
 
-/** Map string alias → canonical LinkType */
-const TYPE_MAP: Record<string, LinkType> = {
-  references:  'references',
-  reference:   'references',
-  ref:         'references',
-  related:     'related',
-  'related to':'related',
-  supports:    'supports',
-  support:     'supports',
-  contradicts: 'contradicts',
-  contradict:  'contradicts',
-  opposes:     'contradicts',
-  partof:      'partOf',
-  'part of':   'partOf',
-  part:        'partOf',
-  child:       'partOf',
+function normaliseType(raw: string | undefined): LinkType {
+  if (!raw) return 'untyped'
+  const key = raw.trim().toLowerCase()
+  return LINK_TYPE_MAP[key] ?? 'untyped'
 }
 
-function parseType(raw: string): LinkType {
-  const k = raw.trim().toLowerCase().replace(/[\s-]/g, ' ')
-  return TYPE_MAP[k] ?? 'untyped'
+/**
+ * Parse [[Title]] or [[Title|type]] from a single wiki-link match.
+ * Returns { title, type, raw }.
+ */
+export function parseLinkToken(inner: string): ParsedLink {
+  const pipeIdx = inner.indexOf('|')
+  if (pipeIdx === -1) {
+    const title = inner.trim()
+    return { title, type: 'untyped', raw: `[[${inner}]]` }
+  }
+  const title = inner.slice(0, pipeIdx).trim()
+  const typeStr = inner.slice(pipeIdx + 1).trim()
+  return { title, type: normaliseType(typeStr), raw: `[[${inner}]]` }
 }
 
-/** Extract all [[Title]] or [[Title|type]] links from text, with typed info */
-export function extractParsedLinks(text: string): ParsedLink[] {
+/** Extract all [[Title]] / [[Title|type]] references from a text string */
+export function extractWikiLinks(text: string): string[] {
   if (!text) return []
   const matches = text.match(/\[\[([^\]]+)\]\]/g) ?? []
   return matches.map((m) => {
     const inner = m.slice(2, -2)
     const pipeIdx = inner.indexOf('|')
-    if (pipeIdx === -1) {
-      return { title: inner.trim(), type: 'untyped' as LinkType, raw: m }
-    }
-    const title = inner.slice(0, pipeIdx).trim()
-    const type  = parseType(inner.slice(pipeIdx + 1))
-    return { title, type, raw: m }
+    return pipeIdx === -1 ? inner.trim() : inner.slice(0, pipeIdx).trim()
   })
 }
 
-/** Legacy: extract just the titles (backwards-compatible) */
-export function extractWikiLinks(text: string): string[] {
-  return extractParsedLinks(text).map((l) => l.title)
+/** Extract typed link objects from a text string */
+export function extractTypedLinks(text: string): ParsedLink[] {
+  if (!text) return []
+  const matches = text.match(/\[\[([^\]]+)\]\]/g) ?? []
+  return matches.map((m) => parseLinkToken(m.slice(2, -2)))
 }
 
-/** Serialise a typed link back to [[Title|type]] or [[Title]] */
-export function serializeLink(title: string, type: LinkType = 'untyped'): string {
-  return type === 'untyped' ? `[[${title}]]` : `[[${title}|${type}]]`
+/** Format a link back to [[Title|type]] or [[Title]] if untyped */
+export function formatLink(title: string, type: LinkType = 'untyped'): string {
+  if (type === 'untyped') return `[[${title}]]`
+  return `[[${title}|${type}]]`
+}
+
+/** Human-readable label for a LinkType */
+export function linkTypeLabel(type: LinkType): string {
+  switch (type) {
+    case 'references':  return 'references'
+    case 'related':     return 'related to'
+    case 'supports':    return 'supports'
+    case 'contradicts': return 'contradicts'
+    case 'partOf':      return 'is part of'
+    case 'untyped':
+    default:            return ''
+  }
 }
 
 /** Find all rows directly linked from `row`, returning typed link objects */
 export interface LinkedRowWithType {
-  row:  BrainRow
+  row: BrainRow
   type: LinkType
 }
 
-export function resolveLinkedRowsTyped(row: BrainRow, allRows: BrainRow[]): LinkedRowWithType[] {
+/** A typed edge between two entries (used in graph views and edge traversal) */
+export interface LinkEdge {
+  sourceIndex: number // _rowIndex of the entry that has the link
+  targetTitle: string // title of the linked entry
+  type: LinkType // relationship type
+  kind: 'explicit' | 'mention' // explicit = links field; mention = body text
+}
+
+/** Build a list of typed link edges from all rows */
+export function buildLinkEdges(rows: BrainRow[]): LinkEdge[] {
+  const edges: LinkEdge[] = []
+  rows.forEach((row) => {
+    // Explicit typed links from the links field
+    extractTypedLinks(row.links ?? '').forEach((link) => {
+      edges.push({
+        sourceIndex: row._rowIndex,
+        targetTitle: link.title,
+        type: link.type,
+        kind: 'explicit',
+      })
+    })
+    // Plain [[Title]] mentions in body text (always untyped)
+    const bodyTitles = extractWikiLinks(
+      [row.original, row.rewritten, row.actionItems].join('\n'),
+    )
+    bodyTitles.forEach((title) => {
+      edges.push({
+        sourceIndex: row._rowIndex,
+        targetTitle: title,
+        type: 'untyped',
+        kind: 'mention',
+      })
+    })
+  })
+  return edges
+}
+
+/** Find all rows directly linked via [[Title]] in any text field of `row` */
+export function resolveLinkedRows(
+  row: BrainRow,
+  allRows: BrainRow[],
+): BrainRow[] {
+  return resolveLinkedRowsTyped(row, allRows).map((x) => x.row)
+}
+
+export function resolveLinkedRowsTyped(
+  row: BrainRow,
+  allRows: BrainRow[],
+): LinkedRowWithType[] {
   const titleMap = new Map(allRows.map((r) => [r.title?.toLowerCase().trim(), r]))
   const fields = [row.original, row.rewritten, row.actionItems, row.links]
   const seen = new Set<number>()
   const result: LinkedRowWithType[] = []
 
   for (const field of fields) {
-    for (const link of extractParsedLinks(field ?? '')) {
+    for (const link of extractTypedLinks(field ?? '')) {
       const found = titleMap.get(link.title.toLowerCase())
       if (!found || found._rowIndex === row._rowIndex || seen.has(found._rowIndex)) continue
       seen.add(found._rowIndex)
@@ -76,11 +143,6 @@ export function resolveLinkedRowsTyped(row: BrainRow, allRows: BrainRow[]): Link
     }
   }
   return result
-}
-
-/** Legacy: find all rows directly linked via [[Title]] */
-export function resolveLinkedRows(row: BrainRow, allRows: BrainRow[]): BrainRow[] {
-  return resolveLinkedRowsTyped(row, allRows).map((x) => x.row)
 }
 
 /**
@@ -117,31 +179,5 @@ export function expandChain(
 
 /**
  * Build a map of graph edges for GraphView:
- * returns array of { source, target, type } where source/target are _rowIndex
  */
-export interface GraphEdge {
-  source: number
-  target: number
-  type:   LinkType
-}
-
-export function buildGraphEdges(rows: BrainRow[]): GraphEdge[] {
-  const titleMap = new Map(rows.map((r) => [r.title?.toLowerCase().trim(), r._rowIndex]))
-  const edges: GraphEdge[] = []
-  const seen = new Set<string>()
-
-  for (const row of rows) {
-    const fields = [row.original, row.rewritten, row.actionItems, row.links]
-    for (const field of fields) {
-      for (const link of extractParsedLinks(field ?? '')) {
-        const targetIdx = titleMap.get(link.title.toLowerCase())
-        if (targetIdx == null || targetIdx === row._rowIndex) continue
-        const key = `${row._rowIndex}-${targetIdx}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        edges.push({ source: row._rowIndex, target: targetIdx, type: link.type })
-      }
-    }
-  }
-  return edges
-}
+export const buildGraphEdges = buildLinkEdges

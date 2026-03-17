@@ -1,3 +1,17 @@
+export type LinkType =
+  | 'references'
+  | 'related'
+  | 'supports'
+  | 'contradicts'
+  | 'partOf'
+  | 'untyped'
+
+export interface ParsedLink {
+  title: string
+  type: LinkType
+  raw: string
+}
+
 export interface BrainRow {
   _rowIndex: number   // 1-based sheet row (row 1 = header, data from row 2)
   _dirty: boolean     // has unsaved local edits
