@@ -1,4 +1,4 @@
-import { Search, X, CalendarDays, SlidersHorizontal, Check } from 'lucide-react'
+import { Search, X, CalendarDays, SlidersHorizontal, Check, ChevronDown } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useFilters } from '@/hooks/useFilters'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -75,17 +75,36 @@ function CheckRow({
   )
 }
 
-/* ── Section header inside the filter panel ─────────────────────── */
-function SectionHead({ label, count }: { label: string; count?: number }) {
+/* ── Collapsible section header ──────────────────────────────────── */
+function SectionHead({
+  label, count, isOpen, onToggle,
+}: {
+  label: string
+  count?: number
+  isOpen: boolean
+  onToggle: () => void
+}) {
   return (
-    <div className="flex items-center justify-between mb-1.5">
-      <span className="text-[10px] font-semibold text-ink3 uppercase tracking-wider">{label}</span>
-      {count !== undefined && count > 0 && (
-        <span className="text-[9px] font-bold bg-brand text-white rounded-full px-1.5 py-px leading-none">
-          {count}
-        </span>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex items-center justify-between mb-1.5 group"
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-semibold text-ink3 uppercase tracking-wider">{label}</span>
+        {count !== undefined && count > 0 && (
+          <span className="text-[9px] font-bold bg-brand text-white rounded-full px-1.5 py-px leading-none">
+            {count}
+          </span>
+        )}
+      </div>
+      <ChevronDown
+        className={cn(
+          'w-3.5 h-3.5 text-ink3 transition-transform duration-150',
+          isOpen ? 'rotate-0' : '-rotate-90',
+        )}
+      />
+    </button>
   )
 }
 
@@ -129,17 +148,28 @@ export function FilterBar() {
   useEffect(() => { if (!filters.search && localSearch) setLocalSearch('') }, [filters.search])
 
   const searchRef = useRef<HTMLInputElement>(null)
-  const dateRef   = useRef<HTMLDivElement>(null)
   const panelRef  = useRef<HTMLDivElement>(null)
-  const [showDate,    setShowDate]    = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+
+  /* ── Collapsible section state ───────────────────────────────── */
+  const ALL_SECTIONS = ['category', 'subcategory', 'status', 'tags', 'people', 'date', 'sort'] as const
+  type SectionKey = typeof ALL_SECTIONS[number]
+  const [openSections, setOpenSections] = useState<Set<SectionKey>>(
+    new Set(ALL_SECTIONS),
+  )
+  function toggleSection(key: SectionKey) {
+    setOpenSections((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
 
   useFilterKeys(searchRef, () => setShowFilters(true))
 
-  /* ── Close panels on outside click ──────────────────────────── */
+  /* ── Close panel on outside click ───────────────────────────── */
   useEffect(() => {
     function click(e: MouseEvent) {
-      if (dateRef.current  && !dateRef.current.contains(e.target as Node))  setShowDate(false)
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) setShowFilters(false)
     }
     document.addEventListener('mousedown', click)
@@ -161,7 +191,7 @@ export function FilterBar() {
     return null
   }
 
-  function setQuickRange(from: string, to: string) { setDateRange(from, to); setShowDate(false) }
+  function setQuickRange(from: string, to: string) { setDateRange(from, to) }
   const last7  = () => { const d = new Date(); d.setDate(d.getDate() - 6);  return { from: d.toISOString().slice(0, 10), to: today } }
   const last30 = () => { const d = new Date(); d.setDate(d.getDate() - 29); return { from: d.toISOString().slice(0, 10), to: today } }
   const week   = () => { const d = new Date(); const m = new Date(d); m.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return { from: m.toISOString().slice(0, 10), to: today } }
@@ -212,71 +242,23 @@ export function FilterBar() {
           )}
         </div>
 
-        {/* Date pill */}
-        <div className="relative shrink-0" ref={dateRef}>
+        {/* Date indicator pill (quick access, mirrors section inside panel) */}
+        {hasDate && (
           <button
-            onClick={() => setShowDate((v) => !v)}
-            className={cn(
-              'flex items-center gap-1 h-8 px-2.5 rounded-lg border text-xs font-medium transition-all',
-              hasDate
-                ? 'bg-brand/8 border-brand/30 text-brand'
-                : 'bg-surface2 border-border text-ink2 hover:bg-hover hover:text-ink',
-            )}
+            onClick={() => { setShowFilters(true); if (!openSections.has('date')) toggleSection('date') }}
+            className="flex items-center gap-1 h-8 px-2.5 rounded-lg border text-xs font-medium transition-all
+              bg-brand/8 border-brand/30 text-brand shrink-0"
           >
             <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden sm:inline whitespace-nowrap">{dl ?? 'Date'}</span>
-            {hasDate && (
-              <span
-                onClick={(e) => { e.stopPropagation(); setDateRange(null, null) }}
-                className="flex items-center justify-center w-3.5 h-3.5 rounded-full hover:bg-brand/20 transition-colors"
-              >
-                <X className="w-2.5 h-2.5" />
-              </span>
-            )}
+            <span className="hidden sm:inline whitespace-nowrap">{dl}</span>
+            <span
+              onClick={(e) => { e.stopPropagation(); setDateRange(null, null) }}
+              className="flex items-center justify-center w-3.5 h-3.5 rounded-full hover:bg-brand/20 transition-colors"
+            >
+              <X className="w-2.5 h-2.5" />
+            </span>
           </button>
-
-          {showDate && (
-            <div className="absolute top-full left-0 mt-1.5 z-50 bg-surface border border-border rounded-xl shadow-xl p-4 w-72 animate-scaleIn">
-              <p className="text-[11px] font-semibold text-ink2 uppercase tracking-wider mb-2">Quick select</p>
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {[
-                  { label: 'Today',        fn: () => setQuickRange(today, today) },
-                  { label: 'Yesterday',    fn: () => { const d = new Date(); d.setDate(d.getDate()-1); const y = d.toISOString().slice(0,10); setQuickRange(y, y) } },
-                  { label: 'Last 7 days',  fn: () => { const r = last7();  setQuickRange(r.from, r.to) } },
-                  { label: 'Last 30 days', fn: () => { const r = last30(); setQuickRange(r.from, r.to) } },
-                  { label: 'This week',    fn: () => { const r = week();   setQuickRange(r.from, r.to) } },
-                  { label: 'This month',   fn: () => { const r = month();  setQuickRange(r.from, r.to) } },
-                ].map(({ label, fn }) => (
-                  <button key={label} onClick={fn}
-                    className="px-2.5 py-1 text-xs bg-surface2 border border-border rounded-lg hover:bg-hover hover:border-brand/30 text-ink transition-colors">
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] font-semibold text-ink2 uppercase tracking-wider mb-2">Custom range</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-ink3 block mb-0.5">From</label>
-                  <input type="date" value={filters.dateFrom ?? ''}
-                    onChange={(e) => setDateRange(e.target.value || null, filters.dateTo)}
-                    className="w-full h-7 px-2 text-xs bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-1 focus:ring-brand/40" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-ink3 block mb-0.5">To</label>
-                  <input type="date" value={filters.dateTo ?? ''} min={filters.dateFrom ?? undefined}
-                    onChange={(e) => setDateRange(filters.dateFrom, e.target.value || null)}
-                    className="w-full h-7 px-2 text-xs bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-1 focus:ring-brand/40" />
-                </div>
-              </div>
-              {hasDate && (
-                <button onClick={() => { setDateRange(null, null); setShowDate(false) }}
-                  className="mt-3 w-full text-xs text-ink2 hover:text-ink border border-border rounded-lg py-1.5 hover:bg-hover transition-colors flex items-center justify-center gap-1">
-                  <X className="w-3 h-3" />Clear dates
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Filters panel toggle */}
         <div className="relative shrink-0" ref={panelRef}>
@@ -326,65 +308,103 @@ export function FilterBar() {
               </div>
 
               {/* Scrollable content */}
-              <div className="overflow-y-auto p-4 space-y-5">
+              <div className="overflow-y-auto p-4 space-y-3">
 
-                {/* Category */}
+                {/* ── Category ── */}
                 {categories.length > 0 && (
                   <div>
-                    <SectionHead label="Category" count={filters.categories.length} />
-                    <div className="space-y-0.5 max-h-36 overflow-y-auto pr-1">
-                      {categories.map((cat) => (
-                        <CheckRow
-                          key={cat}
-                          label={cat}
-                          checked={filters.categories.includes(cat)}
-                          onChange={() => toggleCategory(cat)}
-                        />
-                      ))}
-                    </div>
+                    <SectionHead
+                      label="Category"
+                      count={filters.categories.length}
+                      isOpen={openSections.has('category')}
+                      onToggle={() => toggleSection('category')}
+                    />
+                    {openSections.has('category') && (
+                      <div className="space-y-0.5 max-h-36 overflow-y-auto pr-1">
+                        {categories.map((cat) => (
+                          <CheckRow
+                            key={cat}
+                            label={cat}
+                            checked={filters.categories.includes(cat)}
+                            onChange={() => toggleCategory(cat)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Sub-category */}
+                {/* ── Sub-category ── */}
                 {subCategories.length > 0 && (
                   <div>
-                    <SectionHead label="Sub-category" count={filters.subCategories.length} />
-                    <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
-                      {subCategories.map((sc) => (
-                        <CheckRow
-                          key={sc}
-                          label={sc}
-                          checked={filters.subCategories.includes(sc)}
-                          onChange={() => toggleSubCategory(sc)}
-                        />
-                      ))}
-                    </div>
+                    <SectionHead
+                      label="Sub-category"
+                      count={filters.subCategories.length}
+                      isOpen={openSections.has('subcategory')}
+                      onToggle={() => toggleSection('subcategory')}
+                    />
+                    {openSections.has('subcategory') && (
+                      <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
+                        {subCategories.map((sc) => (
+                          <CheckRow
+                            key={sc}
+                            label={sc}
+                            checked={filters.subCategories.includes(sc)}
+                            onChange={() => toggleSubCategory(sc)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Status */}
+                {/* ── Status ── */}
                 <div>
-                  <SectionHead label="Status" count={filters.statuses.length} />
-                  <div className="space-y-0.5">
-                    {STATUS_OPTS.map((opt) => (
-                      <CheckRow
-                        key={opt.value}
-                        label={opt.label}
-                        dot={opt.dot}
-                        checked={filters.statuses.includes(opt.value)}
-                        onChange={() => toggleStatus(opt.value)}
-                      />
-                    ))}
-                  </div>
+                  <SectionHead
+                    label="Status"
+                    count={filters.statuses.length}
+                    isOpen={openSections.has('status')}
+                    onToggle={() => toggleSection('status')}
+                  />
+                  {openSections.has('status') && (
+                    <div className="space-y-0.5">
+                      {STATUS_OPTS.map((opt) => (
+                        <CheckRow
+                          key={opt.value}
+                          label={opt.label}
+                          dot={opt.dot}
+                          checked={filters.statuses.includes(opt.value)}
+                          onChange={() => toggleStatus(opt.value)}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {/* Tags */}
+                {/* ── Tags ── */}
                 {topTags.length > 0 && (
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <SectionHead label="Tags" count={filters.selectedTags.length} />
-                      {/* AND / OR toggle */}
-                      <div className="flex items-center gap-0.5 bg-surface2 border border-border rounded-lg p-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection('tags')}
+                        className="flex items-center gap-1.5 group flex-1"
+                      >
+                        <span className="text-[10px] font-semibold text-ink3 uppercase tracking-wider">Tags</span>
+                        {filters.selectedTags.length > 0 && (
+                          <span className="text-[9px] font-bold bg-brand text-white rounded-full px-1.5 py-px leading-none">
+                            {filters.selectedTags.length}
+                          </span>
+                        )}
+                        <ChevronDown
+                          className={cn(
+                            'w-3.5 h-3.5 text-ink3 transition-transform duration-150 ml-auto',
+                            openSections.has('tags') ? 'rotate-0' : '-rotate-90',
+                          )}
+                        />
+                      </button>
+                      {/* AND / OR toggle — always visible */}
+                      <div className="flex items-center gap-0.5 bg-surface2 border border-border rounded-lg p-0.5 shrink-0 ml-2">
                         {(['and', 'or'] as const).map((mode) => (
                           <button
                             key={mode}
@@ -401,58 +421,139 @@ export function FilterBar() {
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-0.5 max-h-36 overflow-y-auto pr-1">
-                      {topTags.map((tag) => (
-                        <CheckRow
-                          key={tag}
-                          label={`#${tag}`}
-                          checked={filters.selectedTags.includes(tag)}
-                          onChange={() => toggleTag(tag)}
-                        />
-                      ))}
-                    </div>
+                    {openSections.has('tags') && (
+                      <div className="space-y-0.5 max-h-36 overflow-y-auto pr-1">
+                        {topTags.map((tag) => (
+                          <CheckRow
+                            key={tag}
+                            label={`#${tag}`}
+                            checked={filters.selectedTags.includes(tag)}
+                            onChange={() => toggleTag(tag)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* People */}
+                {/* ── People ── */}
                 {allPeople.length > 0 && (
                   <div>
-                    <SectionHead label="People" count={filters.persons.length} />
-                    <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
-                      {allPeople.map((person) => (
-                        <CheckRow
-                          key={person}
-                          label={person}
-                          checked={filters.persons.includes(person)}
-                          onChange={() => togglePerson(person)}
-                        />
-                      ))}
-                    </div>
+                    <SectionHead
+                      label="People"
+                      count={filters.persons.length}
+                      isOpen={openSections.has('people')}
+                      onToggle={() => toggleSection('people')}
+                    />
+                    {openSections.has('people') && (
+                      <div className="space-y-0.5 max-h-28 overflow-y-auto pr-1">
+                        {allPeople.map((person) => (
+                          <CheckRow
+                            key={person}
+                            label={person}
+                            checked={filters.persons.includes(person)}
+                            onChange={() => togglePerson(person)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Sort */}
+                {/* ── Date ── */}
                 <div>
-                  <SectionHead label="Sort by" />
-                  <div className="space-y-0.5">
-                    {SORT_OPTS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setSortBy(opt.value as typeof filters.sortBy)}
-                        className={cn(
-                          'w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors',
-                          filters.sortBy === opt.value
-                            ? 'bg-brand/10 text-brand font-medium'
-                            : 'text-ink2 hover:bg-hover hover:text-ink',
-                        )}
-                      >
-                        <span>{opt.label}</span>
-                        {filters.sortBy === opt.value && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-brand" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                  <SectionHead
+                    label="Date"
+                    count={hasDate ? 1 : undefined}
+                    isOpen={openSections.has('date')}
+                    onToggle={() => toggleSection('date')}
+                  />
+                  {openSections.has('date') && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: 'Today',        fn: () => setQuickRange(today, today) },
+                          { label: 'Yesterday',    fn: () => { const d = new Date(); d.setDate(d.getDate()-1); const y = d.toISOString().slice(0,10); setQuickRange(y, y) } },
+                          { label: 'Last 7 days',  fn: () => { const r = last7();  setQuickRange(r.from, r.to) } },
+                          { label: 'Last 30 days', fn: () => { const r = last30(); setQuickRange(r.from, r.to) } },
+                          { label: 'This week',    fn: () => { const r = week();   setQuickRange(r.from, r.to) } },
+                          { label: 'This month',   fn: () => { const r = month();  setQuickRange(r.from, r.to) } },
+                        ].map(({ label, fn }) => (
+                          <button
+                            key={label}
+                            onClick={fn}
+                            className={cn(
+                              'px-2.5 py-1 text-xs border rounded-lg transition-colors',
+                              hasDate && dl === label
+                                ? 'bg-brand/10 border-brand/30 text-brand font-medium'
+                                : 'bg-surface2 border-border hover:bg-hover hover:border-brand/30 text-ink',
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-ink3 block mb-0.5">From</label>
+                          <input
+                            type="date"
+                            value={filters.dateFrom ?? ''}
+                            onChange={(e) => setDateRange(e.target.value || null, filters.dateTo)}
+                            className="w-full h-7 px-2 text-xs bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-1 focus:ring-brand/40"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-ink3 block mb-0.5">To</label>
+                          <input
+                            type="date"
+                            value={filters.dateTo ?? ''}
+                            min={filters.dateFrom ?? undefined}
+                            onChange={(e) => setDateRange(filters.dateFrom, e.target.value || null)}
+                            className="w-full h-7 px-2 text-xs bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-1 focus:ring-brand/40"
+                          />
+                        </div>
+                      </div>
+                      {hasDate && (
+                        <button
+                          onClick={() => setDateRange(null, null)}
+                          className="w-full text-xs text-ink2 hover:text-ink border border-border rounded-lg py-1.5 hover:bg-hover transition-colors flex items-center justify-center gap-1"
+                        >
+                          <X className="w-3 h-3" />Clear dates
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Sort ── */}
+                <div>
+                  <SectionHead
+                    label="Sort by"
+                    isOpen={openSections.has('sort')}
+                    onToggle={() => toggleSection('sort')}
+                  />
+                  {openSections.has('sort') && (
+                    <div className="space-y-0.5">
+                      {SORT_OPTS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setSortBy(opt.value as typeof filters.sortBy)}
+                          className={cn(
+                            'w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors',
+                            filters.sortBy === opt.value
+                              ? 'bg-brand/10 text-brand font-medium'
+                              : 'text-ink2 hover:bg-hover hover:text-ink',
+                          )}
+                        >
+                          <span>{opt.label}</span>
+                          {filters.sortBy === opt.value && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -485,7 +586,7 @@ export function FilterBar() {
           <button
             onClick={() => { clearFilters(); setLocalSearch('') }}
             className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-surface2 border border-border text-ink3 hover:bg-hover hover:text-danger transition-colors"
-            title="Clear all filters (⌘⌫)"
+            title="Clear all filters"
           >
             <X className="w-3 h-3" />
           </button>
