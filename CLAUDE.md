@@ -26,6 +26,29 @@ const results: Foo[] = items.flatMap((x) => {
 This applies everywhere a `Map.get()` or other nullable lookup is placed inside
 `.map()` before a narrowing `.filter()`.
 
+## Lucide icon props: never pass `title` directly
+
+Lucide React icons (`<Network>`, `<ExternalLink>`, `<Link2>`, etc.) do **not** accept
+a `title` prop — their TypeScript types only allow `LucideProps` (className, size,
+strokeWidth, etc.). Passing `title` causes a TS error:
+
+```
+Type '{ className: string; title: string; }' is not assignable to type
+'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+```
+
+**Always** wrap the icon in a `<span title="...">` for browser tooltips:
+
+```tsx
+// ❌ Fails
+<Network className="w-4 h-4" title="Show connections" />
+
+// ✅ Correct
+<span title="Show connections">
+  <Network className="w-4 h-4" />
+</span>
+```
+
 ## Build verification
 
 Before committing, always run:
