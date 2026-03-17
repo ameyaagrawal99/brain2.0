@@ -221,7 +221,7 @@ export function DetailModal() {
   }
 
   function linkToEntry(r: BrainRow) {
-    const currentLinks = (fields.links ?? selectedRow.links ?? '').trim()
+    const currentLinks = (fields.links ?? selectedRow?.links ?? '').trim()
     const newRef = `[[${r.title}]]`
     if (currentLinks.includes(newRef)) { toast('Already linked'); return }
     patchField('links', [currentLinks, newRef].filter(Boolean).join('\n'))
