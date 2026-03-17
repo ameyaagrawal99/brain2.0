@@ -62,3 +62,7 @@ publicDir = "dist"
 
 [userenv.shared]
 VITE_GOOGLE_CLIENT_ID = "903792412236-616oeuhccbifjfjon36npig59beprqc4.apps.googleusercontent.com"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
