@@ -70,6 +70,8 @@ export function DetailModal() {
   const [showRelated, setShowRelated]       = useState(false)
   const [selectedRelated, setSelectedRelated] = useState<Set<number>>(new Set())
   const [activeConnTab, setActiveConnTab]     = useState<ConnectionTab>('suggested')
+  const [relateQuery, setRelateQuery]         = useState('')
+  const [relateFilter, setRelateFilter]       = useState<'all' | 'unlinked' | 'linked'>('all')
 
   const row        = selectedRow
   const histSteps  = row ? (entryHistory[row._rowIndex]?.length  ?? 0) : 0
@@ -221,7 +223,10 @@ export function DetailModal() {
       `${i + 1}. Title: "${r.title}" | Category: ${r.category || 'general'} | Snippet: ${(r.rewritten || r.original || '').slice(0, 120)}`
     ).join('\n')
 
-    const prompt = `Current entry: "${merged.title}"\nContent: ${thisContent.slice(0, 300)}\n\nKnowledge base (${pool.length} entries):\n${context}\n\nFind the 10 most semantically related entries. Return ONLY valid JSON array:\n[{"title":"exact entry title","reason":"brief 1-sentence why related","score":0-100}]\nWhere score is 0-100 relevance (70+ = strong, 40-69 = moderate, <40 = weak). JSON only, no other text.`
+    const focusClause = relateQuery.trim()
+      ? `\nSearch focus: "${relateQuery.trim()}" — prioritize entries related to this focus even if they seem unrelated on the surface.`
+      : ''
+    const prompt = `Current entry: "${merged.title}"\nContent: ${thisContent.slice(0, 300)}${focusClause}\n\nKnowledge base (${pool.length} entries):\n${context}\n\nFind the 10 most semantically related entries. Return ONLY valid JSON array:\n[{"title":"exact entry title","reason":"brief 1-sentence why related","score":0-100}]\nWhere score is 0-100 relevance (70+ = strong, 40-69 = moderate, <40 = weak). JSON only, no other text.`
 
     try {
       const result = await runRelated('rewrite', prompt, {
@@ -457,8 +462,15 @@ export function DetailModal() {
                     </Button>
                     {aiError && <span className="text-xs text-red-500 ml-1">{aiError}</span>}
                   </div>
-                  <div>
-                    <p className="text-[10px] text-ink3 mb-1 px-0.5">For "Find related":</p>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-ink3 px-0.5">For "Find related":</p>
+                    <input
+                      type="text"
+                      value={relateQuery}
+                      onChange={(e) => setRelateQuery(e.target.value)}
+                      placeholder="Search focus — e.g. machine learning, meetings with Sarah…"
+                      className="w-full text-xs px-2.5 py-1.5 bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/40"
+                    />
                     <InstructionsBox
                       value={aiInstructions.relate}
                       onChange={(v) => updateAiInstructions({ relate: v })}
@@ -880,16 +892,45 @@ export function DetailModal() {
                             </div>
                           )}
 
+                          {/* Filter bar */}
+                          {relatedEntries.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              {(['all', 'unlinked', 'linked'] as const).map((f) => (
+                                <button
+                                  key={f}
+                                  onClick={() => setRelateFilter(f)}
+                                  className={cn(
+                                    'text-[10px] px-2 py-1 rounded-lg font-medium capitalize transition-colors',
+                                    relateFilter === f ? 'bg-brand text-white' : 'bg-surface2 text-ink2 hover:bg-hover',
+                                  )}
+                                >
+                                  {f}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
                           {/* Tiered groups */}
                           {relatedEntries.length > 0 && (() => {
-                            const strong   = relatedEntries.filter((e) => (e.score ?? 50) >= 70)
-                            const moderate = relatedEntries.filter((e) => { const s = e.score ?? 50; return s >= 40 && s < 70 })
-                            const weak     = relatedEntries.filter((e) => (e.score ?? 50) < 40)
+                            const visible = relatedEntries.filter((e) => {
+                              if (relateFilter === 'linked')   return !!e.alreadyLinked
+                              if (relateFilter === 'unlinked') return !e.alreadyLinked
+                              return true
+                            })
+                            const strong   = visible.filter((e) => (e.score ?? 50) >= 70)
+                            const moderate = visible.filter((e) => { const s = e.score ?? 50; return s >= 40 && s < 70 })
+                            const weak     = visible.filter((e) => (e.score ?? 50) < 40)
                             const tiers = [
                               { label: 'Strong match',   entries: strong,   cls: 'text-green-600 dark:text-green-400' },
                               { label: 'Moderate match', entries: moderate, cls: 'text-amber-600 dark:text-amber-400' },
                               { label: 'Weak match',     entries: weak,     cls: 'text-ink3' },
                             ].filter(({ entries }) => entries.length > 0)
+
+                            if (!visible.length) return (
+                              <p className="text-xs text-ink3 italic py-1">
+                                No {relateFilter === 'linked' ? 'linked' : 'unlinked'} entries in results.
+                              </p>
+                            )
 
                             return (
                               <div className="space-y-3">

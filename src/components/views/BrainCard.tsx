@@ -2,7 +2,7 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
 import { parseTags, formatDate, formatRelative, dynamicCategoryColor, dynamicCategoryBorderColor, statusBgTint, getStatusDot, isImageUrl, highlight, parseActionItems } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import { CheckSquare, ExternalLink, Calendar, Tag, Check } from 'lucide-react'
+import { CheckSquare, ExternalLink, Calendar, Tag, Check, Link2 } from 'lucide-react'
 import { stripMarkdown } from '@/lib/markdown'
 
 function isFormula(v: string): boolean {
@@ -182,9 +182,21 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
 
           {/* Date + link indicator */}
           <div className="flex items-center gap-2 shrink-0">
-            {row.links && !isFormula(row.links) && (
-              <ExternalLink className="w-3 h-3 text-ink3" />
-            )}
+            {row.links && !isFormula(row.links) && (() => {
+              const lines = row.links.split('\n').map((l) => l.trim()).filter(Boolean)
+              const entryRefs = lines.filter((l) => /^\[\[.+\]\]$/.test(l)).length
+              const httpLinks = lines.filter((l) => l.startsWith('http')).length
+              return (
+                <>
+                  {entryRefs > 0 && (
+                    <span className="flex items-center gap-0.5 text-[10px] text-ink3" title={`${entryRefs} linked entr${entryRefs === 1 ? 'y' : 'ies'}`}>
+                      <Link2 className="w-2.5 h-2.5" />{entryRefs}
+                    </span>
+                  )}
+                  {httpLinks > 0 && <ExternalLink className="w-3 h-3 text-ink3" title={`${httpLinks} external link${httpLinks === 1 ? '' : 's'}`} />}
+                </>
+              )
+            })()}
             <span className="text-[10px] text-ink3">
               {row.dueDate && !isFormula(row.dueDate)
                 ? <span className="flex items-center gap-0.5"><Calendar className="w-2.5 h-2.5" />{formatDate(row.dueDate)}</span>

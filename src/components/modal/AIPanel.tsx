@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { BrainRow } from '@/types/sheet'
 
-type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'relate' | 'links' | 'export'
+type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'relate' | 'export'
 
 interface RelatedEntry { row: BrainRow; reason: string; score?: number }
 
@@ -485,8 +485,7 @@ Return ONLY a valid JSON array (no explanation, no markdown):
     { key: 'bulk',   label: 'Bulk Enhance',  icon: Sparkles },
     { key: 'digest', label: 'Digest',        icon: FileText },
     { key: 'chat',   label: 'Chat',          icon: Brain },
-    { key: 'relate', label: 'Find Related',  icon: Network },
-    { key: 'links',  label: 'Link Suggest', icon: Link2 },
+    { key: 'relate', label: 'Connections',   icon: Network },
     { key: 'export', label: 'Export',        icon: Download },
   ]
 
@@ -948,11 +947,11 @@ Return ONLY a valid JSON array (no explanation, no markdown):
               </div>
             )}
 
-            {/* ── FIND RELATED ── */}
+            {/* ── CONNECTIONS (Find Related + Link Suggest) ── */}
             {mode === 'relate' && (
               <div className="space-y-4">
                 <p className="text-xs text-ink2">
-                  Describe a topic or paste text — AI will find the most related entries in your brain.
+                  Find entries related to a topic, or scan the entire knowledge base to discover pairs that should be linked.
                 </p>
                 <InstructionsBox
                   value={aiInstructions.relate}
@@ -1096,96 +1095,79 @@ Return ONLY a valid JSON array (no explanation, no markdown):
                 {!relateResults.length && !relateLoading && relateQuery.trim() && (
                   <p className="text-xs text-ink3 text-center py-4">Run a search above to find related entries</p>
                 )}
-              </div>
-            )}
 
-            {/* ── LINK SUGGEST ── */}
-            {mode === 'links' && (
-              <div className="space-y-4">
-                <p className="text-xs text-ink2">
-                  AI scans all your entries and suggests pairs that should be linked together. Accept to save bidirectional wiki links.
-                </p>
+                {/* ── Link Suggestions sub-section ── */}
+                <div className="border-t border-border pt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-ink2">Suggest Links</p>
+                      <p className="text-[11px] text-ink3 mt-0.5">Scan all entries and find pairs that should be linked.</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 text-[10px] text-ink3">
+                      <span>{rows.filter((r) => r.title && (r.original || r.rewritten)).length} entries</span>
+                      {linkSuggestions.length > 0 && (
+                        <span className="bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold">
+                          {linkSuggestions.length} pending
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="bg-surface2 rounded-xl p-3">
-                    <div className="text-2xl font-bold text-ink">{rows.filter((r) => r.title && (r.original || r.rewritten)).length}</div>
-                    <div className="text-xs text-ink3 mt-0.5">Entries to scan</div>
-                  </div>
-                  <div className="bg-surface2 rounded-xl p-3">
-                    <div className="text-2xl font-bold text-brand">{linkSuggestions.length}</div>
-                    <div className="text-xs text-ink3 mt-0.5">Pending suggestions</div>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateLinkSuggestions}
+                    loading={linksLoading}
+                    className="w-full justify-center"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    {linkSuggestions.length > 0 ? 'Refresh suggestions' : 'Find link suggestions'}
+                  </Button>
+
+                  {linkSuggestions.length > 0 && (
+                    <div className="space-y-2">
+                      {linkSuggestions.map((s, idx) => (
+                        <div
+                          key={`${s.a._rowIndex}-${s.b._rowIndex}`}
+                          className="bg-surface2 border border-border rounded-xl p-3 space-y-2"
+                        >
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => useBrainStore.getState().openModal(s.a)}
+                              className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
+                            >
+                              {s.a.title}
+                            </button>
+                            <Link2 className="w-3 h-3 text-ink3 shrink-0" />
+                            <button
+                              onClick={() => useBrainStore.getState().openModal(s.b)}
+                              className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
+                            >
+                              {s.b.title}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-ink3 leading-relaxed">{s.reason}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAcceptLinkSuggestion(idx)}
+                              className="flex items-center gap-1 text-xs font-medium text-white bg-brand rounded-lg px-2.5 py-1 hover:bg-brand/90 transition-colors"
+                            >
+                              <Check className="w-3 h-3" />
+                              Link them
+                            </button>
+                            <button
+                              onClick={() => handleSkipLinkSuggestion(idx)}
+                              className="flex items-center gap-1 text-xs font-medium text-ink3 bg-surface border border-border rounded-lg px-2.5 py-1 hover:text-ink hover:bg-hover transition-colors"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleGenerateLinkSuggestions}
-                  loading={linksLoading}
-                  className="w-full justify-center"
-                >
-                  <Link2 className="w-3.5 h-3.5" />
-                  {linkSuggestions.length > 0 ? 'Refresh suggestions' : 'Find link suggestions'}
-                </Button>
-
-                {linkSuggestions.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-medium text-ink2 uppercase tracking-wide">
-                      {linkSuggestions.length} suggestion{linkSuggestions.length !== 1 ? 's' : ''} — accept to create bidirectional links
-                    </p>
-                    {linkSuggestions.map((s, idx) => (
-                      <div
-                        key={`${s.a._rowIndex}-${s.b._rowIndex}`}
-                        className="bg-surface2 border border-border rounded-xl p-3 space-y-2"
-                      >
-                        {/* Pair */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <button
-                            onClick={() => useBrainStore.getState().openModal(s.a)}
-                            className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
-                          >
-                            {s.a.title}
-                          </button>
-                          <Link2 className="w-3 h-3 text-ink3 shrink-0" />
-                          <button
-                            onClick={() => useBrainStore.getState().openModal(s.b)}
-                            className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
-                          >
-                            {s.b.title}
-                          </button>
-                        </div>
-                        {/* Reason */}
-                        <p className="text-[11px] text-ink3 leading-relaxed">{s.reason}</p>
-                        {/* Actions */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleAcceptLinkSuggestion(idx)}
-                            className="flex items-center gap-1 text-xs font-medium text-white bg-brand rounded-lg px-2.5 py-1 hover:bg-brand/90 transition-colors"
-                          >
-                            <Check className="w-3 h-3" />
-                            Link them
-                          </button>
-                          <button
-                            onClick={() => handleSkipLinkSuggestion(idx)}
-                            className="flex items-center gap-1 text-xs font-medium text-ink3 bg-surface border border-border rounded-lg px-2.5 py-1 hover:text-ink hover:bg-hover transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Skip
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!linkSuggestions.length && !linksLoading && (
-                  <div className="text-center py-8 text-ink3 text-xs space-y-2">
-                    <Link2 className="w-8 h-8 mx-auto opacity-20" />
-                    <p>Click "Find link suggestions" to discover connections AI thinks should be linked.</p>
-                    <p className="text-ink3/60">Tip: also open any entry and use "Find related" to link individual entries.</p>
-                  </div>
-                )}
               </div>
             )}
 
