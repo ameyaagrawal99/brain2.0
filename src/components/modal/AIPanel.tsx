@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import {
   X, Wand2, Zap, Brain, Tag, CheckSquare, FileText, Sparkles,
   Key, Download, ChevronDown, ChevronUp, RotateCcw, Heading, StopCircle, MousePointerClick, Network, ExternalLink,
-  Link2, Check, Trash2,
+  Link2, Check, Trash2, GitMerge,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { InstructionsBox } from '@/components/ui/InstructionsBox'
@@ -12,17 +12,22 @@ import { useAI } from '@/hooks/useAI'
 import { useFilters } from '@/hooks/useFilters'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { expandChain, formatLink } from '@/lib/linkGraph'
 import toast from 'react-hot-toast'
-import type { BrainRow } from '@/types/sheet'
+import type { BrainRow, LinkType } from '@/types/sheet'
+import { LINK_TYPE_LABELS } from '@/types/sheet'
 
 type AIMode = 'quick' | 'bulk' | 'digest' | 'chat' | 'relate' | 'export'
 
 interface RelatedEntry { row: BrainRow; reason: string; score?: number }
 
 interface LinkSuggestion {
-  a:      BrainRow
-  b:      BrainRow
-  reason: string
+  a:            BrainRow
+  b:            BrainRow
+  reason:       string
+  score:        number
+  suggestedType: LinkType
+  selectedType: LinkType
 }
 
 /* ─── Linked-context helpers ─────────────────────────────────────────── */
@@ -181,7 +186,12 @@ export function AIPanel() {
   const [relatePage, setRelatePage]       = useState(0)
   const [selectedRelateRows, setSelectedRelateRows] = useState<Set<number>>(new Set())
   const [linkSuggestions, setLinkSuggestions] = useState<LinkSuggestion[]>([])
+  const [selectedLinkKeys, setSelectedLinkKeys] = useState<Set<string>>(new Set())
+  const [weakerExpanded, setWeakerExpanded] = useState(false)
+  const [linkPage, setLinkPage] = useState(0)
+  const [useClusterContext, setUseClusterContext] = useState(false)
   const RELATE_PAGE_SIZE = 5
+  const LINK_PAGE_SIZE = 10
 
   // Bulk options (component-level state — no need to persist)
   const [bulkFieldOptions, setBulkFieldOptions] = useState<BulkFieldOptions>({
@@ -301,13 +311,27 @@ export function AIPanel() {
   async function handleGenerateDigest() {
     const base = filteredRows.slice(0, 20)
     if (!base.length) { toast.error('No entries to summarize'); return }
-    // Expand context with linked entries (one hop)
-    const sample = expandWithLinked(base, rows).slice(0, 30)
+
+    let sample: BrainRow[]
+    let contextNote: string
+    if (useClusterContext) {
+      const chainExpanded = expandChain(base, rows, 3, 25)
+      const combined = [...base]
+      const seenIdx = new Set(base.map((r) => r._rowIndex))
+      chainExpanded.forEach((r) => { if (!seenIdx.has(r._rowIndex)) combined.push(r) })
+      sample = combined.slice(0, 25)
+      const clusterCount = sample.length - base.length
+      contextNote = clusterCount > 0 ? ` (including ${clusterCount} cluster-linked entries, depth 3)` : ''
+    } else {
+      sample = expandWithLinked(base, rows).slice(0, 30)
+      const linkedCount = sample.length - base.length
+      contextNote = linkedCount > 0 ? ` (including ${linkedCount} linked entries for context)` : ''
+    }
+
     const context = sample.map((r, i) =>
       `${i + 1}. [${r.category}] ${r.title}: ${(r.rewritten || r.original || '').slice(0, 200)}`
     ).join('\n')
-    const linkedCount = sample.length - base.length
-    const prompt = `You are a personal assistant. Here are recent journal entries${linkedCount > 0 ? ` (including ${linkedCount} linked entries for context)` : ''}:\n\n${context}\n\nWrite a thoughtful weekly digest (3-5 sentences): key themes, accomplishments, patterns, and suggested focus for the week.`
+    const prompt = `You are a personal assistant. Here are recent journal entries${contextNote}:\n\n${context}\n\nWrite a thoughtful weekly digest (3-5 sentences): key themes, accomplishments, patterns, and suggested focus for the week.`
     const result = await runAI('rewrite', prompt, {
       systemInstruction: aiInstructions.digest,
     })
@@ -327,9 +351,20 @@ export function AIPanel() {
       const score = words.reduce((s, w) => s + (text.split(w).length - 1), 0)
       return { r, score }
     }).sort((a, b) => b.score - a.score)
-    // Expand top results with their linked entries (treat clusters as one unit)
-    const topRows = scored.slice(0, 15).map(({ r }) => r)
-    const contextRows = expandWithLinked(topRows, rows).slice(0, 30)
+
+    let contextRows: BrainRow[]
+    if (useClusterContext) {
+      const topRows = scored.slice(0, 10).map(({ r }) => r)
+      const chainExpanded = expandChain(topRows, rows, 3, 25)
+      const combined = [...topRows]
+      const seenIdx = new Set(topRows.map((r) => r._rowIndex))
+      chainExpanded.forEach((r) => { if (!seenIdx.has(r._rowIndex)) combined.push(r) })
+      contextRows = combined.slice(0, 25)
+    } else {
+      const topRows = scored.slice(0, 15).map(({ r }) => r)
+      contextRows = expandWithLinked(topRows, rows).slice(0, 30)
+    }
+
     const context = contextRows.map((r) =>
       `[${r.category || 'General'}] ${r.title}: ${(r.rewritten || r.original || '').slice(0, 200)}`
     ).join('\n')
@@ -340,7 +375,7 @@ IMPORTANT: When referencing specific entries from the user's notes, always wrap 
 
 Available entry titles (for reference): ${titles}
 
-Most relevant entries for this question:
+Most relevant entries for this question${useClusterContext ? ` (cluster context: ${contextRows.length} entries)` : ''}:
 ${context}
 
 User question: ${userMsg}
@@ -404,39 +439,73 @@ Where score is relevance 0-100. Output only valid JSON, no other text.`
 
   /* ── Link Suggestions ── */
   async function handleGenerateLinkSuggestions() {
-    const candidates = rows.filter((r) => r.title?.trim() && (r.original || r.rewritten)).slice(0, 80)
-    if (candidates.length < 2) { toast.error('Need at least 2 entries with content'); return }
+    const unlinkableRows = rows.filter((r) => r.title?.trim() && (r.original || r.rewritten))
+    if (unlinkableRows.length < 2) { toast.error('Need at least 2 entries with content'); return }
+
+    const SCOPED = unlinkableRows.length > 50
+    const candidates = SCOPED
+      ? filteredRows.filter((r) => r.title?.trim() && (r.original || r.rewritten)).slice(0, 50)
+      : unlinkableRows.slice(0, 50)
+
+    if (candidates.length < 2) { toast.error('Not enough visible entries to analyse'); return }
+
+    if (SCOPED) {
+      toast(`Analysing ${candidates.length} visible entries (knowledge base > 50)`, { icon: 'ℹ️', duration: 3000 })
+    }
 
     setLinkSuggestions([])
+    setSelectedLinkKeys(new Set())
+    setLinkPage(0)
 
     const entryList = candidates.map((r, i) =>
       `${i + 1}. [${r.category || 'General'}] "${r.title}" — ${(r.rewritten || r.original || '').slice(0, 100)}`
     ).join('\n')
 
-    const prompt = `You are analyzing a personal knowledge base. Find 15 pairs of entries that would benefit from being wiki-linked together (they share themes, topics, people, or context).
+    const validTypes = Object.keys(LINK_TYPE_LABELS).join(' | ')
+
+    const prompt = `You are analyzing a personal knowledge base. Find up to 20 pairs of entries that would benefit from being wiki-linked (shared themes, topics, people, or context).
 
 Entries:
 ${entryList}
 
 Return ONLY a valid JSON array (no explanation, no markdown):
-[{"a":"exact title A","b":"exact title B","reason":"one sentence why they should be linked"}]`
+[{"a":"exact title A","b":"exact title B","score":0.85,"reason":"one sentence why they should be linked","suggestedType":"related"}]
 
-    const result = await runLinks('rewrite', prompt, { maxTokens: 1200 })
+Rules:
+- score: float 0-1 (1 = extremely strong connection)
+- suggestedType must be one of: ${validTypes}
+- Include 20 pairs ordered by score descending`
+
+    const result = await runLinks('rewrite', prompt, { maxTokens: 1600 })
     const raw = result.rewritten || ''
     try {
       const match = raw.match(/\[[\s\S]*\]/)
       if (!match) throw new Error()
-      const parsed = JSON.parse(match[0]) as { a: string; b: string; reason: string }[]
-      const titleMap = new Map(rows.map((r) => [r.title?.toLowerCase().trim(), r]))
+      const parsed = JSON.parse(match[0]) as { a: string; b: string; score?: number; reason: string; suggestedType?: string }[]
+      // Use candidate map (scoped set) so title resolution stays within the analysed batch
+      const titleMap = new Map(candidates.map((r) => [r.title?.toLowerCase().trim(), r]))
+      const validLinkTypes = new Set<string>(Object.keys(LINK_TYPE_LABELS))
+
+      const seenKeys = new Set<string>()
       const suggestions: LinkSuggestion[] = parsed.flatMap((item) => {
         const rowA = titleMap.get(item.a?.toLowerCase().trim())
         const rowB = titleMap.get(item.b?.toLowerCase().trim())
         if (!rowA || !rowB || rowA._rowIndex === rowB._rowIndex) return []
-        // Skip pairs that are already explicitly linked
+        // Deduplicate symmetric pairs (A→B same as B→A) using canonical key
+        const [lo, hi] = [rowA._rowIndex, rowB._rowIndex].sort((x, y) => x - y)
+        const ck = `${lo}-${hi}`
+        if (seenKeys.has(ck)) return []
+        seenKeys.add(ck)
         const aLinks = rowA.links || ''
-        if (aLinks.includes(`[[${rowB.title}]]`) || (rowB.links || '').includes(`[[${rowA.title}]]`)) return []
-        return [{ a: rowA, b: rowB, reason: item.reason || '' }]
-      })
+        const bLinks = rowB.links || ''
+        const alreadyLinked = aLinks.includes(`[[${rowB.title}`) || bLinks.includes(`[[${rowA.title}`)
+        if (alreadyLinked) return []
+        const score = typeof item.score === 'number' ? Math.max(0, Math.min(1, item.score)) : 0.5
+        const rawType = (item.suggestedType ?? 'related').toLowerCase()
+        const suggestedType: LinkType = validLinkTypes.has(rawType) ? rawType as LinkType : 'related'
+        return [{ a: rowA, b: rowB, reason: item.reason || '', score, suggestedType, selectedType: suggestedType }]
+      }).sort((x, y) => y.score - x.score)
+
       if (!suggestions.length) { toast('All suggested pairs are already linked!'); return }
       setLinkSuggestions(suggestions)
     } catch {
@@ -444,27 +513,87 @@ Return ONLY a valid JSON array (no explanation, no markdown):
     }
   }
 
-  async function handleAcceptLinkSuggestion(idx: number) {
-    const s = linkSuggestions[idx]
-    if (!s) return
-    const addLink = (row: BrainRow, target: BrainRow) => {
-      const current = (row.links || '').trim()
-      const ref = `[[${target.title}]]`
-      if (current.includes(ref)) return current
-      return [current, ref].filter(Boolean).join('\n')
+  /** Canonical (order-independent) key — deduplicates symmetric A→B / B→A pairs */
+  function pairKey(s: LinkSuggestion): string {
+    const [lo, hi] = [s.a._rowIndex, s.b._rowIndex].sort((x, y) => x - y)
+    return `${lo}-${hi}`
+  }
+
+  /**
+   * Merge new typed link refs into a current links string.
+   * Reads from the live store so concurrent saves don't overwrite each other.
+   */
+  function mergeLinksIntoRow(rowIndex: number, additions: { title: string; type: LinkType }[]): string {
+    const liveRow = useBrainStore.getState().rows.find((r) => r._rowIndex === rowIndex)
+    let current = (liveRow?.links ?? '').trim()
+    for (const { title, type } of additions) {
+      if (current.includes(`[[${title}`)) continue
+      const ref = formatLink(title, type)
+      current = [current, ref].filter(Boolean).join('\n')
     }
+    return current
+  }
+
+  function handleUpdateLinkType(key: string, type: LinkType) {
+    setLinkSuggestions((prev) => prev.map((s) => pairKey(s) === key ? { ...s, selectedType: type } : s))
+  }
+
+  async function handleAcceptLinkSuggestion(key: string) {
+    const s = linkSuggestions.find((x) => pairKey(x) === key)
+    if (!s) return
     try {
-      await saveRow(s.a._rowIndex, { links: addLink(s.a, s.b) }, 'AI: Link suggestion')
-      await saveRow(s.b._rowIndex, { links: addLink(s.b, s.a) }, 'AI: Link suggestion')
+      const aLinks = mergeLinksIntoRow(s.a._rowIndex, [{ title: s.b.title, type: s.selectedType }])
+      const bLinks = mergeLinksIntoRow(s.b._rowIndex, [{ title: s.a.title, type: s.selectedType }])
+      await saveRow(s.a._rowIndex, { links: aLinks }, 'AI: Link suggestion')
+      await saveRow(s.b._rowIndex, { links: bLinks }, 'AI: Link suggestion')
       toast.success(`Linked "${s.a.title}" ↔ "${s.b.title}"`)
-      setLinkSuggestions((prev) => prev.filter((_, i) => i !== idx))
+      setLinkSuggestions((prev) => prev.filter((x) => pairKey(x) !== key))
+      setSelectedLinkKeys((prev) => { const next = new Set(prev); next.delete(key); return next })
     } catch {
       toast.error('Failed to save link')
     }
   }
 
-  function handleSkipLinkSuggestion(idx: number) {
-    setLinkSuggestions((prev) => prev.filter((_, i) => i !== idx))
+  async function handleApplySelectedLinks() {
+    const keys = [...selectedLinkKeys]
+    if (!keys.length) return
+    const toApply = linkSuggestions.filter((s) => keys.includes(pairKey(s)))
+    if (!toApply.length) return
+
+    // Aggregate additions per row to avoid overwrite when multiple pairs share a row
+    const byRow = new Map<number, { title: string; type: LinkType }[]>()
+    for (const s of toApply) {
+      if (!byRow.has(s.a._rowIndex)) byRow.set(s.a._rowIndex, [])
+      if (!byRow.has(s.b._rowIndex)) byRow.set(s.b._rowIndex, [])
+      byRow.get(s.a._rowIndex)!.push({ title: s.b.title, type: s.selectedType })
+      byRow.get(s.b._rowIndex)!.push({ title: s.a.title, type: s.selectedType })
+    }
+
+    let saved = 0
+    for (const [rowIndex, additions] of byRow) {
+      try {
+        const merged = mergeLinksIntoRow(rowIndex, additions)
+        await saveRow(rowIndex, { links: merged }, 'AI: Link suggestion')
+        saved++
+      } catch { /* skip failed rows */ }
+    }
+
+    const appliedPairs = toApply.length
+    toast.success(`Applied ${appliedPairs} pair${appliedPairs !== 1 ? 's' : ''} (${saved} rows updated)`)
+    const appliedKeys = new Set(keys)
+    setLinkSuggestions((prev) => prev.filter((s) => !appliedKeys.has(pairKey(s))))
+    setSelectedLinkKeys(new Set())
+    setLinkPage(0)
+  }
+
+  function handleAcceptAllStrong() {
+    const strongKeys = new Set(linkSuggestions.filter((s) => s.score >= 0.7).map(pairKey))
+    setSelectedLinkKeys(strongKeys)
+  }
+
+  function handleSkipLinkSuggestion(key: string) {
+    setLinkSuggestions((prev) => prev.filter((s) => pairKey(s) !== key))
+    setSelectedLinkKeys((prev) => { const next = new Set(prev); next.delete(key); return next })
   }
 
   /* ── Export ── */
@@ -539,7 +668,7 @@ Return ONLY a valid JSON array (no explanation, no markdown):
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center">
               <Wand2 className="w-3.5 h-3.5 text-brand" />
@@ -549,12 +678,27 @@ Return ONLY a valid JSON array (no explanation, no markdown):
               <p className="text-[11px] text-ink3 mt-0.5">{rows.length} entries in your brain</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowAIPanel(false)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { setShowAIPanel(false); useBrainStore.getState().setShowSettings(true) }}
+              title="Edit global AI instructions in Settings"
+              className={cn(
+                'h-7 px-2 flex items-center gap-1 rounded-lg text-[10px] font-medium transition-colors',
+                aiInstructions.global.trim()
+                  ? 'bg-brand/10 text-brand border border-brand/20'
+                  : 'text-ink3 hover:bg-hover hover:text-ink',
+              )}
+            >
+              <Sparkles className="w-3 h-3" />
+              {aiInstructions.global.trim() ? 'Brain instructions set' : 'Brain instructions'}
+            </button>
+            <button
+              onClick={() => setShowAIPanel(false)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Mode tabs */}
@@ -873,6 +1017,30 @@ Return ONLY a valid JSON array (no explanation, no markdown):
                   onChange={(v) => updateAiInstructions({ digest: v })}
                   placeholder="e.g. Focus on professional growth and learning milestones."
                 />
+                {/* Cluster context toggle */}
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setUseClusterContext((v) => !v)}
+                      className={cn(
+                        'w-8 h-4 rounded-full transition-colors relative shrink-0',
+                        useClusterContext ? 'bg-brand' : 'bg-border',
+                      )}
+                    >
+                      <span className={cn(
+                        'absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform',
+                        useClusterContext ? 'translate-x-4' : 'translate-x-0.5',
+                      )} />
+                    </button>
+                    <span className="text-xs text-ink2">Use cluster context</span>
+                    {useClusterContext && (
+                      <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-medium">
+                        Context: {Math.min(25, filteredRows.slice(0, 20).length + expandChain(filteredRows.slice(0, 20), rows, 3, 25).length)} entries
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <Button variant="primary" size="sm" onClick={handleGenerateDigest} loading={aiLoading} className="w-full justify-center">
                   <FileText className="w-3.5 h-3.5" />
                   Generate Digest ({filteredRows.length} entries)
@@ -899,6 +1067,28 @@ Return ONLY a valid JSON array (no explanation, no markdown):
                   onChange={(v) => updateAiInstructions({ chat: v })}
                   placeholder="e.g. Answer in a friendly tone. Always suggest next steps."
                 />
+                {/* Cluster context toggle */}
+                <div className="flex items-center gap-1.5 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setUseClusterContext((v) => !v)}
+                    className={cn(
+                      'w-8 h-4 rounded-full transition-colors relative shrink-0',
+                      useClusterContext ? 'bg-brand' : 'bg-border',
+                    )}
+                  >
+                    <span className={cn(
+                      'absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform',
+                      useClusterContext ? 'translate-x-4' : 'translate-x-0.5',
+                    )} />
+                  </button>
+                  <span className="text-xs text-ink2">Use cluster context</span>
+                  {useClusterContext && (
+                    <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-medium">
+                      depth 3, up to 25 entries
+                    </span>
+                  )}
+                </div>
                 <div className="space-y-3 min-h-[200px]">
                   {chatHistory.length === 0 && (
                     <div className="text-center py-8 text-ink3 text-sm">
@@ -1097,77 +1287,209 @@ Return ONLY a valid JSON array (no explanation, no markdown):
                 )}
 
                 {/* ── Link Suggestions sub-section ── */}
-                <div className="border-t border-border pt-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-semibold text-ink2">Suggest Links</p>
-                      <p className="text-[11px] text-ink3 mt-0.5">Scan all entries and find pairs that should be linked.</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 text-[10px] text-ink3">
-                      <span>{rows.filter((r) => r.title && (r.original || r.rewritten)).length} entries</span>
-                      {linkSuggestions.length > 0 && (
-                        <span className="bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold">
-                          {linkSuggestions.length} pending
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                {(() => {
+                  const unlinkableTotal = rows.filter((r) => r.title && (r.original || r.rewritten)).length
+                  const SCOPED = unlinkableTotal > 50
+                  const strongSuggestions = linkSuggestions.filter((s) => s.score >= 0.4)
+                  const weakerSuggestions = linkSuggestions.filter((s) => s.score < 0.4)
+                  // "Load more" pattern: show all items up to (linkPage+1)*LINK_PAGE_SIZE
+                  const visibleCount = (linkPage + 1) * LINK_PAGE_SIZE
+                  const strongPage = strongSuggestions.slice(0, visibleCount)
+                  const hasMore = strongSuggestions.length > visibleCount
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGenerateLinkSuggestions}
-                    loading={linksLoading}
-                    className="w-full justify-center"
-                  >
-                    <Link2 className="w-3.5 h-3.5" />
-                    {linkSuggestions.length > 0 ? 'Refresh suggestions' : 'Find link suggestions'}
-                  </Button>
-
-                  {linkSuggestions.length > 0 && (
-                    <div className="space-y-2">
-                      {linkSuggestions.map((s, idx) => (
-                        <div
-                          key={`${s.a._rowIndex}-${s.b._rowIndex}`}
-                          className="bg-surface2 border border-border rounded-xl p-3 space-y-2"
-                        >
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <button
-                              onClick={() => useBrainStore.getState().openModal(s.a)}
-                              className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
-                            >
-                              {s.a.title}
-                            </button>
-                            <Link2 className="w-3 h-3 text-ink3 shrink-0" />
-                            <button
-                              onClick={() => useBrainStore.getState().openModal(s.b)}
-                              className="text-xs font-semibold text-brand hover:underline max-w-[120px] truncate"
-                            >
-                              {s.b.title}
-                            </button>
-                          </div>
-                          <p className="text-[11px] text-ink3 leading-relaxed">{s.reason}</p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleAcceptLinkSuggestion(idx)}
-                              className="flex items-center gap-1 text-xs font-medium text-white bg-brand rounded-lg px-2.5 py-1 hover:bg-brand/90 transition-colors"
-                            >
-                              <Check className="w-3 h-3" />
-                              Link them
-                            </button>
-                            <button
-                              onClick={() => handleSkipLinkSuggestion(idx)}
-                              className="flex items-center gap-1 text-xs font-medium text-ink3 bg-surface border border-border rounded-lg px-2.5 py-1 hover:text-ink hover:bg-hover transition-colors"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              Skip
-                            </button>
+                  function SuggestionRow({ s }: { s: LinkSuggestion }) {
+                    const key = pairKey(s)
+                    const scoreColor = s.score >= 0.7 ? 'bg-green-500' : s.score >= 0.4 ? 'bg-amber-500' : 'bg-border'
+                    const scorePct = Math.round(s.score * 100)
+                    return (
+                      <div className="bg-surface2 border border-border rounded-xl p-3 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedLinkKeys.has(key)}
+                            onChange={() => setSelectedLinkKeys((prev) => {
+                              const next = new Set(prev)
+                              next.has(key) ? next.delete(key) : next.add(key)
+                              return next
+                            })}
+                            className="w-3.5 h-3.5 rounded border-border accent-brand shrink-0 mt-0.5 cursor-pointer"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                onClick={() => useBrainStore.getState().openModal(s.a)}
+                                className="text-xs font-semibold text-brand hover:underline max-w-[110px] truncate"
+                              >
+                                {s.a.title}
+                              </button>
+                              <Link2 className="w-3 h-3 text-ink3 shrink-0" />
+                              <button
+                                onClick={() => useBrainStore.getState().openModal(s.b)}
+                                className="text-xs font-semibold text-brand hover:underline max-w-[110px] truncate"
+                              >
+                                {s.b.title}
+                              </button>
+                              <span className={cn(
+                                'ml-auto text-[9px] px-1.5 py-0.5 rounded-full font-bold text-white',
+                                scoreColor,
+                              )}>
+                                {scorePct}%
+                              </span>
+                            </div>
+                            {/* Score bar */}
+                            <div className="h-1 bg-surface rounded-full overflow-hidden mt-1.5">
+                              <div className={cn('h-full rounded-full', scoreColor)} style={{ width: `${scorePct}%` }} />
+                            </div>
+                            <p className="text-[11px] text-ink3 leading-relaxed mt-1.5">{s.reason}</p>
+                            {/* Relationship type selector */}
+                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                              <GitMerge className="w-3 h-3 text-ink3 shrink-0" />
+                              {(Object.keys(LINK_TYPE_LABELS) as LinkType[]).map((lt) => (
+                                <button
+                                  key={lt}
+                                  onClick={() => handleUpdateLinkType(key, lt)}
+                                  className={cn(
+                                    'text-[9px] px-1.5 py-0.5 rounded-full border transition-colors font-medium',
+                                    s.selectedType === lt
+                                      ? 'bg-brand text-white border-brand'
+                                      : 'border-border text-ink3 hover:border-brand/50 hover:text-ink',
+                                  )}
+                                >
+                                  {LINK_TYPE_LABELS[lt]}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      ))}
+                        <div className="flex gap-2 pl-5">
+                          <button
+                            onClick={() => handleAcceptLinkSuggestion(key)}
+                            className="flex items-center gap-1 text-xs font-medium text-white bg-brand rounded-lg px-2.5 py-1 hover:bg-brand/90 transition-colors"
+                          >
+                            <Check className="w-3 h-3" />
+                            Link
+                          </button>
+                          <button
+                            onClick={() => handleSkipLinkSuggestion(key)}
+                            className="flex items-center gap-1 text-xs font-medium text-ink3 bg-surface border border-border rounded-lg px-2.5 py-1 hover:text-ink hover:bg-hover transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Skip
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div className="border-t border-border pt-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-ink2">Suggest Links</p>
+                          <p className="text-[11px] text-ink3 mt-0.5">
+                            {SCOPED
+                              ? `Scoped to filtered view (${filteredRows.filter((r) => r.title && (r.original || r.rewritten)).length} entries)`
+                              : 'Scan all entries and find pairs that should be linked.'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 text-[10px] text-ink3">
+                          <span>{unlinkableTotal} entries</span>
+                          {linkSuggestions.length > 0 && (
+                            <span className="bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-semibold">
+                              {linkSuggestions.length} pending
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateLinkSuggestions}
+                        loading={linksLoading}
+                        className="w-full justify-center"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        {linkSuggestions.length > 0 ? 'Refresh suggestions' : 'Find link suggestions'}
+                      </Button>
+
+                      {linkSuggestions.length > 0 && (
+                        <div className="space-y-3">
+                          {/* Multi-select toolbar */}
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  if (selectedLinkKeys.size === linkSuggestions.length) {
+                                    setSelectedLinkKeys(new Set())
+                                  } else {
+                                    setSelectedLinkKeys(new Set(linkSuggestions.map(pairKey)))
+                                  }
+                                }}
+                                className="text-[10px] text-ink3 hover:text-ink transition-colors font-medium"
+                              >
+                                {selectedLinkKeys.size === linkSuggestions.length ? 'Deselect all' : 'Select all'}
+                              </button>
+                              <button
+                                onClick={handleAcceptAllStrong}
+                                className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-medium"
+                              >
+                                Accept all strong (≥70%)
+                              </button>
+                            </div>
+                            {selectedLinkKeys.size > 0 && (
+                              <button
+                                onClick={handleApplySelectedLinks}
+                                className="text-[10px] px-2.5 py-1 bg-brand text-white rounded-lg hover:bg-brand/90 transition-colors font-medium flex items-center gap-1"
+                              >
+                                <Check className="w-2.5 h-2.5" />
+                                Apply selected ({selectedLinkKeys.size})
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Strong suggestions with load-more */}
+                          <div className="space-y-2">
+                            {strongPage.map((s) => (
+                              <SuggestionRow key={pairKey(s)} s={s} />
+                            ))}
+                          </div>
+
+                          {/* Load more button */}
+                          {hasMore && (
+                            <button
+                              onClick={() => setLinkPage((p) => p + 1)}
+                              className="w-full text-xs py-2 border border-border rounded-lg text-ink2 hover:bg-hover hover:text-ink transition-colors font-medium"
+                            >
+                              Load more ({strongSuggestions.length - strongPage.length} remaining)
+                            </button>
+                          )}
+
+                          {/* Weaker suggestions collapsible */}
+                          {weakerSuggestions.length > 0 && (
+                            <div className="border border-border rounded-xl overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => setWeakerExpanded((v) => !v)}
+                                className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-ink3 hover:bg-hover transition-colors"
+                              >
+                                <span>Weaker suggestions ({weakerSuggestions.length}) — score &lt; 40%</span>
+                                {weakerExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                              {weakerExpanded && (
+                                <div className="border-t border-border p-2 space-y-2 bg-surface2">
+                                  {weakerSuggestions.map((s) => (
+                                    <SuggestionRow key={pairKey(s)} s={s} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  )
+                })()}
               </div>
             )}
 
