@@ -390,13 +390,11 @@ Where score is relevance 0-100. Output only valid JSON, no other text.`
       if (!jsonMatch) throw new Error('No JSON')
       const parsed = JSON.parse(jsonMatch[0]) as { title: string; reason: string; score?: number }[]
       const titleMap = new Map(rows.map((r) => [r.title?.toLowerCase().trim(), r]))
-      const matched: RelatedEntry[] = parsed
-        .map((item) => ({
-          row: titleMap.get(item.title?.toLowerCase().trim() ?? ''),
-          reason: item.reason,
-          score: item.score,
-        }))
-        .filter((x): x is RelatedEntry => !!x.row)
+      const matched: RelatedEntry[] = parsed.flatMap((item) => {
+        const row = titleMap.get(item.title?.toLowerCase().trim() ?? '')
+        if (!row) return []
+        return [{ row, reason: item.reason, score: item.score }]
+      })
       setRelateResults(matched)
       if (!matched.length) toast.error('No matching entries found')
     } catch {
