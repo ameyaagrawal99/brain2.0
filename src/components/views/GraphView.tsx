@@ -36,7 +36,7 @@ import {
 } from 'lucide-react'
 import type { BrainRow, LinkType } from '@/types/sheet'
 import { LINK_TYPE_COLORS, LINK_TYPE_LABELS } from '@/types/sheet'
-import { extractWikiLinks, extractTypedLinks, serializeLink } from '@/lib/linkGraph'
+import { extractWikiLinks, extractTypedLinks, formatLink } from '@/lib/linkGraph'
 import { LinkPicker } from '@/components/ui/LinkPicker'
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -565,10 +565,10 @@ export function GraphView() {
 
   /* ── Add link (LinkPicker save) ── */
 
-  function handleLinkPickerConfirm(links: { row: BrainRow; type: LinkType }[]) {
+  function handleLinkPickerConfirm(links: { title: string; type: LinkType }[]) {
     if (!linkPickerFor) return
     const existing = linkPickerFor.row.links || ''
-    const newLinks = links.map((l) => serializeLink(l.row.title, l.type)).join(' ')
+    const newLinks = links.map((l) => formatLink(l.title, l.type)).join(' ')
     const merged = [existing.trim(), newLinks].filter(Boolean).join(' ')
     updateRowLocally(linkPickerFor.row._rowIndex, { links: merged })
     setLinkPickerFor(null)
@@ -1148,7 +1148,7 @@ export function GraphView() {
               <LinkPicker
                 excludeRowIndex={linkPickerFor.row._rowIndex}
                 onConfirm={handleLinkPickerConfirm}
-                onCancel={() => setLinkPickerFor(null)}
+                onClose={() => setLinkPickerFor(null)}
               />
             </div>
           </div>

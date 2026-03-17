@@ -248,7 +248,7 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
 
           <div className="flex items-center gap-1 shrink-0">
             {isAIEnhanced && (
-              <Sparkles className="w-3 h-3 text-brand/50" title="AI enhanced" />
+              <span title="AI enhanced"><Sparkles className="w-3 h-3 text-brand/50" /></span>
             )}
             {statusInfo ? (
               <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap leading-tight', statusInfo.cls)}>
@@ -329,7 +329,7 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
               </span>
             )}
             {linkCount.http > 0 && (
-              <ExternalLink className="w-2.5 h-2.5" title={`${linkCount.http} link(s)`} />
+              <span title={`${linkCount.http} link(s)`}><ExternalLink className="w-2.5 h-2.5" /></span>
             )}
             {row.dueDate && !isFormula(row.dueDate) ? (
               <span className={cn(
