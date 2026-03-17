@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { LayoutGrid, Table2, Kanban, Plus, Sparkles, X, FileText } from 'lucide-react'
+import { LayoutGrid, Table2, Kanban, Plus, Sparkles, X, FileText, LayoutDashboard } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
 import { ViewMode } from '@/types/sheet'
 
 const TABS: { mode: ViewMode; Icon: typeof LayoutGrid; label: string }[] = [
-  { mode: 'card',  Icon: LayoutGrid, label: 'Cards' },
-  { mode: 'table', Icon: Table2,     label: 'Table' },
-  { mode: 'board', Icon: Kanban,     label: 'Board' },
+  { mode: 'stats', Icon: LayoutDashboard, label: 'Home' },
+  { mode: 'card',  Icon: LayoutGrid,      label: 'Cards' },
+  { mode: 'board', Icon: Kanban,          label: 'Board' },
 ]
 
 export function BottomNav() {

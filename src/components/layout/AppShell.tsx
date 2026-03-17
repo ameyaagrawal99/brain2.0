@@ -21,9 +21,10 @@ import { DEMO_ROWS }          from '@/data/demoData'
 import { useConfettiCheck }   from '@/components/ui/Confetti'
 import { useNotifications }   from '@/hooks/useNotifications'
 import { fetchGoogleContacts } from '@/lib/contacts'
-import { getAccessToken }     from '@/lib/gsi'
+import { getAccessToken, onTokenReady } from '@/lib/gsi'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DashboardView } from '@/components/views/DashboardView'
 
 function MilestoneBanner() {
   const specialDays          = useBrainStore((s) => s.specialDays)
@@ -105,6 +106,12 @@ export function AppShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode])
 
+  // Re-run config (milestones, categories, tags) once a token becomes available
+  useEffect(() => {
+    if (demoMode) return
+    return onTokenReady(() => { refreshConfig().catch(() => {}) })
+  }, [demoMode, refreshConfig])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const action = params.get('action')
@@ -145,13 +152,15 @@ export function AppShell() {
       <PWAInstallBanner />
       <MilestoneBanner />
 
-      {/* Filter / search bar */}
-      <FilterBar />
+      {/* Filter / search bar — hidden on dashboard view */}
+      {viewMode !== 'stats' && <FilterBar />}
 
-      {/* Stats strip */}
-      <div className="sm:ml-14">
-        <StatsBar />
-      </div>
+      {/* Stats strip — hidden on dashboard view */}
+      {viewMode !== 'stats' && (
+        <div className="sm:ml-14">
+          <StatsBar />
+        </div>
+      )}
 
       {/* Sidebar panel (overlay) */}
       <Sidebar />
@@ -162,6 +171,7 @@ export function AppShell() {
         {viewMode === 'table' && <TableView />}
         {viewMode === 'board' && <TaskBoard />}
         {viewMode === 'graph' && <GraphView />}
+        {viewMode === 'stats' && <DashboardView />}
       </main>
 
       {/* Mobile bottom nav */}

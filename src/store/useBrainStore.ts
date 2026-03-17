@@ -411,6 +411,7 @@ export const useBrainStore = create<BrainStore>()(
         aiInstructions:    state.aiInstructions,
         categoryColors:    state.categoryColors,
         lastConfettiDate:  state.lastConfettiDate,
+        specialDays:       state.specialDays,
       }),
     }
   )

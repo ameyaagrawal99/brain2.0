@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutGrid, Table2, Kanban, GitBranch, Sparkles, Settings,
-  BarChart2, Calendar, Brain,
+  SlidersHorizontal, LayoutDashboard, Brain,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
@@ -16,10 +16,11 @@ interface NavItem {
 }
 
 const VIEWS: NavItem[] = [
-  { id: 'card',  icon: LayoutGrid, label: 'Cards',   mode: 'card' },
-  { id: 'table', icon: Table2,     label: 'Table',   mode: 'table' },
-  { id: 'board', icon: Kanban,     label: 'Board',   mode: 'board' },
-  { id: 'graph', icon: GitBranch,  label: 'Graph',   mode: 'graph' },
+  { id: 'stats', icon: LayoutDashboard, label: 'Dashboard', mode: 'stats' },
+  { id: 'card',  icon: LayoutGrid,      label: 'Cards',     mode: 'card' },
+  { id: 'table', icon: Table2,          label: 'Table',     mode: 'table' },
+  { id: 'board', icon: Kanban,          label: 'Board',     mode: 'board' },
+  { id: 'graph', icon: GitBranch,       label: 'Graph',     mode: 'graph' },
 ]
 
 interface TooltipProps { label: string; children: React.ReactNode }
@@ -106,9 +107,9 @@ export function NavRail() {
       {/* Divider */}
       <div className="my-2 w-6 h-px bg-border mx-auto" />
 
-      {/* Dashboard / sidebar */}
+      {/* Filters / sidebar */}
       <div className="flex flex-col gap-0.5 w-full px-2">
-        <Tooltip label="Dashboard">
+        <Tooltip label="Filters">
           <button
             onClick={() => setShowSidebar(!showSidebar)}
             className={cn(navBtnBase,
@@ -117,7 +118,7 @@ export function NavRail() {
                 : 'text-ink3 hover:bg-hover hover:text-ink'
             )}
           >
-            <BarChart2 className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
+            <SlidersHorizontal className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
             {hasSpecial && !showSidebar && (
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
             )}
