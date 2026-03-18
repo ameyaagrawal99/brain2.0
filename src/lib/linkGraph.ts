@@ -129,7 +129,12 @@ export function resolveLinkedRowsTyped(
   row: BrainRow,
   allRows: BrainRow[],
 ): LinkedRowWithType[] {
-  const titleMap = new Map(allRows.map((r) => [r.title?.toLowerCase().trim(), r]))
+  const titleMap = new Map(
+    allRows.flatMap((r) => {
+      const key = r.title?.toLowerCase().trim()
+      return key ? [[key, r] as const] : []
+    })
+  )
   const fields = [row.original, row.rewritten, row.actionItems, row.links]
   const seen = new Set<number>()
   const result: LinkedRowWithType[] = []

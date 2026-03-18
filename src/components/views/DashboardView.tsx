@@ -105,14 +105,14 @@ export function DashboardView() {
   /* ── Computed stats ──────────────────────────────────────────── */
   const stats = useMemo(() => {
     const total    = rows.length
-    const done     = rows.filter((r) => { const s = r.taskStatus.toLowerCase(); return s.includes('done') || s.includes('complete') }).length
-    const active   = rows.filter((r) => { const s = r.taskStatus.toLowerCase(); return s.includes('progress') || s.includes('review') }).length
-    const pending  = rows.filter((r) => r.taskStatus.toLowerCase() === 'pending').length
-    const overdue  = rows.filter((r) => r.dueDate && r.dueDate < today && !r.taskStatus.toLowerCase().includes('done') && !r.taskStatus.toLowerCase().includes('complete')).length
+    const ts       = (r: typeof rows[0]) => (r.taskStatus ?? '').toLowerCase()
+    const done     = rows.filter((r) => { const s = ts(r); return s.includes('done') || s.includes('complete') }).length
+    const active   = rows.filter((r) => { const s = ts(r); return s.includes('progress') || s.includes('review') }).length
+    const pending  = rows.filter((r) => ts(r) === 'pending').length
+    const overdue  = rows.filter((r) => r.dueDate && r.dueDate < today && !ts(r).includes('done') && !ts(r).includes('complete')).length
     const enhanced = rows.filter((r) => r.rewritten).length
-    const completion = rows.filter(r => r.taskStatus).length > 0
-      ? Math.round((done / rows.filter(r => r.taskStatus).length) * 100)
-      : 0
+    const withStatus = rows.filter(r => r.taskStatus).length
+    const completion = withStatus > 0 ? Math.round((done / withStatus) * 100) : 0
     return { total, done, active, pending, overdue, enhanced, completion }
   }, [rows, today])
 
@@ -126,8 +126,11 @@ export function DashboardView() {
   }, [rows, today])
 
   const overdue = useMemo(() => rows
-    .filter((r) => r.dueDate && r.dueDate < today && !r.taskStatus.toLowerCase().includes('done') && !r.taskStatus.toLowerCase().includes('complete'))
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .filter((r) => {
+      const s = (r.taskStatus ?? '').toLowerCase()
+      return r.dueDate && r.dueDate < today && !s.includes('done') && !s.includes('complete')
+    })
+    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
     .slice(0, 4),
   [rows, today])
 
@@ -176,7 +179,7 @@ export function DashboardView() {
     const ago7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
     return rows
       .filter(r => r.createdAt && r.createdAt >= ago7)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
       .slice(0, 5)
   }, [rows])
 

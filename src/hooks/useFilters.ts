@@ -9,7 +9,15 @@ export function useFilters() {
 
   const filteredRows = useMemo<BrainRow[]>(() => {
     const today = new Date().toISOString().slice(0, 10)
-    const q = filters.search.toLowerCase()
+    const q = (filters.search ?? '').toLowerCase()
+
+    // Defensive guards: old persisted state may be missing fields added later
+    const categories    = filters.categories    ?? []
+    const subCategories = filters.subCategories ?? []
+    const statuses      = filters.statuses      ?? []
+    const selectedTags  = filters.selectedTags  ?? []
+    const persons       = filters.persons       ?? []
+    const tagMatchMode  = filters.tagMatchMode  ?? 'and'
 
     let result = rows.filter((r) => {
       // ── Full-text search ─────────────────────────────────────────────
@@ -20,19 +28,19 @@ export function useFilters() {
       }
 
       // ── Categories (multi-select OR) ──────────────────────────────────
-      if (filters.categories.length > 0) {
-        if (!filters.categories.includes(r.category)) return false
+      if (categories.length > 0) {
+        if (!categories.includes(r.category)) return false
       }
 
       // ── Sub-categories (multi-select OR) ─────────────────────────────
-      if (filters.subCategories.length > 0) {
-        if (!filters.subCategories.includes(r.subCategory)) return false
+      if (subCategories.length > 0) {
+        if (!subCategories.includes(r.subCategory)) return false
       }
 
       // ── Statuses (multi-select OR) ────────────────────────────────────
-      if (filters.statuses.length > 0) {
-        const s = r.taskStatus.toLowerCase()
-        const match = filters.statuses.some((status) => {
+      if (statuses.length > 0) {
+        const s = (r.taskStatus ?? '').toLowerCase()
+        const match = statuses.some((status) => {
           if (status === 'done')     return s.includes('done') || s.includes('complete')
           if (status === 'progress') return s.includes('progress') || s.includes('doing')
           if (status === 'pending')  return !s.includes('done') && !s.includes('complete') && !s.includes('progress') && !s.includes('doing')
@@ -44,14 +52,14 @@ export function useFilters() {
       }
 
       // ── Tags (multi-select AND / OR based on tagMatchMode) ────────────
-      if (filters.selectedTags.length > 0) {
+      if (selectedTags.length > 0) {
         const rowTags = parseTags(r.tags)
-        if (filters.tagMatchMode === 'and') {
-          for (const t of filters.selectedTags) {
+        if (tagMatchMode === 'and') {
+          for (const t of selectedTags) {
             if (!rowTags.includes(t)) return false
           }
         } else {
-          if (!filters.selectedTags.some((t) => rowTags.includes(t))) return false
+          if (!selectedTags.some((t) => rowTags.includes(t))) return false
         }
       }
 
@@ -68,9 +76,9 @@ export function useFilters() {
       }
 
       // ── Persons (multi-select OR) ────────────────────────────────────
-      if (filters.persons.length > 0) {
+      if (persons.length > 0) {
         const rowPeople = (r.people ?? '').split(',').map((n) => n.trim().toLowerCase())
-        const match = filters.persons.some((p) => rowPeople.includes(p.toLowerCase()))
+        const match = persons.some((p) => rowPeople.includes(p.toLowerCase()))
         if (!match) return false
       }
 
@@ -117,22 +125,22 @@ export function useFilters() {
 
   const hasActiveFilters = !!(
     filters.search ||
-    filters.categories.length > 0 ||
-    filters.subCategories.length > 0 ||
-    filters.statuses.length > 0 ||
-    filters.persons.length > 0 ||
-    filters.selectedTags.length > 0 ||
+    (filters.categories    ?? []).length > 0 ||
+    (filters.subCategories ?? []).length > 0 ||
+    (filters.statuses      ?? []).length > 0 ||
+    (filters.persons       ?? []).length > 0 ||
+    (filters.selectedTags  ?? []).length > 0 ||
     filters.showToday ||
     filters.dateFrom ||
     filters.dateTo
   )
 
   const activeFilterCount =
-    filters.categories.length +
-    filters.subCategories.length +
-    filters.statuses.length +
-    filters.persons.length +
-    filters.selectedTags.length +
+    (filters.categories    ?? []).length +
+    (filters.subCategories ?? []).length +
+    (filters.statuses      ?? []).length +
+    (filters.persons       ?? []).length +
+    (filters.selectedTags  ?? []).length +
     (filters.dateFrom || filters.dateTo ? 1 : 0)
 
   return { filteredRows, categories, subCategories, topTags, allPeople, hasActiveFilters, activeFilterCount }
