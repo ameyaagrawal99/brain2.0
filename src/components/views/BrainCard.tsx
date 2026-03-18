@@ -219,7 +219,7 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
             alt={row.title}
             className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
             loading="lazy"
-            onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
+            onError={(e) => { const p = (e.target as HTMLImageElement).parentElement; if (p) p.style.display = 'none' }}
           />
         </div>
       )}

@@ -412,6 +412,21 @@ export const useBrainStore = create<BrainStore>()(
     }),
     {
       name: 'brain2-store',
+      version: 1,
+      /**
+       * Deep-merge persisted state so any new fields added to DEFAULT_FILTERS
+       * (persons, selectedTags, tagMatchMode, etc.) get their defaults even if
+       * the user has older stored data that pre-dates those fields.
+       * Without this, .length / .includes on undefined arrays crashes the app.
+       */
+      merge: (persistedState, currentState) => {
+        const ps = (persistedState ?? {}) as Partial<typeof currentState>
+        return {
+          ...currentState,
+          ...ps,
+          filters: { ...DEFAULT_FILTERS, ...(ps.filters ?? {}) },
+        }
+      },
       partialize: (state) => ({
         settings:          state.settings,
         viewMode:          state.viewMode,
