@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { memo, useState, useRef, useEffect } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
 import {
@@ -8,10 +8,13 @@ import {
 import { CheckSquare2, ExternalLink, Calendar, Check, Link2, Clock, Sparkles } from 'lucide-react'
 import { stripMarkdown } from '@/lib/markdown'
 import { LinkPicker } from '@/components/ui/LinkPicker'
-import { useSheetSync } from '@/hooks/useSheetSync'
+import { updateRow } from '@/lib/sheets'
 import { formatLink, extractTypedLinks } from '@/lib/linkGraph'
 import type { LinkType } from '@/types/sheet'
 import toast from 'react-hot-toast'
+
+// Suppress unused import warning — CheckSquare2 kept for icon consistency
+void CheckSquare2
 
 function isFormula(v: string): boolean {
   if (!v) return false
@@ -84,16 +87,14 @@ interface BrainCardProps {
   dragHandle?: React.ReactNode
 }
 
-export function BrainCard({ row, dragHandle }: BrainCardProps) {
+export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardProps) {
   const openModal           = useBrainStore((s) => s.openModal)
   const searchQuery         = useBrainStore((s) => s.filters.search)
   const categoryColors      = useBrainStore((s) => s.categoryColors)
   const selectionMode       = useBrainStore((s) => s.selectionMode)
-  const selectedCardIndices = useBrainStore((s) => s.selectedCardIndices)
+  // Per-card selector: only re-renders THIS card when ITS selection changes
+  const isSelected          = useBrainStore((s) => s.selectedCardIndices.includes(row._rowIndex))
   const toggleCardSelection = useBrainStore((s) => s.toggleCardSelection)
-  const isSelected          = selectedCardIndices.includes(row._rowIndex)
-
-  const { saveRow } = useSheetSync()
 
   const [showLinkPicker, setShowLinkPicker] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -127,7 +128,9 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
     ? { done: actionItems.filter(i => i.done).length, total: actionItems.length }
     : null
 
-  const tags     = parseTags(row.tags).slice(0, 3)
+  // Parse tags once — used for both display and count
+  const allTags  = parseTags(row.tags)
+  const tags     = allTags.slice(0, 3)
   const hasImage = row.mediaUrl && isImageUrl(row.mediaUrl)
   const hasSearch = !!searchQuery?.trim()
 
@@ -168,8 +171,17 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
     const updatedLinks = [currentLinks, ...newRefs].filter(Boolean).join('\n')
     setSaving(true)
     try {
-      await saveRow(row._rowIndex, { links: updatedLinks }, 'Link')
-      toast.success(`${newRefs.length} link${newRefs.length !== 1 ? 's' : ''} added`)
+      // Read rows lazily from store to avoid subscribing to rows in every card
+      const rows = useBrainStore.getState().rows
+      const existing = rows.find((r) => r._rowIndex === row._rowIndex)
+      if (existing) {
+        const updated = { ...existing, links: updatedLinks, updatedAt: new Date().toISOString() }
+        useBrainStore.getState().updateRowLocally(row._rowIndex, { links: updatedLinks })
+        await updateRow(updated)
+        toast.success(`${newRefs.length} link${newRefs.length !== 1 ? 's' : ''} added`)
+      }
+    } catch {
+      toast.error('Failed to save link')
     } finally {
       setSaving(false)
       setShowLinkPicker(false)
@@ -316,8 +328,8 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
                 #{t}
               </span>
             ))}
-            {parseTags(row.tags).length > 3 && (
-              <span className="text-[10px] text-ink3 shrink-0">+{parseTags(row.tags).length - 3}</span>
+            {allTags.length > 3 && (
+              <span className="text-[10px] text-ink3 shrink-0">+{allTags.length - 3}</span>
             )}
           </div>
 
@@ -387,4 +399,4 @@ export function BrainCard({ row, dragHandle }: BrainCardProps) {
       </div>
     </div>
   )
-}
+})

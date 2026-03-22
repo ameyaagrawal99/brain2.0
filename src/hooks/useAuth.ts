@@ -1,16 +1,17 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
-import { initTokenClient, requestToken, revokeToken, hasSessionHint } from '@/lib/gsi'
+import { initTokenClient, requestToken, revokeToken, hasSessionHint, initOneTapFallback } from '@/lib/gsi'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 
-/** Max number of silent re-auth retries before giving up and showing login */
-const MAX_SILENT_RETRIES = 2
+/** Max number of silent re-auth retries before falling back to One Tap */
+const MAX_SILENT_RETRIES = 3
 
 export function useAuth() {
   const { setAuthState } = useBrainStore()
   const initialized       = useRef(false)
   const silentRetryCount  = useRef(0)
+  const oneTapTriggered   = useRef(false)
 
   useEffect(() => {
     if (!CLIENT_ID) {
@@ -18,13 +19,13 @@ export function useAuth() {
       return
     }
 
-    // Returning users get a longer grace period (up to 20s) so retries can complete.
+    // Returning users get a longer grace period (up to 25s) so retries + One Tap can complete.
     const isReturning = hasSessionHint()
     const timeout = setTimeout(() => {
       if (!initialized.current) {
         setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
       }
-    }, isReturning ? 20_000 : 10_000)
+    }, isReturning ? 25_000 : 10_000)
 
     // Poll until GSI script loads
     const interval = setInterval(() => {
@@ -40,10 +41,9 @@ export function useAuth() {
           if (useBrainStore.getState().authState.isAuthenticated) return
 
           // Returning users: retry silent auth before showing login screen.
-          // First silent attempt sometimes fails due to iframe timing or network hiccups.
           if (hasSessionHint() && silentRetryCount.current < MAX_SILENT_RETRIES) {
             silentRetryCount.current++
-            const delay = silentRetryCount.current * 1500  // 1.5s, 3s
+            const delay = silentRetryCount.current * 1500  // 1.5s, 3s, 4.5s
             console.log(`[Auth] Silent auth failed, retrying in ${delay}ms (attempt ${silentRetryCount.current}/${MAX_SILENT_RETRIES})`)
             setTimeout(() => {
               if (!useBrainStore.getState().authState.isAuthenticated) {
@@ -51,6 +51,24 @@ export function useAuth() {
               }
             }, delay)
             return  // keep loading spinner while retry is in flight
+          }
+
+          // All silent retries exhausted — try One Tap as final fallback.
+          // One Tap uses FedCM (no third-party cookies needed), making it more
+          // reliable than the hidden iframe approach used by prompt:'none'.
+          if (hasSessionHint() && !oneTapTriggered.current && google?.accounts?.id) {
+            oneTapTriggered.current = true
+            console.log('[Auth] Attempting One Tap fallback…')
+            initOneTapFallback(CLIENT_ID, () => {
+              // One Tap fired the callback — the token request is now in-flight.
+              // Give it time to resolve before potentially showing login.
+              setTimeout(() => {
+                if (!useBrainStore.getState().authState.isAuthenticated) {
+                  setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
+                }
+              }, 5000)
+            })
+            return  // keep loading while One Tap is in progress
           }
 
           setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
@@ -69,7 +87,7 @@ export function useAuth() {
               setAuthState({ isAuthenticated: false, token: null, error, loading: false })
             }
           },
-          // Silent failure: no active session — retry for returning users, then show login.
+          // Silent failure: no active session — retry for returning users, then try One Tap.
           safeSignOut,
         )
 

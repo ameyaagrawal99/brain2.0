@@ -272,7 +272,7 @@ export function FilterBar() {
             className="w-full h-8 pl-8 pr-8 text-sm bg-surface2 border border-border rounded-lg
               text-ink placeholder:text-ink3
               focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand
-              transition-all"
+              transition-[border-color,box-shadow]"
           />
           {localSearch ? (
             <button onClick={() => { setLocalSearch(''); setSearch('') }}

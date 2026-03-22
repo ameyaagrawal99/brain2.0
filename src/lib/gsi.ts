@@ -12,16 +12,40 @@ let _refreshTimer: ReturnType<typeof setTimeout> | null = null
  * silently re-authenticated, so the app shows "Reconnecting…" instead
  * of immediately jumping to the login screen.
  */
-const SESSION_KEY = 'brain2_session'
+const SESSION_KEY    = 'brain2_session'
+const LOGIN_HINT_KEY = 'brain2_login_hint'
 
 export function setSessionHint(): void {
   try { localStorage.setItem(SESSION_KEY, '1') } catch { /* ignore */ }
 }
 export function clearSessionHint(): void {
-  try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+  try {
+    localStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(LOGIN_HINT_KEY)
+  } catch { /* ignore */ }
 }
 export function hasSessionHint(): boolean {
   try { return localStorage.getItem(SESSION_KEY) === '1' } catch { return false }
+}
+
+/** Store user's email so it can be used as login_hint for silent re-auth */
+export function setLoginHint(email: string): void {
+  try { if (email) localStorage.setItem(LOGIN_HINT_KEY, email) } catch { /* ignore */ }
+}
+export function getLoginHint(): string | null {
+  try { return localStorage.getItem(LOGIN_HINT_KEY) } catch { return null }
+}
+
+/**
+ * Decode a JWT payload (no signature verification — only used for display/hints).
+ */
+function decodeJwtPayload(jwt: string): Record<string, string> {
+  try {
+    const base64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(base64))
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -80,6 +104,8 @@ export function initTokenClient(
       scheduleTokenRefresh(response.expires_in)
       onToken(response.access_token)
       tokenListeners.forEach((fn) => fn(response.access_token))
+      // Fetch user email for future login_hint after a short delay
+      _fetchAndStoreLoginHint(response.access_token)
     },
     error_callback: (err: ErrorResponse) => {
       const wasSilent = _pendingSilentCount > 0
@@ -97,10 +123,84 @@ export function initTokenClient(
   return true
 }
 
+/**
+ * After getting a token, fetch the user's email from Google and store it
+ * as a login_hint. This dramatically improves silent re-auth on page refresh.
+ */
+async function _fetchAndStoreLoginHint(token: string): Promise<void> {
+  // Skip if we already have a hint stored
+  if (getLoginHint()) return
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      const data = await res.json() as { email?: string }
+      if (data.email) {
+        setLoginHint(data.email)
+        console.log('[GSI] Stored login_hint for future silent auth')
+      }
+    }
+  } catch {
+    /* non-fatal */
+  }
+}
+
 export function requestToken(silent = false) {
   if (!tokenClient) throw new Error('Token client not initialized')
   if (silent) _pendingSilentCount++
-  tokenClient.requestAccessToken({ prompt: silent ? 'none' : '' })
+  const hint = getLoginHint()
+  tokenClient.requestAccessToken({
+    prompt: silent ? 'none' : '',
+    // login_hint tells GIS which account to use — skips account picker and
+    // improves silent auth success rate (especially with FedCM/no 3rd-party cookies)
+    ...(hint ? { login_hint: hint } : {}),
+  })
+}
+
+/**
+ * Initialise Google One Tap as a fallback for silent re-authentication.
+ * One Tap uses FedCM in Chrome (no third-party cookies needed) and provides
+ * a credential (ID token) that we decode to extract the user's email, which
+ * is then stored as a login_hint and used for the OAuth access token request.
+ *
+ * This is called when the initial silent token request fails — One Tap can
+ * re-establish the session without requiring a full login popup.
+ */
+export function initOneTapFallback(
+  clientId: string,
+  onTokenObtained: () => void,
+): void {
+  if (!google?.accounts?.id) return
+  const hint = getLoginHint()
+  google.accounts.id.initialize({
+    client_id: clientId,
+    auto_select: true,
+    cancel_on_tap_outside: false,
+    ...(hint ? { login_hint: hint } : {}),
+    callback: (credentialResponse: CredentialResponse) => {
+      // Decode the credential JWT to get the email
+      const payload = decodeJwtPayload(credentialResponse.credential)
+      if (payload.email) {
+        setLoginHint(payload.email)
+        console.log('[GSI] One Tap credential received, stored login_hint:', payload.email)
+      }
+      // Now request an access token using the hint — this should succeed silently
+      // since the user just authenticated via One Tap
+      _pendingSilentCount++
+      tokenClient?.requestAccessToken({
+        prompt: 'none',
+        ...(payload.email ? { login_hint: payload.email } : {}),
+      })
+      onTokenObtained()
+    },
+  })
+  // Prompt for One Tap — if auto_select matches a known account, it fires automatically
+  google.accounts.id.prompt((notification) => {
+    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+      console.log('[GSI] One Tap not displayed or skipped')
+    }
+  })
 }
 
 export function getAccessToken(): string | null {
@@ -120,6 +220,8 @@ export function revokeToken() {
     accessToken = null
     tokenExpiry = 0
   })
+  // Cancel any pending One Tap prompt
+  try { google.accounts.id.cancel() } catch { /* ignore */ }
 }
 
 /**

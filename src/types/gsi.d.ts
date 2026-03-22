@@ -1,5 +1,5 @@
 interface TokenClient {
-  requestAccessToken(options?: { prompt?: string }): void;
+  requestAccessToken(options?: { prompt?: string; login_hint?: string }): void;
 }
 
 interface TokenResponse {
@@ -15,6 +15,19 @@ interface ErrorResponse {
   message?: string;
 }
 
+interface CredentialResponse {
+  credential: string;
+  select_by: string;
+}
+
+interface IdConfiguration {
+  client_id: string;
+  callback: (response: CredentialResponse) => void;
+  auto_select?: boolean;
+  cancel_on_tap_outside?: boolean;
+  login_hint?: string;
+}
+
 interface Google {
   accounts: {
     oauth2: {
@@ -25,6 +38,11 @@ interface Google {
         error_callback?: (error: ErrorResponse) => void;
       }): TokenClient;
       revoke(token: string, callback: () => void): void;
+    };
+    id: {
+      initialize(config: IdConfiguration): void;
+      prompt(momentListener?: (notification: { isNotDisplayed(): boolean; isSkippedMoment(): boolean }) => void): void;
+      cancel(): void;
     };
   };
 }
