@@ -275,6 +275,9 @@ mark {
   overflow: hidden;
   min-width: 0;
   will-change: transform;
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 200px;
 }
 
 .brain-card:hover {

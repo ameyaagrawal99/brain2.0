@@ -85,17 +85,28 @@ export function useFilters() {
       return true
     })
 
-    result = [...result].sort((a, b) => {
-      switch (filters.sortBy) {
-        case 'date-desc': return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-        case 'date-asc':  return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-        case 'title-asc': return a.title.localeCompare(b.title)
-        case 'cat-asc':   return a.category.localeCompare(b.category)
-        case 'num-asc':   return parseFloat(a.srNo || '0') - parseFloat(b.srNo || '0')
-        case 'num-desc':  return parseFloat(b.srNo || '0') - parseFloat(a.srNo || '0')
-        default: return 0
-      }
-    })
+    // Precompute sort keys once — avoids repeated new Date() / parseFloat() in comparator
+    if (filters.sortBy === 'date-desc' || filters.sortBy === 'date-asc') {
+      const ts = new Map(result.map((r) => [r._rowIndex, r.createdAt ? new Date(r.createdAt).getTime() : 0]))
+      result = [...result].sort((a, b) =>
+        filters.sortBy === 'date-desc'
+          ? (ts.get(b._rowIndex) ?? 0) - (ts.get(a._rowIndex) ?? 0)
+          : (ts.get(a._rowIndex) ?? 0) - (ts.get(b._rowIndex) ?? 0)
+      )
+    } else if (filters.sortBy === 'num-asc' || filters.sortBy === 'num-desc') {
+      const ns = new Map(result.map((r) => [r._rowIndex, parseFloat(r.srNo || '0')]))
+      result = [...result].sort((a, b) =>
+        filters.sortBy === 'num-asc'
+          ? (ns.get(a._rowIndex) ?? 0) - (ns.get(b._rowIndex) ?? 0)
+          : (ns.get(b._rowIndex) ?? 0) - (ns.get(a._rowIndex) ?? 0)
+      )
+    } else {
+      result = [...result].sort((a, b) => {
+        if (filters.sortBy === 'title-asc') return a.title.localeCompare(b.title)
+        if (filters.sortBy === 'cat-asc')   return a.category.localeCompare(b.category)
+        return 0
+      })
+    }
     return result
   }, [rows, filters])
 

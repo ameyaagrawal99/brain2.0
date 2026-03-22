@@ -162,6 +162,15 @@ export function NewRowModal() {
       onClick={(e) => e.target === e.currentTarget && close()}
     >
       <div className="bg-surface border border-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg shadow-xl animate-slideUp">
+        {/* Mobile drag-handle pill — tap to close */}
+        <button
+          onClick={close}
+          aria-label="Close"
+          className="sm:hidden flex items-center justify-center w-full pt-3 pb-1"
+        >
+          <span className="w-10 h-1 rounded-full bg-border2" />
+        </button>
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
