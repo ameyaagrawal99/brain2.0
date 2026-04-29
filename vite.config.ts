@@ -121,11 +121,18 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          dnd:    ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
-          store:  ['zustand'],
-          ai:     ['openai'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+            return 'react-vendor'
+          }
+
+          if (id.includes('/@dnd-kit/')) return 'dnd'
+          if (id.includes('/zustand/')) return 'store'
+          if (id.includes('/react-hot-toast/')) return 'toast'
+
+          return 'vendor'
         },
       },
     },
