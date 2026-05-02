@@ -5,6 +5,16 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { EditableFields, SpecialDay } from '@/types/sheet'
 import toast from 'react-hot-toast'
 
+const CONFIG_READY_KEY = 'brain2_config_sheet_ready'
+
+function hasConfigReadyHint(): boolean {
+  try { return localStorage.getItem(CONFIG_READY_KEY) === '1' } catch { return false }
+}
+
+function setConfigReadyHint(): void {
+  try { localStorage.setItem(CONFIG_READY_KEY, '1') } catch { /* ignore */ }
+}
+
 // Internal helper: extract all editable fields from a BrainRow as a snapshot
 function rowToEditableSnapshot(row: ReturnType<typeof useBrainStore.getState>['rows'][number]): Partial<EditableFields> {
   return {
@@ -59,7 +69,10 @@ export function useSheetSync() {
 
   const refreshConfig = useCallback(async () => {
     try {
-      await ensureConfigSheet()
+      if (!hasConfigReadyHint()) {
+        await ensureConfigSheet()
+        setConfigReadyHint()
+      }
       const [{ categories, tags, colors }, specialDays] = await Promise.all([
         fetchConfig(),
         fetchSpecialDays(),

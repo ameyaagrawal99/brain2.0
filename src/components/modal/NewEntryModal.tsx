@@ -5,6 +5,7 @@ import { LinkPicker, LinkTypeBadge, LINK_TYPE_COLORS } from '@/components/ui/Lin
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
+import { useGoogleContacts } from '@/hooks/useGoogleContacts'
 import { parsePeople } from '@/lib/contacts'
 import { parseTags } from '@/lib/utils'
 import { formatLink } from '@/lib/linkGraph'
@@ -147,11 +148,15 @@ function TagsInput({
 }
 
 function PeopleInput({
-  value, onChange, suggestions,
+  value, onChange, suggestions, contactsConnected, contactsLoading, onLoadContacts, onPrimeContacts,
 }: {
   value: string
   onChange: (v: string) => void
   suggestions: string[]
+  contactsConnected: boolean
+  contactsLoading: boolean
+  onLoadContacts: () => void
+  onPrimeContacts: () => void
 }) {
   const [inputVal, setInputVal] = useState('')
   const [showSug, setShowSug]   = useState(false)
@@ -202,7 +207,7 @@ function PeopleInput({
           value={inputVal}
           onChange={(e) => { setInputVal(e.target.value); setShowSug(true) }}
           onKeyDown={handleKey}
-          onFocus={() => setShowSug(true)}
+          onFocus={() => { setShowSug(true); onPrimeContacts() }}
           onBlur={() => setTimeout(() => setShowSug(false), 150)}
           placeholder={people.length === 0 ? 'Add people…' : ''}
           className="flex-1 min-w-[80px] text-sm bg-transparent text-ink placeholder:text-ink3 focus:outline-none"
@@ -223,6 +228,19 @@ function PeopleInput({
           ))}
         </div>
       )}
+      {showSug && filtered.length === 0 && !contactsConnected && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-full bg-surface border border-border rounded-xl shadow-xl overflow-hidden">
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); onLoadContacts() }}
+            disabled={contactsLoading}
+            className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-hover flex items-center gap-2 disabled:opacity-60"
+          >
+            <Users className="w-3.5 h-3.5 text-brand shrink-0" />
+            {contactsLoading ? 'Loading Google contacts…' : 'Load Google contacts'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -232,10 +250,16 @@ export function NewEntryModal() {
   const setShowNewRow = useBrainStore((s) => s.setShowNewRow)
   const settings      = useBrainStore((s) => s.settings)
   const allRows       = useBrainStore((s) => s.rows)
-  const contacts      = useBrainStore((s) => s.contacts)
   const customTags    = useBrainStore((s) => s.customTags)
   const { createRow } = useSheetSync()
   const { run: runAI, loading: aiLoading } = useAI()
+  const {
+    contacts,
+    contactsConnected,
+    contactsLoading,
+    loadSilentlyIfAvailable,
+    requestContacts,
+  } = useGoogleContacts()
 
   const [form, setForm]               = useState<NewEntryForm>(BLANK)
   const [saving, setSaving]           = useState(false)
@@ -440,6 +464,10 @@ export function NewEntryModal() {
                 value={form.people}
                 onChange={(v) => patch('people', v)}
                 suggestions={allPeopleNames}
+                contactsConnected={contactsConnected}
+                contactsLoading={contactsLoading}
+                onLoadContacts={requestContacts}
+                onPrimeContacts={loadSilentlyIfAvailable}
               />
             </div>
           </div>

@@ -12,22 +12,18 @@ export function LoginScreen() {
   const { signIn } = useAuth()
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6 relative overflow-hidden">
-
-      {/* Ambient background orbs */}
-      <div className="pointer-events-none absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-500/8 blur-3xl" />
-      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-brand/4 blur-3xl" />
+    <div className="app-safe-screen bg-bg flex flex-col items-center justify-center p-5 sm:p-6 relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-brand/10 to-transparent" />
 
       <div className="w-full max-w-md relative z-10 animate-fadeIn">
 
         {/* Logo + hero */}
-        <div className="flex flex-col items-center mb-10 text-center">
+        <div className="flex flex-col items-center mb-8 text-center">
           <div className="relative mb-5">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand/20 to-purple-500/20 border border-brand/20 flex items-center justify-center shadow-xl shadow-brand/10">
+            <div className="w-20 h-20 rounded-2xl bg-surface border border-border flex items-center justify-center shadow-lg shadow-brand/10">
               <BookOpen className="w-10 h-10 text-brand" />
             </div>
-            <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-brand to-purple-500 flex items-center justify-center shadow-sm">
+            <div className="absolute -top-1 -right-1 w-6 h-6 rounded-lg bg-brand flex items-center justify-center shadow-sm">
               <Sparkles className="w-3 h-3 text-white" />
             </div>
           </div>
@@ -42,9 +38,9 @@ export function LoginScreen() {
           {FEATURES.map(({ icon: Icon, label, desc }) => (
             <div
               key={label}
-              className="flex items-start gap-3 p-3.5 rounded-2xl bg-surface border border-border shadow-sm hover:border-brand/30 transition-colors"
+              className="flex items-start gap-3 p-3 rounded-xl bg-surface border border-border shadow-sm hover:border-brand/30 transition-colors"
             >
-              <div className="w-8 h-8 rounded-xl bg-brand/10 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center shrink-0 mt-0.5">
                 <Icon className="w-4 h-4 text-brand" />
               </div>
               <div>
@@ -58,7 +54,7 @@ export function LoginScreen() {
         {/* Sign-in button */}
         <button
           onClick={signIn}
-          className="w-full group flex items-center justify-center gap-3 h-12 px-5 bg-surface border border-border rounded-2xl text-sm font-semibold text-ink hover:border-brand/40 hover:bg-brand/5 transition-all shadow-sm hover:shadow-md"
+          className="w-full group flex items-center justify-center gap-3 h-12 px-5 bg-ink text-white border border-ink rounded-xl text-sm font-semibold hover:bg-brand hover:border-brand transition-all shadow-md shadow-brand/10"
         >
           <svg width="20" height="20" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -66,8 +62,8 @@ export function LoginScreen() {
             <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
             <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
           </svg>
-          Continue with Google
-          <ArrowRight className="w-4 h-4 text-ink3 group-hover:text-brand group-hover:translate-x-0.5 transition-all ml-auto" />
+          <span className="flex-1 text-left">Continue with Google</span>
+          <ArrowRight className="w-4 h-4 text-white/70 group-hover:translate-x-0.5 transition-all" />
         </button>
 
         <p className="text-center text-[11px] text-ink3 mt-5 leading-relaxed">

@@ -1,30 +1,38 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Header }             from './Header'
 import { NavRail }            from './NavRail'
 import { FilterBar }          from './FilterBar'
 import { StatsBar }           from './StatsBar'
 import { BottomNav }          from './BottomNav'
 import { Sidebar }            from './Sidebar'
-import { CardView }           from '@/components/views/CardView'
-import { TableView }          from '@/components/views/TableView'
-import { TaskBoard }          from '@/components/views/TaskBoard'
-import { GraphView }          from '@/components/views/GraphView'
-import { DetailModal }        from '@/components/modal/DetailModal'
-import { NewRowModal }        from '@/components/modal/NewRowModal'
-import { MilestoneModal }     from '@/components/modal/MilestoneModal'
-import { SettingsPanel }      from '@/components/modal/SettingsPanel'
-import { AIPanel }            from '@/components/modal/AIPanel'
 import { PWAInstallBanner }   from '@/components/ui/PWAInstallBanner'
 import { useBrainStore }      from '@/store/useBrainStore'
 import { useSheetSync }       from '@/hooks/useSheetSync'
 import { DEMO_ROWS }          from '@/data/demoData'
 import { useConfettiCheck }   from '@/components/ui/Confetti'
 import { useNotifications }   from '@/hooks/useNotifications'
-import { fetchGoogleContacts } from '@/lib/contacts'
-import { getAccessToken, onTokenReady } from '@/lib/gsi'
+import { onTokenReady } from '@/lib/gsi'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DashboardView } from '@/components/views/DashboardView'
+
+const CardView = lazy(() => import('@/components/views/CardView').then((m) => ({ default: m.CardView })))
+const TableView = lazy(() => import('@/components/views/TableView').then((m) => ({ default: m.TableView })))
+const TaskBoard = lazy(() => import('@/components/views/TaskBoard').then((m) => ({ default: m.TaskBoard })))
+const GraphView = lazy(() => import('@/components/views/GraphView').then((m) => ({ default: m.GraphView })))
+const DashboardView = lazy(() => import('@/components/views/DashboardView').then((m) => ({ default: m.DashboardView })))
+const DetailModal = lazy(() => import('@/components/modal/DetailModal').then((m) => ({ default: m.DetailModal })))
+const NewRowModal = lazy(() => import('@/components/modal/NewRowModal').then((m) => ({ default: m.NewRowModal })))
+const MilestoneModal = lazy(() => import('@/components/modal/MilestoneModal').then((m) => ({ default: m.MilestoneModal })))
+const SettingsPanel = lazy(() => import('@/components/modal/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
+const AIPanel = lazy(() => import('@/components/modal/AIPanel').then((m) => ({ default: m.AIPanel })))
+
+function ShellFallback() {
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="h-28 rounded-xl border border-border bg-surface animate-pulse" />
+    </div>
+  )
+}
 
 function MilestoneBanner() {
   const specialDays          = useBrainStore((s) => s.specialDays)
@@ -87,24 +95,12 @@ export function AppShell() {
   const selectedMilestone   = useBrainStore((s) => s.selectedMilestone)
   const showNewMilestone    = useBrainStore((s) => s.showNewMilestone)
   const setShowNewMilestone = useBrainStore((s) => s.setShowNewMilestone)
-  const setContacts         = useBrainStore((s) => s.setContacts)
-  const setContactsConnected = useBrainStore((s) => s.setContactsConnected)
 
   const { refresh, refreshConfig } = useSheetSync()
   const hasLoadedRef = useRef(false)
 
   useConfettiCheck()
   useNotifications()
-
-  useEffect(() => {
-    if (demoMode) return
-    const token = getAccessToken()
-    if (!token) return
-    fetchGoogleContacts(token).then((contacts) => {
-      if (contacts.length > 0) { setContacts(contacts); setContactsConnected(true) }
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoMode])
 
   // Re-run config (milestones, categories, tags) once a token becomes available
   useEffect(() => {
@@ -141,7 +137,7 @@ export function AppShell() {
   }, [selectedRow, showNewRow, showSettings, showAIPanel, selectedMilestone, showNewMilestone])
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="app-safe-screen bg-bg">
       {/* Desktop nav rail */}
       <NavRail />
 
@@ -167,11 +163,13 @@ export function AppShell() {
 
       {/* Main content */}
       <main className="sm:ml-14 pb-20 sm:pb-8 min-h-[calc(100vh-200px)]">
-        {viewMode === 'card'  && <CardView />}
-        {viewMode === 'table' && <TableView />}
-        {viewMode === 'board' && <TaskBoard />}
-        {viewMode === 'graph' && <GraphView />}
-        {viewMode === 'stats' && <DashboardView />}
+        <Suspense fallback={<ShellFallback />}>
+          {viewMode === 'card'  && <CardView />}
+          {viewMode === 'table' && <TableView />}
+          {viewMode === 'board' && <TaskBoard />}
+          {viewMode === 'graph' && <GraphView />}
+          {viewMode === 'stats' && <DashboardView />}
+        </Suspense>
       </main>
 
       {/* Mobile bottom nav */}
@@ -200,11 +198,13 @@ export function AppShell() {
         </div>
       )}
 
-      <DetailModal />
-      <NewRowModal />
-      <MilestoneModal />
-      <SettingsPanel />
-      <AIPanel />
+      <Suspense fallback={null}>
+        {selectedRow && <DetailModal />}
+        {showNewRow && <NewRowModal />}
+        {(selectedMilestone || showNewMilestone) && <MilestoneModal />}
+        {showSettings && <SettingsPanel />}
+        {showAIPanel && <AIPanel />}
+      </Suspense>
     </div>
   )
 }

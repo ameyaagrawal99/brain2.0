@@ -5,6 +5,7 @@ let accessToken: string | null = null
 let tokenExpiry = 0
 let _pendingSilentCount = 0  // number of in-flight silent requests
 let _refreshTimer: ReturnType<typeof setTimeout> | null = null
+let _gisScriptPromise: Promise<void> | null = null
 
 /* ── Session hint ────────────────────────────────────────────────────────
  * A lightweight localStorage flag that survives page refreshes.
@@ -34,6 +35,30 @@ export function setLoginHint(email: string): void {
 }
 export function getLoginHint(): string | null {
   try { return localStorage.getItem(LOGIN_HINT_KEY) } catch { return null }
+}
+
+export function loadGisScript(): Promise<void> {
+  if (typeof google !== 'undefined' && google?.accounts?.oauth2) return Promise.resolve()
+  if (_gisScriptPromise) return _gisScriptPromise
+
+  _gisScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener('error', () => reject(new Error('Failed to load Google Identity Services')), { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load Google Identity Services'))
+    document.head.appendChild(script)
+  })
+
+  return _gisScriptPromise
 }
 
 /**

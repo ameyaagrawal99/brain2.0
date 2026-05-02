@@ -8,6 +8,7 @@ import { LinkPicker, LinkTypeBadge } from '@/components/ui/LinkPicker'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { useAI } from '@/hooks/useAI'
+import { useGoogleContacts } from '@/hooks/useGoogleContacts'
 import { parseTags, formatDate, formatRelative, isImageUrl } from '@/lib/utils'
 import { expandChain, extractTypedLinks, formatLink } from '@/lib/linkGraph'
 import { parsePeople } from '@/lib/contacts'
@@ -57,11 +58,17 @@ export function DetailModal() {
   const aiInstructions       = useBrainStore((s) => s.aiInstructions)
   const updateAiInstructions = useBrainStore((s) => s.updateAiInstructions)
   const allRows              = useBrainStore((s) => s.rows)
-  const contacts             = useBrainStore((s) => s.contacts)
 
   const { saveRow, removeRow, undoRow, redoRow } = useSheetSync()
   const { run: runAI, loading: aiLoading, error: aiError }       = useAI()
   const { run: runRelated, loading: relatedLoading }             = useAI()
+  const {
+    contacts,
+    contactsConnected,
+    contactsLoading,
+    loadSilentlyIfAvailable,
+    requestContacts,
+  } = useGoogleContacts()
 
   const [editing, setEditing]       = useState(false)
   const [showDelete, setShowDelete] = useState(false)
@@ -763,6 +770,10 @@ export function DetailModal() {
                     value={merged.people ?? ''}
                     onChange={(v) => patchField('people', v)}
                     suggestions={allPeopleNames}
+                    contactsConnected={contactsConnected}
+                    contactsLoading={contactsLoading}
+                    onLoadContacts={requestContacts}
+                    onPrimeContacts={loadSilentlyIfAvailable}
                   />
                 ) : peopleTags.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
@@ -1134,10 +1145,18 @@ function PeopleInput({
   value,
   onChange,
   suggestions,
+  contactsConnected,
+  contactsLoading,
+  onLoadContacts,
+  onPrimeContacts,
 }: {
   value: string
   onChange: (v: string) => void
   suggestions: string[]
+  contactsConnected: boolean
+  contactsLoading: boolean
+  onLoadContacts: () => void
+  onPrimeContacts: () => void
 }) {
   const [inputVal, setInputVal] = useState('')
   const [open, setOpen]         = useState(false)
@@ -1189,7 +1208,7 @@ function PeopleInput({
         <input
           value={inputVal}
           onChange={(e) => { setInputVal(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { setOpen(true); onPrimeContacts() }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && inputVal.trim()) { e.preventDefault(); add(inputVal) }
             if (e.key === 'Escape') { setOpen(false); setInputVal('') }
@@ -1212,6 +1231,19 @@ function PeopleInput({
                 {s}
               </button>
             ))}
+          </div>
+        )}
+        {open && filtered.length === 0 && !contactsConnected && (
+          <div className="absolute left-0 top-full mt-1 z-50 w-full bg-surface border border-border rounded-xl shadow-xl overflow-hidden">
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); onLoadContacts() }}
+              disabled={contactsLoading}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-hover flex items-center gap-2 text-ink disabled:opacity-60"
+            >
+              <Users className="w-3.5 h-3.5 text-brand shrink-0" />
+              {contactsLoading ? 'Loading Google contacts…' : 'Load Google contacts'}
+            </button>
           </div>
         )}
       </div>

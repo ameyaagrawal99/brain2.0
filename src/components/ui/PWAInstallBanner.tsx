@@ -21,11 +21,22 @@ interface DeferredPrompt extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
+function isStandalone(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && Boolean(navigator.standalone))
+}
+
+function isIos(): boolean {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
+}
+
 export function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredPrompt | null>(null)
   const [visible, setVisible]               = useState(false)
+  const [iosPrompt, setIosPrompt]           = useState(false)
 
   useEffect(() => {
+    if (isStandalone()) return
+
     // Track visit count
     const visits = parseInt(localStorage.getItem(VISIT_KEY) ?? '0', 10) + 1
     localStorage.setItem(VISIT_KEY, String(visits))
@@ -34,14 +45,20 @@ export function PWAInstallBanner() {
     const lastDismissed = parseInt(localStorage.getItem(DISMISSED_KEY) ?? '0', 10)
     if (Date.now() - lastDismissed < COOLDOWN_MS) return
 
+    if (isIos()) {
+      const delay = visits >= 2 ? 1200 : 6000
+      const timer = setTimeout(() => { setIosPrompt(true); setVisible(true) }, delay)
+      return () => clearTimeout(timer)
+    }
+
     const handler = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e as DeferredPrompt)
-      // Show immediately on 2nd+ visit; delay 30s on first visit
+      // Show quickly on 2nd+ visit; give first-time users a short look around first.
       if (visits >= 2) {
         setVisible(true)
       } else {
-        setTimeout(() => setVisible(true), 30_000)
+        setTimeout(() => setVisible(true), 6000)
       }
     }
     window.addEventListener('beforeinstallprompt', handler)
@@ -63,23 +80,27 @@ export function PWAInstallBanner() {
     localStorage.setItem(DISMISSED_KEY, String(Date.now()))
   }
 
-  if (!visible || !deferredPrompt) return null
+  if (!visible || (!deferredPrompt && !iosPrompt)) return null
 
   return (
-    <div className="relative overflow-hidden bg-brand/5 border-b border-brand/15 px-3 sm:px-4 py-2.5 flex items-center gap-3 animate-slideUp">
+    <div className="relative overflow-hidden bg-surface border-b border-brand/15 px-3 sm:px-4 py-2.5 flex items-center gap-3 animate-slideDown shadow-sm">
       <div className="w-7 h-7 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0">
         <Download className="w-3.5 h-3.5 text-brand" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-ink leading-none">Install Brain 2.0</p>
-        <p className="text-xs text-ink2 mt-0.5">Add to home screen for instant access, offline support &amp; notifications.</p>
+        <p className="text-xs text-ink2 mt-0.5">
+          {iosPrompt ? 'Use Share, then Add to Home Screen for the app experience.' : 'Add to home screen for faster launch, offline shell & notifications.'}
+        </p>
       </div>
-      <button
-        onClick={handleInstall}
-        className="shrink-0 px-3 py-1.5 bg-brand text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity"
-      >
-        Install
-      </button>
+      {deferredPrompt && (
+        <button
+          onClick={handleInstall}
+          className="shrink-0 px-3 py-1.5 bg-brand text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity"
+        >
+          Install
+        </button>
+      )}
       <button
         onClick={handleDismiss}
         className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-ink3 hover:bg-hover transition-colors"

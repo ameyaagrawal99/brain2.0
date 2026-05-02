@@ -60,6 +60,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        cleanupOutdatedCaches: true,
+        navigateFallback: 'index.html',
         // Allow the SW to handle larger assets
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [

@@ -1,11 +1,9 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
-import { initTokenClient, requestToken, revokeToken, hasSessionHint, initOneTapFallback } from '@/lib/gsi'
+import { initTokenClient, requestToken, revokeToken, hasSessionHint, initOneTapFallback, loadGisScript } from '@/lib/gsi'
+import { getAuthStartupPolicy } from '@/lib/startupPolicy'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
-
-/** Max number of silent re-auth retries before falling back to One Tap */
-const MAX_SILENT_RETRIES = 3
 
 export function useAuth() {
   const { setAuthState } = useBrainStore()
@@ -19,20 +17,19 @@ export function useAuth() {
       return
     }
 
-    // Returning users get a longer grace period (up to 25s) so retries + One Tap can complete.
     const isReturning = hasSessionHint()
-    const timeout = setTimeout(() => {
-      if (!initialized.current) {
-        setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
-      }
-    }, isReturning ? 25_000 : 10_000)
+    const policy = getAuthStartupPolicy(isReturning)
+    let cancelled = false
+    let oneTapTimer: ReturnType<typeof setTimeout> | null = null
+    const retryTimers: ReturnType<typeof setTimeout>[] = []
 
-    // Poll until GSI script loads
-    const interval = setInterval(() => {
-      if (typeof google !== 'undefined' && google?.accounts?.oauth2) {
-        clearInterval(interval)
-        clearTimeout(timeout)
-        if (initialized.current) return
+    if (policy.showLoginImmediately) {
+      setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
+    }
+
+    loadGisScript()
+      .then(() => {
+        if (cancelled || initialized.current) return
         initialized.current = true
 
         // Guard: don't let a stale error/silent-failure callback sign the user out
@@ -40,16 +37,16 @@ export function useAuth() {
         const safeSignOut = () => {
           if (useBrainStore.getState().authState.isAuthenticated) return
 
-          // Returning users: retry silent auth before showing login screen.
-          if (hasSessionHint() && silentRetryCount.current < MAX_SILENT_RETRIES) {
-            silentRetryCount.current++
-            const delay = silentRetryCount.current * 1500  // 1.5s, 3s, 4.5s
-            console.log(`[Auth] Silent auth failed, retrying in ${delay}ms (attempt ${silentRetryCount.current}/${MAX_SILENT_RETRIES})`)
-            setTimeout(() => {
+          const delay = policy.silentRetryDelaysMs[silentRetryCount.current]
+          if (hasSessionHint() && delay !== undefined) {
+            silentRetryCount.current += 1
+            console.log(`[Auth] Silent auth failed, retrying in ${delay}ms`)
+            const timer = setTimeout(() => {
               if (!useBrainStore.getState().authState.isAuthenticated) {
                 try { requestToken(true) } catch { /* ignore */ }
               }
             }, delay)
+            retryTimers.push(timer)
             return  // keep loading spinner while retry is in flight
           }
 
@@ -60,14 +57,17 @@ export function useAuth() {
             oneTapTriggered.current = true
             console.log('[Auth] Attempting One Tap fallback…')
             initOneTapFallback(CLIENT_ID, () => {
-              // One Tap fired the callback — the token request is now in-flight.
-              // Give it time to resolve before potentially showing login.
-              setTimeout(() => {
+              oneTapTimer = setTimeout(() => {
                 if (!useBrainStore.getState().authState.isAuthenticated) {
                   setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
                 }
-              }, 5000)
+              }, policy.oneTapGraceMs)
             })
+            oneTapTimer = setTimeout(() => {
+              if (!useBrainStore.getState().authState.isAuthenticated) {
+                setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
+              }
+            }, policy.oneTapGraceMs)
             return  // keep loading while One Tap is in progress
           }
 
@@ -92,23 +92,43 @@ export function useAuth() {
         )
 
         if (didInit) {
-          // Attempt silent token acquisition via hidden iframe (not a popup — safe on load).
-          // If the user has an active Google session and has previously granted consent,
-          // this re-authenticates them on every reload without any interaction.
-          requestToken(true)
+          if (isReturning) {
+            // Attempt silent token acquisition via hidden iframe (not a popup — safe on load).
+            // If it fails, the compact retry policy above quickly falls back to explicit sign-in.
+            requestToken(true)
+          }
         } else {
-          // initTokenClient was already called (useAuth used in multiple components).
-          // We're not the owner of the token client — just stop the loading spinner.
-          safeSignOut()
+          // initTokenClient was already called (useAuth is also used by LoginScreen).
+          // Avoid starting a second silent-auth retry loop from the non-owner hook.
+          if (!useBrainStore.getState().authState.isAuthenticated) {
+            setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
+          }
         }
-      }
-    }, 100)
-    return () => { clearInterval(interval); clearTimeout(timeout) }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAuthState({
+            isAuthenticated: false,
+            token: null,
+            error: error instanceof Error ? error.message : 'Failed to load Google sign-in',
+            loading: false,
+          })
+        }
+      })
+
+    return () => {
+      cancelled = true
+      if (oneTapTimer) clearTimeout(oneTapTimer)
+      retryTimers.forEach(clearTimeout)
+    }
   }, [setAuthState])
 
   // signIn MUST be called directly from a button onClick
-  const signIn = useCallback(() => {
-    try { requestToken(false) } catch (e) { console.error(e) }
+  const signIn = useCallback(async () => {
+    try {
+      await loadGisScript()
+      requestToken(false)
+    } catch (e) { console.error(e) }
   }, [])
 
   const signOut = useCallback(() => {
