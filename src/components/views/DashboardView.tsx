@@ -3,7 +3,7 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { parseTags, cn } from '@/lib/utils'
 import { parsePeople } from '@/lib/contacts'
-import { aggregateSentiment } from '@/lib/sentiment'
+import { aggregateSentiment, EMOTION_META } from '@/lib/sentiment'
 import {
   CheckCircle2, Clock, AlertTriangle, CalendarDays, Star,
   TrendingUp, Tag, Zap, RefreshCw, Plus, Smile, Meh, Frown,
@@ -440,74 +440,109 @@ export function DashboardView() {
 
             {/* Sentiment analysis */}
             {rows.length > 0 && (
-              <Section title="Sentiment">
+              <Section title="Sentiment & Emotions">
                 <div className="bg-surface border border-border rounded-2xl px-4 py-4 space-y-4">
-                  {/* Overall label + icon */}
-                  <div className="flex items-center gap-2.5">
-                    {sentiment.overall === 'Positive' && (
-                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-                        <Smile className="w-5 h-5 text-emerald-500" />
+
+                  {/* Overall tone + dominant emotion */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      {sentiment.overall === 'Positive' && (
+                        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <Smile className="w-5 h-5 text-emerald-500" />
+                        </div>
+                      )}
+                      {sentiment.overall === 'Neutral' && (
+                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                          <Meh className="w-5 h-5 text-amber-500" />
+                        </div>
+                      )}
+                      {sentiment.overall === 'Negative' && (
+                        <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center shrink-0">
+                          <Frown className="w-5 h-5 text-rose-500" />
+                        </div>
+                      )}
+                      <div>
+                        <p className={cn(
+                          'text-sm font-bold leading-none',
+                          sentiment.overall === 'Positive' && 'text-emerald-500',
+                          sentiment.overall === 'Neutral'  && 'text-amber-500',
+                          sentiment.overall === 'Negative' && 'text-rose-500',
+                        )}>
+                          {sentiment.overall} overall
+                        </p>
+                        <p className="text-[11px] text-ink3 mt-0.5">{sentiment.total} notes analysed</p>
                       </div>
-                    )}
-                    {sentiment.overall === 'Neutral' && (
-                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
-                        <Meh className="w-5 h-5 text-amber-500" />
-                      </div>
-                    )}
-                    {sentiment.overall === 'Negative' && (
-                      <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center shrink-0">
-                        <Frown className="w-5 h-5 text-rose-500" />
-                      </div>
-                    )}
-                    <div>
-                      <p className={cn(
-                        'text-base font-bold leading-none',
-                        sentiment.overall === 'Positive' && 'text-emerald-500',
-                        sentiment.overall === 'Neutral'  && 'text-amber-500',
-                        sentiment.overall === 'Negative' && 'text-rose-500',
-                      )}>
-                        {sentiment.overall}
-                      </p>
-                      <p className="text-[11px] text-ink3 mt-0.5">across {sentiment.total} note{sentiment.total !== 1 ? 's' : ''}</p>
                     </div>
+                    {sentiment.dominantEmotion && (
+                      <div className="text-right">
+                        <p className="text-lg leading-none">{EMOTION_META[sentiment.dominantEmotion].emoji}</p>
+                        <p className="text-[10px] text-ink3 mt-0.5">top emotion</p>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Gauge bar */}
+                  {/* Tone gauge */}
                   <div>
-                    <div className="relative h-2.5 bg-surface2 rounded-full overflow-hidden">
+                    <div className="relative h-2 bg-surface2 rounded-full overflow-hidden">
                       <div className="absolute inset-0 bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 rounded-full" />
                       <div
                         className="absolute inset-0 bg-surface2 rounded-full transition-all duration-700"
                         style={{ left: `${sentiment.gauge}%` }}
                       />
                     </div>
-                    <div className="flex justify-between mt-1">
+                    <div className="flex justify-between mt-0.5">
                       <span className="text-[10px] text-rose-400">Negative</span>
                       <span className="text-[10px] text-emerald-500">Positive</span>
                     </div>
                   </div>
 
-                  {/* Breakdown bars */}
-                  <div className="space-y-2">
+                  {/* Tone breakdown */}
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider">Tone breakdown</p>
                     {[
                       { label: 'Positive', count: sentiment.positiveCount, pct: sentiment.positivePct, color: 'bg-emerald-500' },
                       { label: 'Neutral',  count: sentiment.neutralCount,  pct: sentiment.neutralPct,  color: 'bg-amber-400' },
                       { label: 'Negative', count: sentiment.negativeCount, pct: sentiment.negativePct, color: 'bg-rose-500' },
                     ].map(({ label, count, pct, color }) => (
                       <div key={label}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-ink2">{label}</span>
-                          <span className="text-xs text-ink3">{count} <span className="text-[10px]">({pct}%)</span></span>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-xs text-ink2">{label}</span>
+                          <span className="text-[11px] text-ink3">{count} <span className="opacity-60">({pct}%)</span></span>
                         </div>
                         <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
-                          <div
-                            className={cn('h-full rounded-full transition-all duration-500', color)}
-                            style={{ width: `${pct}%` }}
-                          />
+                          <div className={cn('h-full rounded-full transition-all duration-500', color)} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     ))}
                   </div>
+
+                  {/* Emotion bars — all 8 */}
+                  <div className="space-y-1.5 pt-1 border-t border-border">
+                    <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider pt-1">Emotions detected</p>
+                    {sentiment.emotions.map(({ emotion, count, pct }) => {
+                      const meta = EMOTION_META[emotion]
+                      const maxPct = sentiment.emotions[0]?.pct || 1
+                      const barPct = Math.round((pct / maxPct) * 100)
+                      return (
+                        <div key={emotion}>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="flex items-center gap-1 text-xs text-ink2">
+                              <span>{meta.emoji}</span>
+                              <span>{meta.label}</span>
+                            </span>
+                            <span className="text-[11px] text-ink3">{count} <span className="opacity-60">({pct}%)</span></span>
+                          </div>
+                          <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
+                            <div
+                              className={cn('h-full rounded-full transition-all duration-500', meta.bg)}
+                              style={{ width: `${barPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
                 </div>
               </Section>
             )}
