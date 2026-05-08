@@ -2,16 +2,28 @@ import { useMemo } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
 import { parseTags } from '@/lib/utils'
+import { analyzeSentiment } from '@/lib/sentiment'
 
 export function useFilters() {
-  const rows    = useBrainStore((s) => s.rows)
-  const filters = useBrainStore((s) => s.filters)
+  const rows            = useBrainStore((s) => s.rows)
+  const filters         = useBrainStore((s) => s.filters)
+  const sentimentFilter = useBrainStore((s) => s.sentimentFilter)
+
+  // Compute per-row sentiment lazily — only when a sentiment filter is active
+  const sentimentMap = useMemo(() => {
+    if (!sentimentFilter) return null
+    const map = new Map<number, ReturnType<typeof analyzeSentiment>>()
+    for (const row of rows) {
+      const text = [row.title, row.original, row.rewritten, row.actionItems].filter(Boolean).join(' ')
+      map.set(row._rowIndex, analyzeSentiment(text))
+    }
+    return map
+  }, [rows, sentimentFilter])
 
   const filteredRows = useMemo<BrainRow[]>(() => {
     const today = new Date().toISOString().slice(0, 10)
     const q = (filters.search ?? '').toLowerCase()
 
-    // Defensive guards: old persisted state may be missing fields added later
     const categories    = filters.categories    ?? []
     const subCategories = filters.subCategories ?? []
     const statuses      = filters.statuses      ?? []
@@ -27,17 +39,17 @@ export function useFilters() {
         if (!hay.includes(q)) return false
       }
 
-      // ── Categories (multi-select OR) ──────────────────────────────────
+      // ── Categories ───────────────────────────────────────────────────
       if (categories.length > 0) {
         if (!categories.includes(r.category)) return false
       }
 
-      // ── Sub-categories (multi-select OR) ─────────────────────────────
+      // ── Sub-categories ───────────────────────────────────────────────
       if (subCategories.length > 0) {
         if (!subCategories.includes(r.subCategory)) return false
       }
 
-      // ── Statuses (multi-select OR) ────────────────────────────────────
+      // ── Statuses ─────────────────────────────────────────────────────
       if (statuses.length > 0) {
         const s = (r.taskStatus ?? '').toLowerCase()
         const match = statuses.some((status) => {
@@ -51,7 +63,7 @@ export function useFilters() {
         if (!match) return false
       }
 
-      // ── Tags (multi-select AND / OR based on tagMatchMode) ────────────
+      // ── Tags ─────────────────────────────────────────────────────────
       if (selectedTags.length > 0) {
         const rowTags = parseTags(r.tags)
         if (tagMatchMode === 'and') {
@@ -75,17 +87,35 @@ export function useFilters() {
         if (!createdToday && !dueToday) return false
       }
 
-      // ── Persons (multi-select OR) ────────────────────────────────────
+      // ── Persons ──────────────────────────────────────────────────────
       if (persons.length > 0) {
         const rowPeople = (r.people ?? '').split(',').map((n) => n.trim().toLowerCase())
         const match = persons.some((p) => rowPeople.includes(p.toLowerCase()))
         if (!match) return false
       }
 
+      // ── Sentiment filter ─────────────────────────────────────────────
+      if (sentimentFilter && sentimentMap) {
+        const s = sentimentMap.get(r._rowIndex)
+        if (!s) return false
+        if (sentimentFilter.kind === 'tone') {
+          if (s.label !== sentimentFilter.value) return false
+        } else {
+          // emotion: keep rows where that emotion has the highest count (dominant)
+          // OR at least has some signal above zero
+          const target = s.emotions[sentimentFilter.value] ?? 0
+          if (target === 0) return false
+          // Require it to be among the top 2 emotions for this row
+          const sorted = Object.values(s.emotions).sort((a, b) => b - a)
+          const threshold = sorted[1] ?? 0
+          if (target < threshold) return false
+        }
+      }
+
       return true
     })
 
-    // Precompute sort keys once — avoids repeated new Date() / parseFloat() in comparator
+    // Sort
     if (filters.sortBy === 'date-desc' || filters.sortBy === 'date-asc') {
       const ts = new Map(result.map((r) => [r._rowIndex, r.createdAt ? new Date(r.createdAt).getTime() : 0]))
       result = [...result].sort((a, b) =>
@@ -108,7 +138,7 @@ export function useFilters() {
       })
     }
     return result
-  }, [rows, filters])
+  }, [rows, filters, sentimentFilter, sentimentMap])
 
   const categories = useMemo(
     () => [...new Set(rows.map((r) => r.category).filter(Boolean))].sort(),
@@ -143,7 +173,8 @@ export function useFilters() {
     (filters.selectedTags  ?? []).length > 0 ||
     filters.showToday ||
     filters.dateFrom ||
-    filters.dateTo
+    filters.dateTo ||
+    sentimentFilter
   )
 
   const activeFilterCount =
@@ -152,7 +183,8 @@ export function useFilters() {
     (filters.statuses      ?? []).length +
     (filters.persons       ?? []).length +
     (filters.selectedTags  ?? []).length +
-    (filters.dateFrom || filters.dateTo ? 1 : 0)
+    (filters.dateFrom || filters.dateTo ? 1 : 0) +
+    (sentimentFilter ? 1 : 0)
 
   return { filteredRows, categories, subCategories, topTags, allPeople, hasActiveFilters, activeFilterCount }
 }

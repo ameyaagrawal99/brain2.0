@@ -3,7 +3,7 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { parseTags, cn } from '@/lib/utils'
 import { parsePeople } from '@/lib/contacts'
-import { aggregateSentiment, EMOTION_META } from '@/lib/sentiment'
+import { aggregateSentiment, EMOTION_META, type SentimentFilter } from '@/lib/sentiment'
 import {
   CheckCircle2, Clock, AlertTriangle, CalendarDays, Star,
   TrendingUp, Tag, Zap, RefreshCw, Plus, Smile, Meh, Frown,
@@ -91,12 +91,20 @@ function Section({ title, action, children }: {
 
 /* ── Main DashboardView ──────────────────────────────────────────── */
 export function DashboardView() {
-  const rows           = useBrainStore((s) => s.rows)
-  const specialDays    = useBrainStore((s) => s.specialDays)
+  const rows                 = useBrainStore((s) => s.rows)
+  const specialDays          = useBrainStore((s) => s.specialDays)
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
   const setShowNewMilestone  = useBrainStore((s) => s.setShowNewMilestone)
   const setShowNewRow        = useBrainStore((s) => s.setShowNewRow)
   const openModal            = useBrainStore((s) => s.openModal)
+  const setViewMode          = useBrainStore((s) => s.setViewMode)
+  const setSentimentFilter   = useBrainStore((s) => s.setSentimentFilter)
+  const sentimentFilter      = useBrainStore((s) => s.sentimentFilter)
+
+  function applySentimentFilter(f: SentimentFilter) {
+    setSentimentFilter(f)
+    setViewMode('card')
+  }
 
   const { refresh } = useSheetSync()
 
@@ -372,7 +380,7 @@ export function DashboardView() {
                         >
                           <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-ink truncate">{r.title}</p>
+                            <p className="text-sm font-medium text-ink line-clamp-1 break-all">{r.title}</p>
                             <p className="text-xs text-rose-500">{daysFromNow(r.dueDate)}</p>
                           </div>
                           {r.category && (
@@ -395,7 +403,7 @@ export function DashboardView() {
                         >
                           <CalendarDays className="w-3.5 h-3.5 text-brand shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-ink truncate">{r.title}</p>
+                            <p className="text-sm font-medium text-ink line-clamp-1 break-all">{r.title}</p>
                             <p className="text-xs text-ink3">{daysFromNow(r.dueDate)}</p>
                           </div>
                           {r.taskStatus && (
@@ -438,114 +446,111 @@ export function DashboardView() {
           {/* Right column (1/3 width) */}
           <div className="space-y-6">
 
-            {/* Sentiment analysis */}
-            {rows.length > 0 && (
-              <Section title="Sentiment & Emotions">
-                <div className="bg-surface border border-border rounded-2xl px-4 py-4 space-y-4">
+            {/* Sentiment & Emotions */}
+            {rows.length > 0 && (() => {
+              const toneRows = [
+                { label: 'Positive' as const, count: sentiment.positiveCount, pct: sentiment.positivePct, bar: 'bg-emerald-500', icon: <Smile className="w-3 h-3" /> },
+                { label: 'Neutral'  as const, count: sentiment.neutralCount,  pct: sentiment.neutralPct,  bar: 'bg-amber-400',  icon: <Meh  className="w-3 h-3" /> },
+                { label: 'Negative' as const, count: sentiment.negativeCount, pct: sentiment.negativePct, bar: 'bg-rose-500',   icon: <Frown className="w-3 h-3" /> },
+              ]
+              const maxEmotionPct = sentiment.emotions[0]?.pct || 1
 
-                  {/* Overall tone + dominant emotion */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      {sentiment.overall === 'Positive' && (
-                        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-                          <Smile className="w-5 h-5 text-emerald-500" />
+              return (
+                <Section title="Sentiment & Emotions">
+                  <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+
+                    {/* Header strip — overall + gauge */}
+                    <div className="px-4 pt-3.5 pb-3 border-b border-border">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {sentiment.overall === 'Positive' && <Smile className="w-4 h-4 text-emerald-500 shrink-0" />}
+                          {sentiment.overall === 'Neutral'  && <Meh   className="w-4 h-4 text-amber-500  shrink-0" />}
+                          {sentiment.overall === 'Negative' && <Frown className="w-4 h-4 text-rose-500   shrink-0" />}
+                          <span className={cn(
+                            'text-sm font-semibold',
+                            sentiment.overall === 'Positive' && 'text-emerald-500',
+                            sentiment.overall === 'Neutral'  && 'text-amber-500',
+                            sentiment.overall === 'Negative' && 'text-rose-500',
+                          )}>
+                            {sentiment.overall}
+                          </span>
+                          {sentiment.dominantEmotion && (
+                            <span className="text-xs text-ink3">· {EMOTION_META[sentiment.dominantEmotion].emoji} {EMOTION_META[sentiment.dominantEmotion].label}</span>
+                          )}
                         </div>
-                      )}
-                      {sentiment.overall === 'Neutral' && (
-                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
-                          <Meh className="w-5 h-5 text-amber-500" />
-                        </div>
-                      )}
-                      {sentiment.overall === 'Negative' && (
-                        <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center shrink-0">
-                          <Frown className="w-5 h-5 text-rose-500" />
-                        </div>
-                      )}
-                      <div>
-                        <p className={cn(
-                          'text-sm font-bold leading-none',
-                          sentiment.overall === 'Positive' && 'text-emerald-500',
-                          sentiment.overall === 'Neutral'  && 'text-amber-500',
-                          sentiment.overall === 'Negative' && 'text-rose-500',
-                        )}>
-                          {sentiment.overall} overall
-                        </p>
-                        <p className="text-[11px] text-ink3 mt-0.5">{sentiment.total} notes analysed</p>
+                        <span className="text-[11px] text-ink3">{sentiment.total.toLocaleString()} notes</span>
+                      </div>
+                      {/* Gauge */}
+                      <div className="relative h-1.5 bg-surface2 rounded-full overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500" />
+                        <div className="absolute inset-0 bg-surface2 rounded-full transition-all duration-700" style={{ left: `${sentiment.gauge}%` }} />
+                      </div>
+                      <div className="flex justify-between mt-0.5">
+                        <span className="text-[9px] text-rose-400">Negative</span>
+                        <span className="text-[9px] text-emerald-500">Positive</span>
                       </div>
                     </div>
-                    {sentiment.dominantEmotion && (
-                      <div className="text-right">
-                        <p className="text-lg leading-none">{EMOTION_META[sentiment.dominantEmotion].emoji}</p>
-                        <p className="text-[10px] text-ink3 mt-0.5">top emotion</p>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Tone gauge */}
-                  <div>
-                    <div className="relative h-2 bg-surface2 rounded-full overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 rounded-full" />
-                      <div
-                        className="absolute inset-0 bg-surface2 rounded-full transition-all duration-700"
-                        style={{ left: `${sentiment.gauge}%` }}
-                      />
+                    {/* Tone rows — clickable */}
+                    <div className="px-3 py-2 border-b border-border space-y-0.5">
+                      <p className="text-[9px] font-semibold text-ink3 uppercase tracking-wider px-1 mb-1.5">Tone</p>
+                      {toneRows.map(({ label, count, pct, bar, icon }) => {
+                        const isActive = sentimentFilter?.kind === 'tone' && sentimentFilter.value === label
+                        return (
+                          <button
+                            key={label}
+                            onClick={() => applySentimentFilter({ kind: 'tone', value: label })}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all',
+                              isActive
+                                ? 'bg-brand/10 ring-1 ring-brand/30'
+                                : 'hover:bg-hover',
+                            )}
+                          >
+                            <span className={cn('shrink-0', isActive ? 'text-brand' : 'text-ink3')}>{icon}</span>
+                            <span className={cn('text-xs font-medium w-14 shrink-0', isActive ? 'text-brand' : 'text-ink2')}>{label}</span>
+                            <div className="flex-1 h-1.5 bg-surface2 rounded-full overflow-hidden">
+                              <div className={cn('h-full rounded-full transition-all duration-500', isActive ? 'bg-brand' : bar)} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-[10px] text-ink3 w-12 text-right shrink-0">{count.toLocaleString()} <span className="opacity-60">({pct}%)</span></span>
+                          </button>
+                        )
+                      })}
                     </div>
-                    <div className="flex justify-between mt-0.5">
-                      <span className="text-[10px] text-rose-400">Negative</span>
-                      <span className="text-[10px] text-emerald-500">Positive</span>
+
+                    {/* Emotion rows — clickable */}
+                    <div className="px-3 py-2 space-y-0.5">
+                      <p className="text-[9px] font-semibold text-ink3 uppercase tracking-wider px-1 mb-1.5">Emotions</p>
+                      {sentiment.emotions.map(({ emotion, count, pct }) => {
+                        const meta = EMOTION_META[emotion]
+                        const barPct = Math.round((pct / maxEmotionPct) * 100)
+                        const isActive = sentimentFilter?.kind === 'emotion' && sentimentFilter.value === emotion
+                        return (
+                          <button
+                            key={emotion}
+                            onClick={() => applySentimentFilter({ kind: 'emotion', value: emotion })}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all',
+                              isActive
+                                ? 'bg-brand/10 ring-1 ring-brand/30'
+                                : 'hover:bg-hover',
+                            )}
+                          >
+                            <span className="text-sm shrink-0 leading-none">{meta.emoji}</span>
+                            <span className={cn('text-xs font-medium w-20 shrink-0 truncate', isActive ? 'text-brand' : 'text-ink2')}>{meta.label}</span>
+                            <div className="flex-1 h-1.5 bg-surface2 rounded-full overflow-hidden">
+                              <div className={cn('h-full rounded-full transition-all duration-500', isActive ? 'bg-brand' : meta.bg)} style={{ width: `${barPct}%` }} />
+                            </div>
+                            <span className="text-[10px] text-ink3 w-12 text-right shrink-0">{count.toLocaleString()} <span className="opacity-60">({pct}%)</span></span>
+                          </button>
+                        )
+                      })}
                     </div>
-                  </div>
 
-                  {/* Tone breakdown */}
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider">Tone breakdown</p>
-                    {[
-                      { label: 'Positive', count: sentiment.positiveCount, pct: sentiment.positivePct, color: 'bg-emerald-500' },
-                      { label: 'Neutral',  count: sentiment.neutralCount,  pct: sentiment.neutralPct,  color: 'bg-amber-400' },
-                      { label: 'Negative', count: sentiment.negativeCount, pct: sentiment.negativePct, color: 'bg-rose-500' },
-                    ].map(({ label, count, pct, color }) => (
-                      <div key={label}>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-xs text-ink2">{label}</span>
-                          <span className="text-[11px] text-ink3">{count} <span className="opacity-60">({pct}%)</span></span>
-                        </div>
-                        <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
-                          <div className={cn('h-full rounded-full transition-all duration-500', color)} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    ))}
                   </div>
-
-                  {/* Emotion bars — all 8 */}
-                  <div className="space-y-1.5 pt-1 border-t border-border">
-                    <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider pt-1">Emotions detected</p>
-                    {sentiment.emotions.map(({ emotion, count, pct }) => {
-                      const meta = EMOTION_META[emotion]
-                      const maxPct = sentiment.emotions[0]?.pct || 1
-                      const barPct = Math.round((pct / maxPct) * 100)
-                      return (
-                        <div key={emotion}>
-                          <div className="flex items-center justify-between mb-0.5">
-                            <span className="flex items-center gap-1 text-xs text-ink2">
-                              <span>{meta.emoji}</span>
-                              <span>{meta.label}</span>
-                            </span>
-                            <span className="text-[11px] text-ink3">{count} <span className="opacity-60">({pct}%)</span></span>
-                          </div>
-                          <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
-                            <div
-                              className={cn('h-full rounded-full transition-all duration-500', meta.bg)}
-                              style={{ width: `${barPct}%` }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                </div>
-              </Section>
-            )}
+                </Section>
+              )
+            })()}
 
             {/* Category breakdown */}
             {catStats.length > 0 && (

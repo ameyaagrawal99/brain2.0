@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { BrainRow, EditableFields, HistoryEntry, SortKey, SpecialDay, ViewMode } from '@/types/sheet'
 import type { Contact } from '@/lib/contacts'
+import type { SentimentFilter } from '@/lib/sentiment'
 
 export type ThemeMode  = 'light' | 'dark' | 'system'
 export type ThemeColor = 'indigo' | 'warm' | 'green' | 'rose'
@@ -200,6 +201,10 @@ interface BrainStore {
   setSelectedMilestone: (day: SpecialDay | null) => void
   showNewMilestone:     boolean
   setShowNewMilestone:  (v: boolean) => void
+
+  // Sentiment filter (not persisted — cleared on page reload)
+  sentimentFilter:    SentimentFilter | null
+  setSentimentFilter: (f: SentimentFilter | null) => void
 }
 
 export const useBrainStore = create<BrainStore>()(
@@ -275,7 +280,7 @@ export const useBrainStore = create<BrainStore>()(
       setSortBy:       (sortBy)       => set((s) => ({ filters: { ...s.filters, sortBy } })),
       setShowToday:    (showToday)    => set((s) => ({ filters: { ...s.filters, showToday } })),
       setDateRange:    (dateFrom, dateTo) => set((s) => ({ filters: { ...s.filters, dateFrom, dateTo, showToday: false } })),
-      clearFilters:    ()             => set({ filters: DEFAULT_FILTERS }),
+      clearFilters:    ()             => set({ filters: DEFAULT_FILTERS, sentimentFilter: null }),
 
       contacts:             [],
       setContacts:          (contacts) => set({ contacts }),
@@ -409,6 +414,10 @@ export const useBrainStore = create<BrainStore>()(
       setSelectedMilestone: (selectedMilestone) => set({ selectedMilestone }),
       showNewMilestone:     false,
       setShowNewMilestone:  (showNewMilestone) => set({ showNewMilestone }),
+
+      // ── Sentiment filter ───────────────────────────────────────────────
+      sentimentFilter:    null,
+      setSentimentFilter: (sentimentFilter) => set({ sentimentFilter }),
     }),
     {
       name: 'brain2-store',

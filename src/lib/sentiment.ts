@@ -172,6 +172,11 @@ const EMOTION_WORDS: Record<Emotion, string[]> = {
   ],
 }
 
+// ── Filter type (used by store + useFilters) ──────────────────────────────
+export type SentimentFilter =
+  | { kind: 'tone';    value: 'Positive' | 'Neutral' | 'Negative' }
+  | { kind: 'emotion'; value: Emotion }
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 const NEGATIONS = new Set(['not',"n't",'no','never','neither','nor','without','nobody','nothing','nowhere'])
 
