@@ -7,3 +7,4 @@ dist
 credentials.json
 *.credentials.json
 secrets/
+all-skills.zip
