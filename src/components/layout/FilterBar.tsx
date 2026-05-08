@@ -4,6 +4,7 @@ import { useFilters } from '@/hooks/useFilters'
 import { useDebounce } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState } from 'react'
+import { EMOTION_META } from '@/lib/sentiment'
 
 /* ── Keyboard shortcut: ⌘K focuses search, ⌘F opens filter panel ─── */
 function useFilterKeys(
@@ -157,17 +158,19 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 
 /* ── Main FilterBar ──────────────────────────────────────────────── */
 export function FilterBar() {
-  const filters          = useBrainStore((s) => s.filters)
-  const setSearch        = useBrainStore((s) => s.setSearch)
-  const toggleCategory   = useBrainStore((s) => s.toggleCategory)
-  const toggleSubCategory = useBrainStore((s) => s.toggleSubCategory)
-  const toggleStatus     = useBrainStore((s) => s.toggleStatus)
-  const togglePerson     = useBrainStore((s) => s.togglePerson)
-  const toggleTag        = useBrainStore((s) => s.toggleTag)
-  const setTagMatchMode  = useBrainStore((s) => s.setTagMatchMode)
-  const setSortBy        = useBrainStore((s) => s.setSortBy)
-  const setDateRange     = useBrainStore((s) => s.setDateRange)
-  const clearFilters     = useBrainStore((s) => s.clearFilters)
+  const filters             = useBrainStore((s) => s.filters)
+  const setSearch           = useBrainStore((s) => s.setSearch)
+  const toggleCategory      = useBrainStore((s) => s.toggleCategory)
+  const toggleSubCategory   = useBrainStore((s) => s.toggleSubCategory)
+  const toggleStatus        = useBrainStore((s) => s.toggleStatus)
+  const togglePerson        = useBrainStore((s) => s.togglePerson)
+  const toggleTag           = useBrainStore((s) => s.toggleTag)
+  const setTagMatchMode     = useBrainStore((s) => s.setTagMatchMode)
+  const setSortBy           = useBrainStore((s) => s.setSortBy)
+  const setDateRange        = useBrainStore((s) => s.setDateRange)
+  const clearFilters        = useBrainStore((s) => s.clearFilters)
+  const sentimentFilter     = useBrainStore((s) => s.sentimentFilter)
+  const setSentimentFilter  = useBrainStore((s) => s.setSentimentFilter)
 
   const { categories, subCategories, topTags, allPeople, hasActiveFilters, activeFilterCount, filteredRows } = useFilters()
 
@@ -245,6 +248,12 @@ export function FilterBar() {
   const dl = dateLabel()
 
   /* ── Chip labels ─────────────────────────────────────────────── */
+  const sentimentChipLabel = sentimentFilter
+    ? sentimentFilter.kind === 'tone'
+      ? sentimentFilter.value
+      : `${EMOTION_META[sentimentFilter.value].emoji} ${EMOTION_META[sentimentFilter.value].label}`
+    : null
+
   const chipData = [
     ...filters.categories.map((c)    => ({ id: `cat:${c}`,    label: c,        remove: () => toggleCategory(c) })),
     ...filters.subCategories.map((c) => ({ id: `sub:${c}`,    label: `↳ ${c}`, remove: () => toggleSubCategory(c) })),
@@ -252,6 +261,7 @@ export function FilterBar() {
     ...filters.persons.map((p)       => ({ id: `per:${p}`,    label: `@${p}`,  remove: () => togglePerson(p) })),
     ...filters.selectedTags.map((t)  => ({ id: `tag:${t}`,    label: `#${t}`,  remove: () => toggleTag(t) })),
     ...(hasDate ? [{ id: 'date', label: dl ?? 'Date', remove: () => setDateRange(null, null) }] : []),
+    ...(sentimentChipLabel ? [{ id: 'sentiment', label: sentimentChipLabel, remove: () => setSentimentFilter(null) }] : []),
   ]
 
   return (
