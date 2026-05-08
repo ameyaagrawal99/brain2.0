@@ -3,9 +3,10 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { parseTags, cn } from '@/lib/utils'
 import { parsePeople } from '@/lib/contacts'
+import { aggregateSentiment } from '@/lib/sentiment'
 import {
   CheckCircle2, Clock, AlertTriangle, CalendarDays, Star,
-  TrendingUp, Tag, Zap, RefreshCw, Plus,
+  TrendingUp, Tag, Zap, RefreshCw, Plus, Smile, Meh, Frown,
 } from 'lucide-react'
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
@@ -181,6 +182,14 @@ export function DashboardView() {
       .filter(r => r.createdAt && r.createdAt >= ago7)
       .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
       .slice(0, 5)
+  }, [rows])
+
+  /* ── Sentiment ───────────────────────────────────────────────── */
+  const sentiment = useMemo(() => {
+    const texts = rows.map((r) =>
+      [r.title, r.original, r.rewritten, r.actionItems].filter(Boolean).join(' '),
+    )
+    return aggregateSentiment(texts)
   }, [rows])
 
   const fullDate = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -428,6 +437,80 @@ export function DashboardView() {
 
           {/* Right column (1/3 width) */}
           <div className="space-y-6">
+
+            {/* Sentiment analysis */}
+            {rows.length > 0 && (
+              <Section title="Sentiment">
+                <div className="bg-surface border border-border rounded-2xl px-4 py-4 space-y-4">
+                  {/* Overall label + icon */}
+                  <div className="flex items-center gap-2.5">
+                    {sentiment.overall === 'Positive' && (
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                        <Smile className="w-5 h-5 text-emerald-500" />
+                      </div>
+                    )}
+                    {sentiment.overall === 'Neutral' && (
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                        <Meh className="w-5 h-5 text-amber-500" />
+                      </div>
+                    )}
+                    {sentiment.overall === 'Negative' && (
+                      <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center shrink-0">
+                        <Frown className="w-5 h-5 text-rose-500" />
+                      </div>
+                    )}
+                    <div>
+                      <p className={cn(
+                        'text-base font-bold leading-none',
+                        sentiment.overall === 'Positive' && 'text-emerald-500',
+                        sentiment.overall === 'Neutral'  && 'text-amber-500',
+                        sentiment.overall === 'Negative' && 'text-rose-500',
+                      )}>
+                        {sentiment.overall}
+                      </p>
+                      <p className="text-[11px] text-ink3 mt-0.5">across {sentiment.total} note{sentiment.total !== 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+
+                  {/* Gauge bar */}
+                  <div>
+                    <div className="relative h-2.5 bg-surface2 rounded-full overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 rounded-full" />
+                      <div
+                        className="absolute inset-0 bg-surface2 rounded-full transition-all duration-700"
+                        style={{ left: `${sentiment.gauge}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[10px] text-rose-400">Negative</span>
+                      <span className="text-[10px] text-emerald-500">Positive</span>
+                    </div>
+                  </div>
+
+                  {/* Breakdown bars */}
+                  <div className="space-y-2">
+                    {[
+                      { label: 'Positive', count: sentiment.positiveCount, pct: sentiment.positivePct, color: 'bg-emerald-500' },
+                      { label: 'Neutral',  count: sentiment.neutralCount,  pct: sentiment.neutralPct,  color: 'bg-amber-400' },
+                      { label: 'Negative', count: sentiment.negativeCount, pct: sentiment.negativePct, color: 'bg-rose-500' },
+                    ].map(({ label, count, pct, color }) => (
+                      <div key={label}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-ink2">{label}</span>
+                          <span className="text-xs text-ink3">{count} <span className="text-[10px]">({pct}%)</span></span>
+                        </div>
+                        <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
+                          <div
+                            className={cn('h-full rounded-full transition-all duration-500', color)}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Section>
+            )}
 
             {/* Category breakdown */}
             {catStats.length > 0 && (
