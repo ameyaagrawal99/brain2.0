@@ -10,6 +10,7 @@ import { parseTags, formatDate, cn, parseActionItems, toggleActionItem } from '@
 import { parsePeople } from '@/lib/contacts'
 import { fetchQuickFilters, saveQuickFilter, deleteQuickFilter } from '@/lib/sheetsConfig'
 import { useSheetSync } from '@/hooks/useSheetSync'
+import { addLocalDays, monthDay, toLocalISODate } from '@/lib/date'
 import type { QuickFilter } from '@/lib/sheetsConfig'
 import type { BrainRow } from '@/types/sheet'
 import toast from 'react-hot-toast'
@@ -182,17 +183,19 @@ export function Sidebar() {
 
   const dueSoonRows = useMemo(() => {
     const today = new Date()
-    const in7   = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-    const todayStr = today.toISOString().slice(0, 10)
-    const in7Str   = in7.toISOString().slice(0, 10)
+    const todayStr = toLocalISODate(today)
+    const in7Str   = toLocalISODate(addLocalDays(today, 7))
     return rows
-      .filter(r => r.dueDate && r.dueDate >= todayStr && r.dueDate <= in7Str)
+      .filter(r => {
+        const status = (r.taskStatus ?? '').toLowerCase()
+        return r.dueDate && r.dueDate >= todayStr && r.dueDate <= in7Str && !status.includes('done') && !status.includes('complete')
+      })
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
       .slice(0, 20)
   }, [rows])
 
   const overdueRows = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStr = toLocalISODate()
     return rows
       .filter(r => r.dueDate && r.dueDate < todayStr && r.taskStatus !== 'Done' && r.taskStatus !== 'Complete')
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
@@ -230,8 +233,8 @@ export function Sidebar() {
     const counts: Record<string, number> = {}
     const today  = new Date()
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
-      counts[d.toISOString().slice(0, 10)] = 0
+      const d = addLocalDays(today, -i)
+      counts[toLocalISODate(d)] = 0
     }
     for (const r of rows) {
       const day = r.createdAt?.slice(0, 10)
@@ -452,8 +455,8 @@ export function Sidebar() {
           <div className="flex overflow-x-auto scrollbar-hide px-1 py-1 gap-0.5">
             {TABS.map(({ key, label, icon: Icon }) => {
               const isActive = tab === key
-              const todayStr = new Date().toISOString().slice(0, 10)
-              const todayMD  = todayStr.slice(5)
+              const todayStr = toLocalISODate()
+              const todayMD  = monthDay(todayStr)
               const milestoneAlert = key === 'milestones' &&
                 specialDays.some(d => d.date === todayStr || (d.date !== todayStr && d.date.slice(5) === todayMD))
               const taskBadge = key === 'tasks' && pendingTaskCount > 0
@@ -916,8 +919,8 @@ export function Sidebar() {
 
           {/* ── MILESTONES ── */}
           {tab === 'milestones' && (() => {
-            const today   = new Date().toISOString().slice(0, 10)
-            const todayMD = today.slice(5)
+            const today   = toLocalISODate()
+            const todayMD = monthDay(today)
             const sorted  = [...specialDays].sort((a, b) => {
               // anniversaries/today first, then by date desc
               const aSpec = a.date === today || a.date.slice(5) === todayMD

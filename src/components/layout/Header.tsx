@@ -6,6 +6,7 @@ import { differenceInYears, differenceInMonths } from 'date-fns'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { cn } from '@/lib/utils'
+import { coerceDate, monthDay, toLocalISODate } from '@/lib/date'
 
 function getElapsedShort(dateStr: string) {
   const now    = new Date()
@@ -57,14 +58,15 @@ export function Header() {
     return () => window.removeEventListener('keydown', handler)
   }, [setShowNewRow])
 
-  const today   = new Date().toISOString().slice(0, 10)
-  const todayMD = today.slice(5)
+  const today   = toLocalISODate()
+  const todayMD = monthDay(today)
   const todayMs       = specialDays.filter(d => d.date === today)
   const anniversaryMs = specialDays.filter(d => d.date !== today && d.date.slice(5) === todayMD)
   const specialCount  = todayMs.length + anniversaryMs.length
 
-  const syncAgo = lastSynced ? (() => {
-    const diff = Math.floor((Date.now() - lastSynced.getTime()) / 60000)
+  const syncDate = coerceDate(lastSynced)
+  const syncAgo = syncDate ? (() => {
+    const diff = Math.floor((Date.now() - syncDate.getTime()) / 60000)
     if (diff < 1) return 'just now'
     if (diff < 60) return `${diff}m ago`
     return `${Math.floor(diff / 60)}h ago`
@@ -95,6 +97,7 @@ export function Header() {
             showSidebar && 'text-brand bg-brand/10'
           )}
           title="Dashboard (stats, tasks, milestones)"
+          aria-label="Dashboard (stats, tasks, milestones)"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <rect x="1" y="1" width="14" height="14" rx="2" />
@@ -108,6 +111,7 @@ export function Header() {
         <div className="relative" ref={memoriesRef}>
           <button
             onClick={() => setShowMemories(v => !v)}
+            aria-label="Memories"
             className={cn(
               'flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium transition-all relative',
               showMemories
@@ -199,12 +203,12 @@ export function Header() {
         </div>
 
         {/* AI */}
-        <button onClick={() => setShowAIPanel(true)} className={iconBtn} title="AI Assistant">
+        <button onClick={() => setShowAIPanel(true)} className={iconBtn} title="AI Assistant" aria-label="AI Assistant">
           <Wand2 className="w-4 h-4" />
         </button>
 
         {/* Dark mode */}
-        <button onClick={toggleDark} className={iconBtn} title="Toggle theme">
+        <button onClick={toggleDark} className={iconBtn} title="Toggle theme" aria-label="Toggle theme">
           {settings.themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 

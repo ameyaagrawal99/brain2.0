@@ -3,6 +3,7 @@ import { LayoutGrid, Table2, Kanban, Plus, Sparkles, X, FileText, LayoutDashboar
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
 import { ViewMode } from '@/types/sheet'
+import { monthDay, toLocalISODate } from '@/lib/date'
 
 const TABS: { mode: ViewMode; Icon: typeof LayoutGrid; label: string }[] = [
   { mode: 'stats', Icon: LayoutDashboard, label: 'Home' },
@@ -19,8 +20,8 @@ export function BottomNav() {
 
   const [showNewMenu, setShowNewMenu] = useState(false)
 
-  const today   = new Date().toISOString().slice(0, 10)
-  const todayMD = today.slice(5)
+  const today   = toLocalISODate()
+  const todayMD = monthDay(today)
   const specialCount = specialDays.filter(
     (d) => d.date === today || (d.date !== today && d.date.slice(5) === todayMD)
   ).length
@@ -82,6 +83,7 @@ export function BottomNav() {
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
+            aria-label={label}
             className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors py-1"
           >
             <div className={cn(
@@ -97,6 +99,7 @@ export function BottomNav() {
         {/* New button — opens menu with Entry + Milestone */}
         <button
           onClick={() => setShowNewMenu((v) => !v)}
+          aria-label="Create new"
           className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 relative"
         >
           <div className={cn(

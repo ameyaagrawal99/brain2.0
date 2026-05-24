@@ -13,7 +13,7 @@ import { useConfettiCheck }   from '@/components/ui/Confetti'
 import { useNotifications }   from '@/hooks/useNotifications'
 import { onTokenReady } from '@/lib/gsi'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { monthDay, toLocalISODate } from '@/lib/date'
 
 const CardView = lazy(() => import('@/components/views/CardView').then((m) => ({ default: m.CardView })))
 const TableView = lazy(() => import('@/components/views/TableView').then((m) => ({ default: m.TableView })))
@@ -39,8 +39,8 @@ function MilestoneBanner() {
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
   const [dismissed, setDismissed] = useState(false)
 
-  const today   = new Date().toISOString().slice(0, 10)
-  const todayMD = today.slice(5)
+  const today   = toLocalISODate()
+  const todayMD = monthDay(today)
 
   const todayMs       = specialDays.filter(d => d.date === today)
   const anniversaryMs = specialDays.filter(d => d.date !== today && d.date.slice(5) === todayMD)

@@ -7,24 +7,24 @@
 ═══════════════════════════════════════════════════ */
 
 :root {
-  /* Brand — vivid indigo-violet */
-  --color-brand:   99  91  255;
-  --color-brand-l: 129 120 255;
+  /* Brand — premium blue with violet support */
+  --color-brand:   59  130 246;
+  --color-brand-l: 139 92  246;
 
-  /* Surfaces — warm paper whites */
-  --color-bg:       248 247 244;
+  /* Surfaces — crisp system whites */
+  --color-bg:       245 245 247;
   --color-surface:  255 255 255;
-  --color-surface2: 244 243 240;
-  --color-hover:    238 237 234;
+  --color-surface2: 250 250 252;
+  --color-hover:    242 244 248;
 
   /* Borders — extremely subtle */
-  --color-border:   224 222 218;
-  --color-border2:  206 204 200;
+  --color-border:   226 232 240;
+  --color-border2:  203 213 225;
 
-  /* Text — warm near-black */
-  --color-text:    22  22  26;
-  --color-text2:   94  93  100;
-  --color-text3:   152 150 158;
+  /* Text — premium near-black */
+  --color-text:    17  24  39;
+  --color-text2:   75  85  99;
+  --color-text3:   107 114 128;
 
   /* Status colors */
   --color-green:   22  163 74;
@@ -45,12 +45,12 @@
   --radius-lg:  14px;
   --radius-xl:  20px;
 
-  /* Shadows — warm tinted */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 8px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.04);
-  --shadow-lg: 0 10px 20px -3px rgb(0 0 0 / 0.09), 0 4px 8px -4px rgb(0 0 0 / 0.04);
-  --shadow-xl: 0 20px 40px -5px rgb(0 0 0 / 0.12), 0 8px 16px -6px rgb(0 0 0 / 0.05);
+  /* Shadows — soft, layered, neutral */
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.08), 0 1px 2px -1px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 8px 18px -8px rgb(15 23 42 / 0.16), 0 2px 6px -3px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 18px 36px -18px rgb(15 23 42 / 0.28), 0 6px 18px -10px rgb(15 23 42 / 0.12);
+  --shadow-xl: 0 28px 60px -24px rgb(15 23 42 / 0.36), 0 12px 30px -18px rgb(15 23 42 / 0.18);
 
   /* Nav rail width */
   --nav-width: 56px;
@@ -116,7 +116,8 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background-color: rgb(var(--color-bg));
+  background:
+    linear-gradient(180deg, rgb(var(--color-surface)) 0%, rgb(var(--color-bg)) 320px);
   color: rgb(var(--color-text));
   min-height: 100vh;
   min-height: 100svh;
@@ -124,6 +125,25 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
   word-break: break-word;
   overflow-wrap: break-word;
+}
+
+.premium-surface {
+  background: rgb(var(--color-surface) / 0.92);
+  border: 1px solid rgb(var(--color-border));
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px);
+}
+
+.premium-control {
+  background: rgb(var(--color-surface2));
+  border: 1px solid rgb(var(--color-border));
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.premium-control:hover {
+  background: rgb(var(--color-surface));
+  border-color: rgb(var(--color-border2));
+  box-shadow: var(--shadow-xs);
 }
 
 .app-safe-screen {

@@ -1,6 +1,7 @@
 import { useBrainStore } from '@/store/useBrainStore'
 import { useFilters } from '@/hooks/useFilters'
 import { parseTags, formatRelative } from '@/lib/utils'
+import { coerceDate } from '@/lib/date'
 import { useMemo } from 'react'
 
 export function StatsBar() {
@@ -21,6 +22,7 @@ export function StatsBar() {
   if (!rows.length) return null
 
   const isFiltered = rows.length !== filteredRows.length
+  const syncedAt = coerceDate(lastSyncedAt)
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 flex items-center gap-2 sm:gap-4 text-[11px] overflow-x-auto scrollbar-hide border-b border-border/50">
@@ -66,9 +68,9 @@ export function StatsBar() {
         </div>
       )}
 
-      {lastSyncedAt && (
+      {syncedAt && (
         <span className="ml-auto shrink-0 hidden sm:block text-ink3">
-          synced {formatRelative(lastSyncedAt.toISOString())}
+          synced {formatRelative(syncedAt.toISOString())}
         </span>
       )}
     </div>

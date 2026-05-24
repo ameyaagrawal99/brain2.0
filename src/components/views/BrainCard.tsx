@@ -12,6 +12,7 @@ import { updateRow } from '@/lib/sheets'
 import { formatLink, extractTypedLinks } from '@/lib/linkGraph'
 import type { LinkType } from '@/types/sheet'
 import toast from 'react-hot-toast'
+import { toLocalISODate } from '@/lib/date'
 
 // Suppress unused import warning — CheckSquare2 kept for icon consistency
 void CheckSquare2
@@ -144,7 +145,7 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
   const isAIEnhanced = !!row.rewritten && !isFormula(row.rewritten)
   const isOverdue    = (() => {
     if (!row.dueDate || row.taskStatus === 'Done') return false
-    return row.dueDate < new Date().toISOString().slice(0, 10)
+    return row.dueDate < toLocalISODate()
   })()
 
   const linkCount = (() => {
@@ -192,8 +193,8 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
     <div
       onClick={handleClick}
       className={cn(
-        'brain-card group relative bg-surface border border-border rounded-xl overflow-hidden cursor-pointer',
-        'shadow-[var(--shadow-xs)]',
+        'brain-card group relative h-full bg-surface border border-border rounded-2xl overflow-hidden cursor-pointer',
+        'shadow-[var(--shadow-xs)] transition-[border-color,box-shadow,transform,opacity] duration-200 hover:-translate-y-0.5 hover:border-brand/25 hover:shadow-md',
         isSelected && 'ring-2 ring-brand',
         selectionMode && !isSelected && 'opacity-60',
         isOverdue && 'border-red-200 dark:border-red-800',
@@ -237,7 +238,7 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
       )}
 
       {/* Content */}
-      <div className={cn('p-4 flex flex-col gap-2', selectionMode && 'pl-10')}>
+      <div className={cn('p-4 flex min-h-44 flex-col gap-2', selectionMode && 'pl-10')}>
 
         {/* Header row: category + status */}
         <div className="flex items-center justify-between gap-2 min-h-[18px]">
@@ -280,10 +281,10 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
 
         {/* Title */}
         {hasSearch ? (
-          <h3 className="text-[14px] font-semibold text-ink leading-snug line-clamp-2"
+          <h3 className="text-[15px] font-semibold text-ink leading-snug line-clamp-2"
             dangerouslySetInnerHTML={{ __html: titleHtml || 'Untitled' }} />
         ) : (
-          <h3 className="text-[14px] font-semibold text-ink leading-snug line-clamp-2">
+          <h3 className="text-[15px] font-semibold text-ink leading-snug line-clamp-2">
             {row.title || 'Untitled'}
           </h3>
         )}
@@ -291,10 +292,10 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
         {/* Preview */}
         {preview && (
           hasSearch ? (
-            <p className="text-[12px] text-ink2 leading-relaxed line-clamp-3 font-normal"
+            <p className="text-[13px] text-ink2 leading-relaxed line-clamp-3 font-normal"
               dangerouslySetInnerHTML={{ __html: previewHtml }} />
           ) : (
-            <p className="text-[12px] text-ink2 leading-relaxed line-clamp-3 font-normal">{preview}</p>
+            <p className="text-[13px] text-ink2 leading-relaxed line-clamp-3 font-normal">{preview}</p>
           )
         )}
 

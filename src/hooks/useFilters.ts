@@ -3,6 +3,7 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { BrainRow } from '@/types/sheet'
 import { parseTags } from '@/lib/utils'
 import { analyzeSentiment } from '@/lib/sentiment'
+import { toLocalISODate } from '@/lib/date'
 
 export function useFilters() {
   const rows            = useBrainStore((s) => s.rows)
@@ -21,7 +22,7 @@ export function useFilters() {
   }, [rows, sentimentFilter])
 
   const filteredRows = useMemo<BrainRow[]>(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toLocalISODate()
     const q = (filters.search ?? '').toLowerCase()
 
     const categories    = filters.categories    ?? []

@@ -1,5 +1,6 @@
 import { BookOpen, Sparkles, Shield, Smartphone, ArrowRight, Brain } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useBrainStore } from '@/store/useBrainStore'
 
 const FEATURES = [
   { icon: Brain,       label: 'Knowledge graph',  desc: 'Connect ideas visually' },
@@ -10,6 +11,13 @@ const FEATURES = [
 
 export function LoginScreen() {
   const { signIn } = useAuth()
+  const setAuthState = useBrainStore((s) => s.setAuthState)
+  const updateSettings = useBrainStore((s) => s.updateSettings)
+
+  function enterDemo() {
+    updateSettings({ demoMode: true })
+    setAuthState({ isAuthenticated: true, token: null, error: null, loading: false })
+  }
 
   return (
     <div className="app-safe-screen bg-bg flex flex-col items-center justify-center p-5 sm:p-6 relative overflow-hidden">
@@ -64,6 +72,13 @@ export function LoginScreen() {
           </svg>
           <span className="flex-1 text-left">Continue with Google</span>
           <ArrowRight className="w-4 h-4 text-white/70 group-hover:translate-x-0.5 transition-all" />
+        </button>
+
+        <button
+          onClick={enterDemo}
+          className="mt-3 w-full flex items-center justify-center gap-2 h-11 px-5 premium-control rounded-xl text-sm font-semibold text-ink"
+        >
+          Explore demo
         </button>
 
         <p className="text-center text-[11px] text-ink3 mt-5 leading-relaxed">
