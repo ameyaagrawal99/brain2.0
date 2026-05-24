@@ -59,7 +59,7 @@ interface AuthState {
   loading: boolean   // true while silent token refresh is in-flight
 }
 
-interface FilterState {
+export interface FilterState {
   search:        string
   categories:    string[]
   subCategories: string[]
@@ -71,6 +71,8 @@ interface FilterState {
   showToday:     boolean
   dateFrom:      string | null
   dateTo:        string | null
+  dueDateFrom:   string | null
+  dueDateTo:     string | null
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -85,6 +87,8 @@ const DEFAULT_FILTERS: FilterState = {
   showToday:     false,
   dateFrom:      null,
   dateTo:        null,
+  dueDateFrom:   null,
+  dueDateTo:     null,
 }
 
 const MAX_HISTORY = 20
@@ -118,6 +122,7 @@ interface BrainStore {
   setSortBy:         (k: SortKey) => void
   setShowToday:      (v: boolean) => void
   setDateRange:      (from: string | null, to: string | null) => void
+  setFilters:        (patch: Partial<FilterState>) => void
   clearFilters:      () => void
 
   // Google Contacts (fetched after auth if user has granted contacts scope)
@@ -280,6 +285,7 @@ export const useBrainStore = create<BrainStore>()(
       setSortBy:       (sortBy)       => set((s) => ({ filters: { ...s.filters, sortBy } })),
       setShowToday:    (showToday)    => set((s) => ({ filters: { ...s.filters, showToday } })),
       setDateRange:    (dateFrom, dateTo) => set((s) => ({ filters: { ...s.filters, dateFrom, dateTo, showToday: false } })),
+      setFilters:      (patch)        => set((s) => ({ filters: { ...s.filters, ...patch } })),
       clearFilters:    ()             => set({ filters: DEFAULT_FILTERS, sentimentFilter: null }),
 
       contacts:             [],

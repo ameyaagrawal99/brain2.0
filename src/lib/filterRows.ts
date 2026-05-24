@@ -15,6 +15,8 @@ export interface FilterStateLike {
   showToday?: boolean
   dateFrom?: string | null
   dateTo?: string | null
+  dueDateFrom?: string | null
+  dueDateTo?: string | null
 }
 
 export function rowMatchesFilters(
@@ -71,6 +73,13 @@ export function rowMatchesFilters(
     const createdToday = row.createdAt?.startsWith(today)
     const dueToday = row.dueDate?.trim() === today
     if (!createdToday && !dueToday) return false
+  }
+
+  if (filters.dueDateFrom || filters.dueDateTo) {
+    const dueDate = row.dueDate?.trim() ?? ''
+    if (!dueDate) return false
+    if (filters.dueDateFrom && dueDate < filters.dueDateFrom) return false
+    if (filters.dueDateTo && dueDate > filters.dueDateTo) return false
   }
 
   if (persons.length > 0) {

@@ -100,7 +100,7 @@ export function useSheetSync() {
     label = 'Edit',
   ) => {
     const existing = rows.find((r) => r._rowIndex === rowIndex)
-    if (!existing) return
+    if (!existing) return false
 
     // Snapshot BEFORE state for undo history
     const before = rowToEditableSnapshot(existing)
@@ -118,10 +118,11 @@ export function useSheetSync() {
         pushHistory(rowIndex, before, label)
         clearFuture(rowIndex)
       }
+      return true
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Save failed'
       toast.error(msg)
-      await refresh()
+      return false
     }
   }, [rows, updateRowLocally, refresh, pushHistory, clearFuture])
 

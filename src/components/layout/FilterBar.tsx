@@ -1,4 +1,4 @@
-import { Search, X, CalendarDays, SlidersHorizontal, Check, ChevronDown } from 'lucide-react'
+import { Search, X, CalendarDays, SlidersHorizontal, Check, ChevronDown, BookmarkCheck, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useFilters } from '@/hooks/useFilters'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState } from 'react'
 import { EMOTION_META } from '@/lib/sentiment'
 import { addLocalDays, toLocalISODate } from '@/lib/date'
+import { deleteQuickFilter, fetchQuickFilters, saveQuickFilter, type QuickFilter } from '@/lib/sheetsConfig'
+import toast from 'react-hot-toast'
 
 /* ── Keyboard shortcut: ⌘K focuses search, ⌘F opens filter panel ─── */
 function useFilterKeys(
@@ -169,9 +171,11 @@ export function FilterBar() {
   const setTagMatchMode     = useBrainStore((s) => s.setTagMatchMode)
   const setSortBy           = useBrainStore((s) => s.setSortBy)
   const setDateRange        = useBrainStore((s) => s.setDateRange)
+  const setFilters          = useBrainStore((s) => s.setFilters)
   const clearFilters        = useBrainStore((s) => s.clearFilters)
   const sentimentFilter     = useBrainStore((s) => s.sentimentFilter)
   const setSentimentFilter  = useBrainStore((s) => s.setSentimentFilter)
+  const demoMode            = useBrainStore((s) => s.settings.demoMode)
 
   const { categories, subCategories, topTags, allPeople, hasActiveFilters, activeFilterCount, filteredRows } = useFilters()
 
@@ -185,9 +189,13 @@ export function FilterBar() {
   const searchRef = useRef<HTMLInputElement>(null)
   const panelRef  = useRef<HTMLDivElement>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [quickFilters, setQuickFilters] = useState<QuickFilter[]>([])
+  const [quickName, setQuickName] = useState('')
+  const [loadingQuick, setLoadingQuick] = useState(false)
+  const [savingQuick, setSavingQuick] = useState(false)
 
   /* ── Collapsible section state ───────────────────────────────── */
-  const ALL_SECTIONS = ['category', 'subcategory', 'status', 'tags', 'people', 'date', 'sort'] as const
+  const ALL_SECTIONS = ['category', 'subcategory', 'status', 'tags', 'people', 'date', 'due', 'sort'] as const
   type SectionKey = typeof ALL_SECTIONS[number]
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(
     new Set(ALL_SECTIONS),
@@ -213,6 +221,82 @@ export function FilterBar() {
 
   useFilterKeys(searchRef, () => setShowFilters(true))
 
+  useEffect(() => {
+    if (!showFilters || demoMode) return
+    setLoadingQuick(true)
+    fetchQuickFilters()
+      .then(setQuickFilters)
+      .finally(() => setLoadingQuick(false))
+  }, [showFilters, demoMode])
+
+  async function handleSaveQuickFilter() {
+    const name = quickName.trim()
+    if (!name) return
+    setSavingQuick(true)
+    try {
+      const qf: QuickFilter = {
+        name,
+        search: localSearch || filters.search || '',
+        categories: filters.categories,
+        subCategories: filters.subCategories,
+        statuses: filters.statuses,
+        persons: filters.persons,
+        selectedTags: filters.selectedTags,
+        tagMatchMode: filters.tagMatchMode,
+        sortBy: filters.sortBy,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        dueDateFrom: filters.dueDateFrom,
+        dueDateTo: filters.dueDateTo,
+        showToday: filters.showToday,
+        sentimentFilter,
+      }
+      await saveQuickFilter(qf)
+      setQuickFilters((prev) => {
+        const idx = prev.findIndex((item) => item.name.toLowerCase() === name.toLowerCase())
+        return idx >= 0 ? prev.map((item, i) => i === idx ? qf : item) : [...prev, qf]
+      })
+      setQuickName('')
+      toast.success('Saved view')
+    } catch {
+      toast.error('Failed to save view')
+    } finally {
+      setSavingQuick(false)
+    }
+  }
+
+  function handleApplyQuickFilter(qf: QuickFilter) {
+    setLocalSearch(qf.search || '')
+    setFilters({
+      search: qf.search || '',
+      categories: qf.categories ?? [],
+      subCategories: qf.subCategories ?? [],
+      statuses: qf.statuses ?? [],
+      persons: qf.persons ?? [],
+      selectedTags: qf.selectedTags ?? [],
+      tagMatchMode: qf.tagMatchMode ?? 'and',
+      sortBy: (qf.sortBy || 'date-desc') as typeof filters.sortBy,
+      dateFrom: qf.dateFrom ?? null,
+      dateTo: qf.dateTo ?? null,
+      dueDateFrom: qf.dueDateFrom ?? null,
+      dueDateTo: qf.dueDateTo ?? null,
+      showToday: qf.showToday ?? false,
+    })
+    setSentimentFilter(qf.sentimentFilter ?? null)
+    setShowFilters(false)
+    toast.success(`Applied "${qf.name}"`)
+  }
+
+  async function handleDeleteQuickFilter(name: string) {
+    try {
+      await deleteQuickFilter(name)
+      setQuickFilters((prev) => prev.filter((item) => item.name !== name))
+      toast.success('Deleted view')
+    } catch {
+      toast.error('Failed to delete view')
+    }
+  }
+
   /* ── Close panel on outside click ───────────────────────────── */
   useEffect(() => {
     function click(e: MouseEvent) {
@@ -228,6 +312,7 @@ export function FilterBar() {
   /* ── Date helpers ────────────────────────────────────────────── */
   const today = toLocalISODate()
   const hasDate = !!(filters.dateFrom || filters.dateTo)
+  const hasDueDate = !!(filters.dueDateFrom || filters.dueDateTo)
 
   function dateLabel() {
     const { dateFrom: from, dateTo: to } = filters
@@ -241,12 +326,25 @@ export function FilterBar() {
   }
 
   function setQuickRange(from: string, to: string) { setDateRange(from, to) }
+  function setDueRange(from: string | null, to: string | null) {
+    setFilters({ dueDateFrom: from, dueDateTo: to })
+  }
+  function rangeLabel(from: string | null, to: string | null, fallback: string) {
+    if (!from && !to) return null
+    if (from === today && to === today) return 'Today'
+    if (from && to && from === to) return from
+    if (from && to) return `${from.slice(5)} - ${to.slice(5)}`
+    if (from) return `From ${from.slice(5)}`
+    if (to) return `Until ${to.slice(5)}`
+    return fallback
+  }
   const last7  = () => ({ from: toLocalISODate(addLocalDays(new Date(), -6)), to: today })
   const last30 = () => ({ from: toLocalISODate(addLocalDays(new Date(), -29)), to: today })
   const week   = () => { const d = new Date(); const m = addLocalDays(d, -((d.getDay() + 6) % 7)); return { from: toLocalISODate(m), to: today } }
   const month  = () => { const d = new Date(); return { from: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`, to: today } }
 
   const dl = dateLabel()
+  const dueLabel = rangeLabel(filters.dueDateFrom, filters.dueDateTo, 'Due date')
 
   /* ── Chip labels ─────────────────────────────────────────────── */
   const sentimentChipLabel = sentimentFilter
@@ -262,6 +360,7 @@ export function FilterBar() {
     ...filters.persons.map((p)       => ({ id: `per:${p}`,    label: `@${p}`,  remove: () => togglePerson(p) })),
     ...filters.selectedTags.map((t)  => ({ id: `tag:${t}`,    label: `#${t}`,  remove: () => toggleTag(t) })),
     ...(hasDate ? [{ id: 'date', label: dl ?? 'Date', remove: () => setDateRange(null, null) }] : []),
+    ...(hasDueDate ? [{ id: 'due', label: `Due: ${dueLabel ?? 'date'}`, remove: () => setDueRange(null, null) }] : []),
     ...(sentimentChipLabel ? [{ id: 'sentiment', label: sentimentChipLabel, remove: () => setSentimentFilter(null) }] : []),
   ]
 
@@ -367,6 +466,58 @@ export function FilterBar() {
 
               {/* Scrollable content */}
               <div className="overflow-y-auto p-4 space-y-3">
+                <div className="rounded-xl border border-border bg-surface2/60 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-ink">Saved views</p>
+                      <p className="text-[10px] text-ink3">Save and reapply full filter state.</p>
+                    </div>
+                    {loadingQuick && <Loader2 className="w-3.5 h-3.5 text-ink3 animate-spin" />}
+                  </div>
+                  {!demoMode && (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={quickName}
+                        onChange={(e) => setQuickName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveQuickFilter()}
+                        placeholder="Name this view…"
+                        className="min-w-0 flex-1 h-8 rounded-lg border border-border bg-surface px-2 text-xs text-ink placeholder:text-ink3 focus:outline-none focus:ring-1 focus:ring-brand/40"
+                      />
+                      <button
+                        onClick={handleSaveQuickFilter}
+                        disabled={!quickName.trim() || savingQuick}
+                        className="h-8 px-2.5 rounded-lg bg-brand text-white text-xs font-semibold disabled:opacity-40"
+                      >
+                        {savingQuick ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                      </button>
+                    </div>
+                  )}
+                  {demoMode ? (
+                    <p className="text-[11px] text-ink3">Saved views sync through Google Sheets and are disabled in demo mode.</p>
+                  ) : quickFilters.length > 0 ? (
+                    <div className="space-y-1">
+                      {quickFilters.map((qf) => (
+                        <div key={qf.name} className="flex items-center gap-1.5 rounded-lg bg-surface border border-border px-2 py-1.5">
+                          <button onClick={() => handleApplyQuickFilter(qf)} className="min-w-0 flex-1 text-left">
+                            <p className="truncate text-xs font-medium text-ink">{qf.name}</p>
+                            <p className="truncate text-[10px] text-ink3">
+                              {[qf.search && `"${qf.search}"`, qf.categories?.join(', '), qf.statuses?.join(', '), qf.dateFrom || qf.dateTo ? 'date' : '', qf.dueDateFrom || qf.dueDateTo ? 'due' : '', qf.sentimentFilter ? 'sentiment' : ''].filter(Boolean).join(' · ') || 'All entries'}
+                            </p>
+                          </button>
+                          <button onClick={() => handleApplyQuickFilter(qf)} className="text-brand p-1 rounded hover:bg-brand/10" aria-label={`Apply ${qf.name}`}>
+                            <BookmarkCheck className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteQuickFilter(qf.name)} className="text-ink3 p-1 rounded hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${qf.name}`}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-ink3">No saved views yet.</p>
+                  )}
+                </div>
 
                 {/* ── Category ── */}
                 {categories.length > 0 && (
@@ -618,6 +769,64 @@ export function FilterBar() {
                           className="w-full text-xs text-ink2 hover:text-ink border border-border rounded-lg py-1.5 hover:bg-hover transition-colors flex items-center justify-center gap-1"
                         >
                           <X className="w-3 h-3" />Clear dates
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Due date ── */}
+                <div>
+                  <SectionHead
+                    label="Due date"
+                    count={hasDueDate ? 1 : undefined}
+                    isOpen={openSections.has('due')}
+                    onToggle={() => toggleSection('due')}
+                  />
+                  {openSections.has('due') && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: 'Overdue',     fn: () => setDueRange(null, toLocalISODate(addLocalDays(new Date(), -1))) },
+                          { label: 'Today',       fn: () => setDueRange(today, today) },
+                          { label: 'Next 7 days', fn: () => setDueRange(today, toLocalISODate(addLocalDays(new Date(), 7))) },
+                        ].map(({ label, fn }) => (
+                          <button
+                            key={label}
+                            onClick={fn}
+                            className="px-2.5 py-1 text-xs border rounded-lg transition-colors bg-surface2 border-border hover:bg-hover hover:border-brand/30 text-ink"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-ink3 block mb-0.5">From</label>
+                          <input
+                            type="date"
+                            value={filters.dueDateFrom ?? ''}
+                            onChange={(e) => setDueRange(e.target.value || null, filters.dueDateTo)}
+                            className="w-full h-7 px-2 text-xs bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-1 focus:ring-brand/40"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-ink3 block mb-0.5">To</label>
+                          <input
+                            type="date"
+                            value={filters.dueDateTo ?? ''}
+                            min={filters.dueDateFrom ?? undefined}
+                            onChange={(e) => setDueRange(filters.dueDateFrom, e.target.value || null)}
+                            className="w-full h-7 px-2 text-xs bg-surface2 border border-border rounded-lg text-ink focus:outline-none focus:ring-1 focus:ring-brand/40"
+                          />
+                        </div>
+                      </div>
+                      {hasDueDate && (
+                        <button
+                          onClick={() => setDueRange(null, null)}
+                          className="w-full text-xs text-ink2 hover:text-ink border border-border rounded-lg py-1.5 hover:bg-hover transition-colors flex items-center justify-center gap-1"
+                        >
+                          <X className="w-3 h-3" />Clear due dates
                         </button>
                       )}
                     </div>

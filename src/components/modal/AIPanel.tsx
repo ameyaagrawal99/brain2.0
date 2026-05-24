@@ -179,6 +179,7 @@ export function AIPanel() {
   const [quickText, setQuickText]     = useState('')
   const [quickResult, setQuickResult] = useState<string | null>(null)
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [bulkPreviewRows, setBulkPreviewRows] = useState<BrainRow[] | null>(null)
   const [digest, setDigest]           = useState<string | null>(null)
   const [chatInput, setChatInput]     = useState('')
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
@@ -239,10 +240,18 @@ export function AIPanel() {
   }
 
   async function handleBulkEnhance() {
-    const toProcess = getBulkRows()
-    if (!toProcess.length) { toast('No entries need enhancement with the current settings'); return }
+    if (!bulkPreviewRows) {
+      const toPreview = getBulkRows()
+      if (!toPreview.length) { toast('No entries need enhancement with the current settings'); return }
+      setBulkPreviewRows(toPreview)
+      toast('Review the bulk preview, then apply when ready')
+      return
+    }
 
+    const toProcess = bulkPreviewRows
+    if (!toProcess.length) { toast('No entries need enhancement with the current settings'); return }
     stopRef.current = false
+    setBulkPreviewRows(null)
     setBulkProgress({ done: 0, total: toProcess.length })
     const touchedIndices: number[] = []
     let done = 0
@@ -282,6 +291,7 @@ export function AIPanel() {
         if (fieldsNeeded.includes('rewrite')  && result.rewritten)   fields.rewritten   = result.rewritten
         if (fieldsNeeded.includes('tags')     && result.tags)        fields.tags        = result.tags
         if (fieldsNeeded.includes('category') && result.category)    fields.category    = result.category
+        if (fieldsNeeded.includes('category') && result.subCategory) fields.subCategory = result.subCategory
         if (fieldsNeeded.includes('actions')  && result.actionItems) fields.actionItems = result.actionItems
 
         if (Object.keys(fields).length) {
@@ -966,6 +976,27 @@ Rules:
                   </div>
                 )}
 
+                {bulkPreviewRows && !bulkProgress && (
+                  <div className="rounded-xl border border-brand/25 bg-brand/5 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-ink">Bulk preview</p>
+                        <p className="text-xs text-ink3">{bulkPreviewRows.length} entries will be processed. No changes have been saved yet.</p>
+                      </div>
+                      <button onClick={() => setBulkPreviewRows(null)} className="text-xs text-ink3 hover:text-ink">Cancel</button>
+                    </div>
+                    <div className="space-y-1 max-h-28 overflow-y-auto">
+                      {bulkPreviewRows.slice(0, 6).map((row) => (
+                        <div key={row._rowIndex} className="flex items-center justify-between gap-2 rounded-lg bg-surface border border-border px-2 py-1.5">
+                          <span className="text-xs text-ink truncate">{row.title || 'Untitled'}</span>
+                          <span className="text-[10px] text-ink3 shrink-0">{getFieldsToGenerate(row, bulkFieldOptions).join(', ')}</span>
+                        </div>
+                      ))}
+                      {bulkPreviewRows.length > 6 && <p className="text-[10px] text-ink3">+{bulkPreviewRows.length - 6} more</p>}
+                    </div>
+                  </div>
+                )}
+
                 {/* Run / Stop buttons */}
                 {bulkProgress ? (
                   <Button
@@ -986,7 +1017,9 @@ Rules:
                     className="w-full justify-center"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    {bulkScopeCount > 0
+                    {bulkPreviewRows
+                      ? `Apply to ${bulkPreviewRows.length} ${bulkPreviewRows.length === 1 ? 'entry' : 'entries'}`
+                      : bulkScopeCount > 0
                       ? `Enhance ${bulkScopeCount} ${bulkScopeCount === 1 ? 'entry' : 'entries'}`
                       : 'Nothing to enhance'}
                   </Button>

@@ -282,6 +282,7 @@ export function GraphView() {
   const [hiddenLinkTypes, setHiddenLinkTypes] = useState<Set<LinkType>>(new Set())
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
   const [linkedOnly, setLinkedOnly] = useState(false)
+  const [isolatedOnly, setIsolatedOnly] = useState(false)
 
   const dragging = useRef<{ startX: number; startY: number; tx: number; ty: number } | null>(null)
   const mmDragging = useRef(false)
@@ -305,6 +306,8 @@ export function GraphView() {
     allEdges.forEach((e) => { ids.add(e.source); ids.add(e.target) })
     return ids
   }, [allEdges])
+  const linkedCount = connectedIds.size
+  const unlinkedCount = Math.max(0, rows.length - linkedCount)
 
   // Performance cap: > 300 nodes → fewer sim ticks
   const totalNodes = rows.length
@@ -389,11 +392,12 @@ export function GraphView() {
   const visibleNodes = useMemo(() => {
     let nodes = focusNeighbours ? allNodes.filter((n) => focusNeighbours.has(n.id)) : allNodes
     if (linkedOnly) nodes = nodes.filter((n) => connectedIds.has(n.id))
+    if (isolatedOnly) nodes = nodes.filter((n) => !connectedIds.has(n.id))
     if (hiddenCategories.size > 0) {
       nodes = nodes.filter((n) => !hiddenCategories.has(n.row.category?.trim() ?? ''))
     }
     return nodes
-  }, [allNodes, focusNeighbours, linkedOnly, connectedIds, hiddenCategories])
+  }, [allNodes, focusNeighbours, linkedOnly, isolatedOnly, connectedIds, hiddenCategories])
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes])
 
@@ -623,10 +627,8 @@ export function GraphView() {
 
         {/* Stats badge */}
         <div className="bg-surface/90 backdrop-blur-sm border border-border rounded-xl px-3 py-2 text-xs text-ink2 shadow">
-          <span className="font-semibold text-ink">{connectedRows.length}</span> linked
-          {showOrphans && orphanRows.length > 0 && (
-            <> · <span className="font-semibold text-ink">{orphanRows.length}</span> unlinked</>
-          )}
+          <span className="font-semibold text-ink">{linkedCount}</span> linked
+          <> · <span className="font-semibold text-ink">{unlinkedCount}</span> unlinked</>
           {' · '}
           <span className="font-semibold text-brand">{explicitEdges.length}</span> edge{explicitEdges.length !== 1 ? 's' : ''}
           {totalNodes > 300 && (
@@ -650,7 +652,10 @@ export function GraphView() {
             Implicit links
           </button>
           <button
-            onClick={() => setShowOrphans((v) => !v)}
+            onClick={() => {
+              setShowOrphans((v) => !v)
+              setIsolatedOnly(false)
+            }}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors shadow-sm',
               showOrphans
@@ -660,6 +665,22 @@ export function GraphView() {
           >
             {showOrphans ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
             Unlinked nodes
+          </button>
+          <button
+            onClick={() => {
+              setShowOrphans(true)
+              setLinkedOnly(false)
+              setIsolatedOnly((v) => !v)
+            }}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors shadow-sm',
+              isolatedOnly
+                ? 'bg-brand text-white border-brand'
+                : 'bg-surface/90 border-border text-ink3 hover:text-ink backdrop-blur-sm',
+            )}
+          >
+            <Target className="w-3 h-3" />
+            Isolated only
           </button>
           <button
             onClick={() => setShowClusters((v) => !v)}
@@ -677,7 +698,7 @@ export function GraphView() {
             onClick={() => setShowFilterPanel((v) => !v)}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors shadow-sm',
-              showFilterPanel || hiddenLinkTypes.size > 0 || hiddenCategories.size > 0 || linkedOnly
+              showFilterPanel || hiddenLinkTypes.size > 0 || hiddenCategories.size > 0 || linkedOnly || isolatedOnly
                 ? 'bg-brand text-white border-brand'
                 : 'bg-surface/90 border-border text-ink2 hover:text-ink backdrop-blur-sm',
             )}
@@ -724,10 +745,26 @@ export function GraphView() {
             <input
               type="checkbox"
               checked={linkedOnly}
-              onChange={(e) => setLinkedOnly(e.target.checked)}
+              onChange={(e) => {
+                setLinkedOnly(e.target.checked)
+                if (e.target.checked) setIsolatedOnly(false)
+              }}
               className="rounded"
             />
             Linked entries only
+          </label>
+          <label className="flex items-center gap-2 text-xs text-ink2 mb-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isolatedOnly}
+              onChange={(e) => {
+                setIsolatedOnly(e.target.checked)
+                setShowOrphans(true)
+                if (e.target.checked) setLinkedOnly(false)
+              }}
+              className="rounded"
+            />
+            Isolated entries only
           </label>
 
           <p className="text-[11px] font-semibold text-ink mb-1.5 uppercase tracking-wide">Edge types</p>
@@ -772,9 +809,9 @@ export function GraphView() {
             </>
           )}
 
-          {(hiddenLinkTypes.size > 0 || hiddenCategories.size > 0 || linkedOnly) && (
+          {(hiddenLinkTypes.size > 0 || hiddenCategories.size > 0 || linkedOnly || isolatedOnly) && (
             <button
-              onClick={() => { setHiddenLinkTypes(new Set()); setHiddenCategories(new Set()); setLinkedOnly(false) }}
+              onClick={() => { setHiddenLinkTypes(new Set()); setHiddenCategories(new Set()); setLinkedOnly(false); setIsolatedOnly(false) }}
               className="mt-3 text-xs text-brand hover:underline"
             >
               Clear all filters

@@ -82,6 +82,8 @@ export function DetailModal() {
   const [relateQuery, setRelateQuery]         = useState('')
   const [relateFilter, setRelateFilter]       = useState<'all' | 'unlinked' | 'linked'>('all')
   const [showLinkPicker, setShowLinkPicker]   = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const row        = selectedRow
   const histSteps  = row ? (entryHistory[row._rowIndex]?.length  ?? 0) : 0
@@ -165,9 +167,16 @@ export function DetailModal() {
 
   async function handleSave() {
     if (!row) return
-    await saveRow(row._rowIndex, fields, 'Edit')
-    setEditing(false)
-    setFields({})
+    setSavingEdit(true)
+    setSaveError(null)
+    const ok = await saveRow(row._rowIndex, fields, 'Edit')
+    setSavingEdit(false)
+    if (ok) {
+      setEditing(false)
+      setFields({})
+    } else {
+      setSaveError('Save failed. Your edits are still here; retry when the connection or sheet access is fixed.')
+    }
   }
 
   function handleCancel() {
@@ -191,6 +200,7 @@ export function DetailModal() {
     if (result.rewritten)   patchField('rewritten',    result.rewritten)
     if (result.tags)        patchField('tags',         result.tags)
     if (result.category)    patchField('category',     result.category)
+    if (result.subCategory) patchField('subCategory',  result.subCategory)
     if (result.actionItems) patchField('actionItems',  result.actionItems)
     if (Object.keys(result).length) {
       setEditing(true)
@@ -443,7 +453,7 @@ export function DetailModal() {
               {editing ? (
                 <>
                   <Button size="sm" variant="ghost" onClick={handleCancel}><X className="w-3.5 h-3.5" /></Button>
-                  <Button size="sm" variant="primary" onClick={handleSave}><Save className="w-3.5 h-3.5" />Save</Button>
+                  <Button size="sm" variant="primary" onClick={handleSave} loading={savingEdit}><Save className="w-3.5 h-3.5" />Save</Button>
                 </>
               ) : (
                 <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
@@ -512,6 +522,13 @@ export function DetailModal() {
               ) : (
                 <span className="text-xs text-ink3">Add OpenAI key in Settings to enable AI features.</span>
               )}
+            </div>
+          )}
+
+          {saveError && (
+            <div className="px-5 py-2.5 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-center justify-between gap-3">
+              <span>{saveError}</span>
+              <button onClick={handleSave} className="font-semibold underline">Retry</button>
             </div>
           )}
 

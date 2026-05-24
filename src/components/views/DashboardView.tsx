@@ -83,6 +83,7 @@ function FocusSummary({
   activeCount,
   onOpenBoard,
   onNewEntry,
+  onFocus,
 }: {
   overdueCount: number
   dueTodayCount: number
@@ -90,12 +91,13 @@ function FocusSummary({
   activeCount: number
   onOpenBoard: () => void
   onNewEntry: () => void
+  onFocus: (kind: 'overdue' | 'today' | 'week' | 'active') => void
 }) {
   const focusItems = [
-    { label: 'Overdue', value: overdueCount, tone: overdueCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-ink2' },
-    { label: 'Due today', value: dueTodayCount, tone: dueTodayCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-ink2' },
-    { label: 'Next 7 days', value: dueSoonCount, tone: 'text-blue-600 dark:text-blue-400' },
-    { label: 'Active', value: activeCount, tone: 'text-emerald-600 dark:text-emerald-400' },
+    { key: 'overdue' as const, label: 'Overdue', value: overdueCount, tone: overdueCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-ink2' },
+    { key: 'today' as const, label: 'Due today', value: dueTodayCount, tone: dueTodayCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-ink2' },
+    { key: 'week' as const, label: 'Next 7 days', value: dueSoonCount, tone: 'text-blue-600 dark:text-blue-400' },
+    { key: 'active' as const, label: 'Active', value: activeCount, tone: 'text-emerald-600 dark:text-emerald-400' },
   ]
 
   return (
@@ -113,10 +115,10 @@ function FocusSummary({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
           {focusItems.map((item) => (
-            <div key={item.label} className="rounded-2xl bg-surface2 border border-border px-3 py-2.5">
+            <button key={item.label} onClick={() => onFocus(item.key)} className="rounded-2xl bg-surface2 border border-border px-3 py-2.5 text-left hover:border-brand/30 hover:bg-hover transition-colors">
               <p className={cn('text-xl font-bold tabular-nums leading-none', item.tone)}>{item.value}</p>
               <p className="text-[11px] text-ink3 mt-1">{item.label}</p>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -163,12 +165,27 @@ export function DashboardView() {
   const setShowNewRow        = useBrainStore((s) => s.setShowNewRow)
   const openModal            = useBrainStore((s) => s.openModal)
   const setViewMode          = useBrainStore((s) => s.setViewMode)
+  const setFilters           = useBrainStore((s) => s.setFilters)
   const setSentimentFilter   = useBrainStore((s) => s.setSentimentFilter)
   const sentimentFilter      = useBrainStore((s) => s.sentimentFilter)
 
   function applySentimentFilter(f: SentimentFilter) {
     setSentimentFilter(f)
     setViewMode('card')
+  }
+
+  function applyFocusFilter(kind: 'overdue' | 'today' | 'week' | 'active') {
+    setSentimentFilter(null)
+    if (kind === 'overdue') {
+      setFilters({ search: '', statuses: ['pending', 'progress', 'blocked', 'review'], dateFrom: null, dateTo: null, dueDateFrom: null, dueDateTo: toLocalISODate(addLocalDays(new Date(), -1)), showToday: false })
+    } else if (kind === 'today') {
+      setFilters({ search: '', statuses: ['pending', 'progress', 'blocked', 'review'], dateFrom: null, dateTo: null, dueDateFrom: today, dueDateTo: today, showToday: false })
+    } else if (kind === 'week') {
+      setFilters({ search: '', statuses: ['pending', 'progress', 'blocked', 'review'], dateFrom: null, dateTo: null, dueDateFrom: today, dueDateTo: toLocalISODate(addLocalDays(new Date(), 7)), showToday: false })
+    } else {
+      setFilters({ search: '', statuses: ['progress', 'review'], dateFrom: null, dateTo: null, dueDateFrom: null, dueDateTo: null, showToday: false })
+    }
+    setViewMode(kind === 'active' ? 'board' : 'card')
   }
 
   const { refresh } = useSheetSync()
@@ -314,6 +331,7 @@ export function DashboardView() {
           activeCount={stats.active}
           onOpenBoard={() => setViewMode('board')}
           onNewEntry={() => setShowNewRow(true)}
+          onFocus={applyFocusFilter}
         />
 
         {/* ── Progress bar ───────────────────────────────────── */}
