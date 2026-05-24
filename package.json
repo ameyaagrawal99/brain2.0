@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "audit": "npm audit --omit=dev",
+    "check": "npm run test && npm run build",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

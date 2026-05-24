@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { initTokenClient, requestToken, revokeToken, hasSessionHint, initOneTapFallback, loadGisScript } from '@/lib/gsi'
 import { getAuthStartupPolicy } from '@/lib/startupPolicy'
+import { logger } from '@/lib/logger'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 
@@ -40,7 +41,7 @@ export function useAuth() {
           const delay = policy.silentRetryDelaysMs[silentRetryCount.current]
           if (hasSessionHint() && delay !== undefined) {
             silentRetryCount.current += 1
-            console.log(`[Auth] Silent auth failed, retrying in ${delay}ms`)
+            logger.info(`[Auth] Silent auth failed, retrying in ${delay}ms`)
             const timer = setTimeout(() => {
               if (!useBrainStore.getState().authState.isAuthenticated) {
                 try { requestToken(true) } catch { /* ignore */ }
@@ -55,7 +56,7 @@ export function useAuth() {
           // reliable than the hidden iframe approach used by prompt:'none'.
           if (hasSessionHint() && !oneTapTriggered.current && google?.accounts?.id) {
             oneTapTriggered.current = true
-            console.log('[Auth] Attempting One Tap fallback…')
+            logger.info('[Auth] Attempting One Tap fallback…')
             initOneTapFallback(CLIENT_ID, () => {
               oneTapTimer = setTimeout(() => {
                 if (!useBrainStore.getState().authState.isAuthenticated) {

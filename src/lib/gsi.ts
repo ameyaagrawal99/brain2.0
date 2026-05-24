@@ -1,4 +1,5 @@
 import { SHEETS_SCOPE, CONTACTS_SCOPE, CONTACTS_OTHER_SCOPE } from '@/constants/sheet'
+import { logger } from './logger'
 
 let tokenClient: TokenClient | null = null
 let accessToken: string | null = null
@@ -83,7 +84,7 @@ function scheduleTokenRefresh(expiresIn: number) {
   const refreshInSec = expiresIn > 600 ? expiresIn - 300 : Math.floor(expiresIn / 2)
   const refreshInMs  = Math.max(0, refreshInSec * 1000)
   _refreshTimer = setTimeout(() => {
-    console.log('[GSI] Auto-refreshing token silently…')
+    logger.info('[GSI] Auto-refreshing token silently…')
     try { requestToken(true) } catch { /* ignore if not yet initialised */ }
   }, refreshInMs)
 }
@@ -124,7 +125,7 @@ export function initTokenClient(
       // Set module-level token BEFORE calling listeners
       accessToken = response.access_token
       tokenExpiry = Date.now() + (response.expires_in - 60) * 1000
-      console.log('[GSI] Token received, expires in', response.expires_in, 'seconds')
+      logger.info('[GSI] Token received, expires in', response.expires_in, 'seconds')
       setSessionHint()  // mark that user has an active session (survives refresh)
       scheduleTokenRefresh(response.expires_in)
       onToken(response.access_token)
@@ -135,7 +136,7 @@ export function initTokenClient(
     error_callback: (err: ErrorResponse) => {
       const wasSilent = _pendingSilentCount > 0
       if (wasSilent) _pendingSilentCount = Math.max(0, _pendingSilentCount - 1)
-      console.warn('[GSI] Error (silent=%s):', wasSilent, err.type, err.message)
+      logger.warn('[GSI] Error (silent=%s):', wasSilent, err.type, err.message)
       if (wasSilent) {
         // Silent failures are expected (no active session / consent not yet granted).
         // Don't surface as an error — just let the caller know so it can stop loading.
@@ -163,7 +164,7 @@ async function _fetchAndStoreLoginHint(token: string): Promise<void> {
       const data = await res.json() as { email?: string }
       if (data.email) {
         setLoginHint(data.email)
-        console.log('[GSI] Stored login_hint for future silent auth')
+        logger.info('[GSI] Stored login_hint for future silent auth')
       }
     }
   } catch {
@@ -208,7 +209,7 @@ export function initOneTapFallback(
       const payload = decodeJwtPayload(credentialResponse.credential)
       if (payload.email) {
         setLoginHint(payload.email)
-        console.log('[GSI] One Tap credential received, stored login_hint:', payload.email)
+        logger.info('[GSI] One Tap credential received, stored login_hint:', payload.email)
       }
       // Now request an access token using the hint — this should succeed silently
       // since the user just authenticated via One Tap
@@ -223,7 +224,7 @@ export function initOneTapFallback(
   // Prompt for One Tap — if auto_select matches a known account, it fires automatically
   google.accounts.id.prompt((notification) => {
     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      console.log('[GSI] One Tap not displayed or skipped')
+      logger.info('[GSI] One Tap not displayed or skipped')
     }
   })
 }
@@ -231,7 +232,7 @@ export function initOneTapFallback(
 export function getAccessToken(): string | null {
   if (!accessToken) return null
   if (Date.now() >= tokenExpiry) {
-    console.warn('[GSI] Token expired')
+    logger.warn('[GSI] Token expired')
     return null
   }
   return accessToken

@@ -2,6 +2,7 @@ import { SHEET_ID, DATA_RANGE, SHEETS_BASE, SHEET_NAME, TOTAL_COLS } from '@/con
 import { parseRows, rowToValues } from './parseRows'
 import { BrainRow } from '@/types/sheet'
 import { getAccessToken } from './gsi'
+import { logger } from './logger'
 
 export function authHeaders(): HeadersInit {
   const token = getAccessToken()
@@ -16,12 +17,12 @@ export function authHeaders(): HeadersInit {
 
 export async function sheetsFetch(url: string, init?: RequestInit) {
   const headers = authHeaders()
-  console.log('[sheets] fetching:', url.split('?')[0])
+  logger.debug('[sheets] fetching:', url.split('?')[0])
   const res = await fetch(url, { ...init, headers: { ...headers, ...(init?.headers ?? {}) } })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const msg  = (body as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`
-    console.error('[sheets] API error:', res.status, msg)
+    logger.error('[sheets] API error:', res.status, msg)
     if (res.status === 401) throw new Error('Auth expired — please sign in again')
     if (res.status === 403) throw new Error('Permission denied — make sure the Google Sheet is accessible to your account')
     if (res.status === 404) throw new Error('Sheet not found — check SHEET_ID in constants/sheet.ts')
@@ -34,7 +35,7 @@ export async function fetchRows(): Promise<BrainRow[]> {
   const url = `${SHEETS_BASE}/${SHEET_ID}/values/${encodeURIComponent(DATA_RANGE)}?valueRenderOption=FORMATTED_VALUE`
   const data = await sheetsFetch(url)
   const values = (data as { values?: string[][] }).values ?? []
-  console.log('[sheets] raw rows received:', values.length)
+  logger.debug('[sheets] raw rows received:', values.length)
   return parseRows(values)
 }
 
