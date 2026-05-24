@@ -5,6 +5,7 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState } from 'react'
 import { EMOTION_META } from '@/lib/sentiment'
+import { addLocalDays, toLocalISODate } from '@/lib/date'
 
 /* ── Keyboard shortcut: ⌘K focuses search, ⌘F opens filter panel ─── */
 function useFilterKeys(
@@ -225,7 +226,7 @@ export function FilterBar() {
   }, [])
 
   /* ── Date helpers ────────────────────────────────────────────── */
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalISODate()
   const hasDate = !!(filters.dateFrom || filters.dateTo)
 
   function dateLabel() {
@@ -240,9 +241,9 @@ export function FilterBar() {
   }
 
   function setQuickRange(from: string, to: string) { setDateRange(from, to) }
-  const last7  = () => { const d = new Date(); d.setDate(d.getDate() - 6);  return { from: d.toISOString().slice(0, 10), to: today } }
-  const last30 = () => { const d = new Date(); d.setDate(d.getDate() - 29); return { from: d.toISOString().slice(0, 10), to: today } }
-  const week   = () => { const d = new Date(); const m = new Date(d); m.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return { from: m.toISOString().slice(0, 10), to: today } }
+  const last7  = () => ({ from: toLocalISODate(addLocalDays(new Date(), -6)), to: today })
+  const last30 = () => ({ from: toLocalISODate(addLocalDays(new Date(), -29)), to: today })
+  const week   = () => { const d = new Date(); const m = addLocalDays(d, -((d.getDay() + 6) % 7)); return { from: toLocalISODate(m), to: today } }
   const month  = () => { const d = new Date(); return { from: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`, to: today } }
 
   const dl = dateLabel()
@@ -319,6 +320,7 @@ export function FilterBar() {
         <div className="relative shrink-0" ref={panelRef}>
           <button
             onClick={() => setShowFilters((v) => !v)}
+            aria-label="Filters"
             className={cn(
               'flex items-center gap-1.5 h-8 px-2.5 rounded-lg border text-xs font-medium transition-all',
               activeFilterCount > 0 || showFilters
@@ -337,7 +339,8 @@ export function FilterBar() {
 
           {/* ── Filter panel ───────────────────────────────────────── */}
           {showFilters && (
-            <div className="absolute right-0 top-full mt-1.5 z-50 w-[360px] max-h-[80vh]
+            <div className="fixed left-3 right-3 top-[6.25rem] z-50 max-h-[calc(100svh-7rem)]
+              sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-[360px] sm:max-h-[80vh]
               bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden
               animate-scaleIn flex flex-col">
 
@@ -568,7 +571,7 @@ export function FilterBar() {
                       <div className="flex flex-wrap gap-1.5">
                         {[
                           { label: 'Today',        fn: () => setQuickRange(today, today) },
-                          { label: 'Yesterday',    fn: () => { const d = new Date(); d.setDate(d.getDate()-1); const y = d.toISOString().slice(0,10); setQuickRange(y, y) } },
+                          { label: 'Yesterday',    fn: () => { const y = toLocalISODate(addLocalDays(new Date(), -1)); setQuickRange(y, y) } },
                           { label: 'Last 7 days',  fn: () => { const r = last7();  setQuickRange(r.from, r.to) } },
                           { label: 'Last 30 days', fn: () => { const r = last30(); setQuickRange(r.from, r.to) } },
                           { label: 'This week',    fn: () => { const r = week();   setQuickRange(r.from, r.to) } },
@@ -673,13 +676,14 @@ export function FilterBar() {
 
         {/* Result count */}
         <span className="text-xs text-ink3 whitespace-nowrap shrink-0 hidden lg:block">
-          {filteredRows.length.toLocaleString()}
+          {filteredRows.length.toLocaleString()} shown
         </span>
 
         {/* Clear all (when active) */}
         {hasActiveFilters && (
           <button
             onClick={() => { clearFilters(); setLocalSearch('') }}
+            aria-label="Clear all filters"
             className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-surface2 border border-border text-ink3 hover:bg-hover hover:text-danger transition-colors"
             title="Clear all filters"
           >

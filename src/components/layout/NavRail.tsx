@@ -6,6 +6,7 @@ import {
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
 import type { ViewMode } from '@/types/sheet'
+import { monthDay, toLocalISODate } from '@/lib/date'
 
 interface NavItem {
   id: string
@@ -57,8 +58,8 @@ export function NavRail() {
   const rows           = useBrainStore((s) => s.rows)
   const specialDays    = useBrainStore((s) => s.specialDays)
 
-  const today   = new Date().toISOString().slice(0, 10)
-  const todayMD = today.slice(5)
+  const today   = toLocalISODate()
+  const todayMD = monthDay(today)
   const hasSpecial = specialDays.some(d => d.date === today || (d.date !== today && d.date.slice(5) === todayMD))
 
   const navBtnBase = `
@@ -88,6 +89,8 @@ export function NavRail() {
             <Tooltip key={id} label={label}>
               <button
                 onClick={() => mode && setViewMode(mode)}
+                aria-label={label}
+                title={label}
                 className={cn(navBtnBase,
                   isActive
                     ? 'bg-brand/12 text-brand shadow-sm'
@@ -112,6 +115,8 @@ export function NavRail() {
         <Tooltip label="Filters">
           <button
             onClick={() => setShowSidebar(!showSidebar)}
+            aria-label="Open insight sidebar"
+            title="Open insight sidebar"
             className={cn(navBtnBase,
               showSidebar
                 ? 'bg-brand/12 text-brand shadow-sm'
@@ -128,6 +133,8 @@ export function NavRail() {
         <Tooltip label="AI Assistant">
           <button
             onClick={() => setShowAIPanel(true)}
+            aria-label="AI Assistant"
+            title="AI Assistant"
             className={cn(navBtnBase, 'text-ink3 hover:bg-hover hover:text-ink')}
           >
             <Sparkles className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
@@ -151,6 +158,8 @@ export function NavRail() {
         <Tooltip label="Settings">
           <button
             onClick={() => setShowSettings(true)}
+            aria-label="Settings"
+            title="Settings"
             className={cn(navBtnBase, 'text-ink3 hover:bg-hover hover:text-ink')}
           >
             <Settings className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
@@ -160,7 +169,7 @@ export function NavRail() {
 
       {/* Upcoming — due today badge */}
       {(() => {
-        const todayStr = new Date().toISOString().slice(0, 10)
+        const todayStr = toLocalISODate()
         const dueToday = rows.filter(r => r.dueDate === todayStr && r.taskStatus !== 'Done').length
         if (!dueToday) return null
         return (

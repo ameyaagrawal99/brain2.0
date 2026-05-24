@@ -13,6 +13,7 @@ import { useFilters } from '@/hooks/useFilters'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { expandChain, formatLink } from '@/lib/linkGraph'
+import { toLocalISODate } from '@/lib/date'
 import toast from 'react-hot-toast'
 import type { BrainRow, LinkType } from '@/types/sheet'
 import { LINK_TYPE_LABELS } from '@/types/sheet'
@@ -600,7 +601,7 @@ Rules:
   function handleExport() {
     const data = exportScope === 'all' ? rows : filteredRows
     if (!data.length) { toast.error('No entries to export'); return }
-    const ts = new Date().toISOString().slice(0, 10)
+    const ts = toLocalISODate()
     if (exportFormat === 'md') {
       downloadFile(exportMarkdown(data), `brain-export-${ts}.md`, 'text/markdown')
     } else {

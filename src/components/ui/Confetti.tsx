@@ -2,14 +2,7 @@ import { useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import toast from 'react-hot-toast'
 import { useBrainStore } from '@/store/useBrainStore'
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function monthDay(isoDate: string) {
-  return isoDate.slice(5, 10) // "MM-DD"
-}
+import { monthDay, toLocalISODate } from '@/lib/date'
 
 export function useConfettiCheck() {
   const specialDays        = useBrainStore((s) => s.specialDays)
@@ -21,7 +14,7 @@ export function useConfettiCheck() {
     if (!specialDays.length) return
     if (firedRef.current) return
 
-    const today = todayISO()
+    const today = toLocalISODate()
     if (lastConfettiDate === today) return
 
     const todayMD = monthDay(today)

@@ -8,6 +8,7 @@ import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { renderMarkdown } from '@/lib/markdown'
 import { cn, isImageUrl } from '@/lib/utils'
+import { monthDay, toLocalISODate } from '@/lib/date'
 import type { SpecialDay } from '@/types/sheet'
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -154,8 +155,8 @@ export function MilestoneModal() {
 
   if (!isOpen) return null
 
-  const today   = new Date().toISOString().slice(0, 10)
-  const todayMD = today.slice(5)
+  const today   = toLocalISODate()
+  const todayMD = monthDay(today)
   const dayDate = selectedMilestone?.date ?? date
   const isToday       = dayDate === today
   const isAnniversary = !!dayDate && dayDate !== today && dayDate.slice(5) === todayMD

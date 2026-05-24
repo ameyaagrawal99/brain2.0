@@ -13,6 +13,7 @@ import { useEffect, useRef } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { parseActionItems } from '@/lib/utils'
 import { differenceInYears } from 'date-fns'
+import { addLocalDays, toLocalISODate } from '@/lib/date'
 
 const notified = new Set<string>()
 
@@ -65,11 +66,9 @@ export function useNotifications() {
     hasChecked.current = true
 
     const today    = new Date()
-    const todayStr = today.toISOString().slice(0, 10)
+    const todayStr = toLocalISODate(today)
     const todayMD  = todayStr.slice(5)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10)
+    const tomorrowStr = toLocalISODate(addLocalDays(today, 1))
 
     // ── 1. Overdue tasks ──────────────────────────────────────────────
     const overdue = rows.filter(
