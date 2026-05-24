@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Sparkles, X, Star, ChevronDown, Plus, Sun, Moon, Wand2, RefreshCw,
+  Sparkles, X, Star, ChevronDown, Plus, Sun, Moon, Wand2, RefreshCw, LogIn,
 } from 'lucide-react'
 import { differenceInYears, differenceInMonths } from 'date-fns'
 import { useBrainStore } from '@/store/useBrainStore'
@@ -30,6 +30,7 @@ export function Header() {
   const setShowSidebar      = useBrainStore((s) => s.setShowSidebar)
   const settings            = useBrainStore((s) => s.settings)
   const updateSettings      = useBrainStore((s) => s.updateSettings)
+  const setAuthState        = useBrainStore((s) => s.setAuthState)
   const specialDays         = useBrainStore((s) => s.specialDays)
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
   const demoMode            = settings.demoMode
@@ -73,6 +74,10 @@ export function Header() {
   })() : null
 
   const toggleDark = () => updateSettings({ themeMode: settings.themeMode === 'dark' ? 'light' : 'dark' })
+  const exitDemo = () => {
+    updateSettings({ demoMode: false })
+    setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
+  }
 
   const iconBtn = 'w-8 h-8 flex items-center justify-center rounded-lg text-ink3 hover:bg-hover hover:text-ink transition-all shrink-0'
 
@@ -107,6 +112,17 @@ export function Header() {
 
         <div className="flex-1" />
 
+        {demoMode && (
+          <button
+            onClick={exitDemo}
+            aria-label="Exit demo and sign in"
+            className="flex items-center gap-1.5 h-8 px-2 rounded-lg border border-border bg-surface2 text-xs font-semibold text-ink2 hover:bg-hover hover:text-ink transition-colors"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sign in</span>
+          </button>
+        )}
+
         {/* Memories */}
         <div className="relative" ref={memoriesRef}>
           <button
@@ -138,7 +154,7 @@ export function Header() {
                   <p className="text-sm font-bold text-ink">✨ Memories</p>
                   <p className="text-[10px] text-ink3">Today's special moments</p>
                 </div>
-                <button onClick={() => setShowMemories(false)} className={iconBtn}>
+                <button onClick={() => setShowMemories(false)} className={iconBtn} aria-label="Close memories">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -215,7 +231,8 @@ export function Header() {
         {/* Sync */}
         {!demoMode && (
           <button onClick={refresh} disabled={isSyncing} className={cn(iconBtn, isSyncing && 'opacity-50')}
-            title={syncAgo ? `Synced ${syncAgo}` : 'Sync'}>
+            title={syncAgo ? `Synced ${syncAgo}` : 'Sync'}
+            aria-label={syncAgo ? `Sync, last synced ${syncAgo}` : 'Sync'}>
             <RefreshCw className={cn('w-4 h-4', isSyncing && 'animate-spin')} style={{ animationDuration: '1.4s' }} />
           </button>
         )}
@@ -224,6 +241,7 @@ export function Header() {
         <div className="flex items-center" ref={newMenuRef}>
           <button
             onClick={() => setShowNewRow(true)}
+            aria-label="New entry"
             className="flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-l-xl
               bg-gradient-to-r from-[rgb(var(--color-brand))] to-purple-500
               text-white text-xs font-semibold shadow-sm shadow-brand/30
@@ -234,6 +252,7 @@ export function Header() {
           </button>
           <button
             onClick={() => setShowNewMenu(v => !v)}
+            aria-label="More new options"
             className="h-8 w-6 flex items-center justify-center rounded-r-xl
               bg-purple-500 text-white hover:bg-purple-600
               border-l border-white/20 shadow-sm shadow-brand/20

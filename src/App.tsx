@@ -11,6 +11,7 @@ export default function App() {
   useTheme()
 
   const { isAuthenticated, loading } = useBrainStore((s) => s.authState)
+  const demoMode = useBrainStore((s) => s.settings.demoMode)
 
   // While attempting silent re-auth on reload, show a minimal spinner so the
   // login screen doesn't flash briefly before the token arrives.
@@ -25,7 +26,7 @@ export default function App() {
   return (
     <>
       <ErrorBoundary>
-        {isAuthenticated ? <AppShell /> : <LoginScreen />}
+        {isAuthenticated || demoMode ? <AppShell /> : <LoginScreen />}
       </ErrorBoundary>
       <Toaster
         position="bottom-right"

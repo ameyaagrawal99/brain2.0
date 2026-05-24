@@ -7,7 +7,7 @@ import { fetchGoogleContacts, ContactsError } from '@/lib/contacts'
 import { requestContactsAccess } from '@/lib/gsi'
 import { cn, COLOR_PALETTE } from '@/lib/utils'
 import { requestNotificationPermission, getNotificationPermission } from '@/hooks/useNotifications'
-import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2, Bot } from 'lucide-react'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogIn, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2, Bot } from 'lucide-react'
 import { useState } from 'react'
 import type { AIProvider } from '@/store/useBrainStore'
 import toast from 'react-hot-toast'
@@ -19,6 +19,7 @@ export function SettingsPanel() {
   const setShowSettings = useBrainStore((s) => s.setShowSettings)
   const settings        = useBrainStore((s) => s.settings)
   const updateSettings  = useBrainStore((s) => s.updateSettings)
+  const setAuthState    = useBrainStore((s) => s.setAuthState)
   const resetSettings   = useBrainStore((s) => s.resetSettings)
   const customCats      = useBrainStore((s) => s.customCategories)
   const customTags      = useBrainStore((s) => s.customTags)
@@ -119,6 +120,12 @@ export function SettingsPanel() {
     signOut()
     setShowSettings(false)
     toast.success('Signed out')
+  }
+
+  function handleExitDemo() {
+    updateSettings({ demoMode: false })
+    setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
+    setShowSettings(false)
   }
 
   async function handleAddCategory() {
@@ -640,6 +647,12 @@ export function SettingsPanel() {
             checked={settings.demoMode}
             onChange={() => toggle('demoMode')}
           />
+          {settings.demoMode && (
+            <Button variant="outline" size="sm" onClick={handleExitDemo}>
+              <LogIn className="w-3.5 h-3.5" />
+              Exit demo and sign in
+            </Button>
+          )}
         </Section>
 
         {/* Actions */}

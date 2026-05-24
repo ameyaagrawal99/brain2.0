@@ -8,6 +8,7 @@ import { monthDay, toLocalISODate } from '@/lib/date'
 const TABS: { mode: ViewMode; Icon: typeof LayoutGrid; label: string }[] = [
   { mode: 'stats', Icon: LayoutDashboard, label: 'Home' },
   { mode: 'card',  Icon: LayoutGrid,      label: 'Cards' },
+  { mode: 'table', Icon: Table2,          label: 'Table' },
   { mode: 'board', Icon: Kanban,          label: 'Board' },
 ]
 
