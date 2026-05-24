@@ -3,6 +3,7 @@ import { fetchRows, updateRow, appendRow, deleteRow } from '@/lib/sheets'
 import { ensureConfigSheet, fetchConfig, fetchSpecialDays, appendSpecialDay, deleteSpecialDay, updateSpecialDay } from '@/lib/sheetsConfig'
 import { useBrainStore } from '@/store/useBrainStore'
 import { EditableFields, SpecialDay } from '@/types/sheet'
+import { logger } from '@/lib/logger'
 import toast from 'react-hot-toast'
 
 const CONFIG_READY_KEY = 'brain2_config_sheet_ready'
@@ -84,7 +85,7 @@ export function useSheetSync() {
       }
       setSpecialDays(specialDays)
     } catch (err) {
-      console.warn('[useSheetSync] refreshConfig non-fatal:', err)
+      logger.warn('[useSheetSync] refreshConfig non-fatal:', err)
     }
   }, [setCustomCategories, setCustomTags, setCategoryColors, setSpecialDays])
 

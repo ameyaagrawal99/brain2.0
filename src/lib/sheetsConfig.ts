@@ -1,5 +1,6 @@
 import { SHEET_ID, SHEETS_BASE, CONFIG_SHEET_NAME, CONFIG_RANGE, CONFIG_TYPES } from '@/constants/sheet'
 import type { SpecialDay } from '@/types/sheet'
+import { logger } from './logger'
 
 export interface QuickFilter {
   name:          string
@@ -49,7 +50,7 @@ export async function ensureConfigSheet(): Promise<void> {
     const msg = err instanceof Error ? err.message : ''
     // Sheet already exists — not an error
     if (msg.includes('already exists') || msg.includes('ALREADY_EXISTS')) return
-    console.warn('[sheetsConfig] ensureConfigSheet warning:', msg)
+    logger.warn('[sheetsConfig] ensureConfigSheet warning:', msg)
     // Non-fatal — swallow other errors so app still loads
   }
 }
@@ -74,7 +75,7 @@ export async function fetchConfig(): Promise<{ categories: string[]; tags: strin
       .forEach(r => { colors[r[1].trim().toLowerCase()] = r[2].trim() })
     return { categories, tags, colors }
   } catch (err) {
-    console.warn('[sheetsConfig] fetchConfig failed (non-fatal):', err)
+    logger.warn('[sheetsConfig] fetchConfig failed (non-fatal):', err)
     return { categories: [], tags: [], colors: {} }
   }
 }
@@ -135,7 +136,7 @@ export async function saveColorConfig(category: string, colorName: string): Prom
       await appendConfigItem(CONFIG_TYPES.COLOR, catLower, colorName)
     }
   } catch (err) {
-    console.warn('[sheetsConfig] saveColorConfig failed:', err)
+    logger.warn('[sheetsConfig] saveColorConfig failed:', err)
     throw err
   }
 }
@@ -194,7 +195,7 @@ export async function saveQuickFilter(filter: QuickFilter): Promise<void> {
       await appendConfigItem(CONFIG_TYPES.QUICKFILTER, name, jsonValue)
     }
   } catch (err) {
-    console.warn('[sheetsConfig] saveQuickFilter failed:', err)
+    logger.warn('[sheetsConfig] saveQuickFilter failed:', err)
     throw err
   }
 }
@@ -263,7 +264,7 @@ export async function updateSpecialDay(day: SpecialDay): Promise<void> {
       }
     )
   } catch (err) {
-    console.warn('[sheetsConfig] updateSpecialDay failed:', err)
+    logger.warn('[sheetsConfig] updateSpecialDay failed:', err)
     throw err
   }
 }
@@ -309,7 +310,7 @@ export async function deleteConfigItem(type: 'category' | 'tag' | 'color' | 'qui
       }),
     })
   } catch (err) {
-    console.warn('[sheetsConfig] deleteConfigItem failed:', err)
+    logger.warn('[sheetsConfig] deleteConfigItem failed:', err)
     throw err
   }
 }

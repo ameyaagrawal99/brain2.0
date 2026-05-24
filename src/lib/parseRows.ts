@@ -1,5 +1,5 @@
-import { BrainRow } from '@/types/sheet'
-import { COL } from '@/constants/sheet'
+import type { BrainRow } from '../types/sheet.ts'
+import { COL } from '../constants/sheet.ts'
 
 function cell(row: string[], idx: number): string {
   return (row[idx] ?? '').trim()
