@@ -13,6 +13,8 @@ export function LoginScreen() {
   const { signIn } = useAuth()
   const setAuthState = useBrainStore((s) => s.setAuthState)
   const updateSettings = useBrainStore((s) => s.updateSettings)
+  const authError = useBrainStore((s) => s.authState.error)
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   function enterDemo() {
     updateSettings({ demoMode: true })
@@ -60,9 +62,23 @@ export function LoginScreen() {
         </div>
 
         {/* Sign-in button */}
+        {authError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-left dark:border-red-900/60 dark:bg-red-900/20">
+            <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+              {clientId ? 'Google sign-in needs attention' : 'Google sign-in is not configured'}
+            </p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-red-600 dark:text-red-300/80">
+              {clientId
+                ? authError
+                : 'The app needs VITE_GOOGLE_CLIENT_ID before live Google Sheets sync can start.'}
+            </p>
+          </div>
+        )}
+
         <button
           onClick={signIn}
-          className="w-full group flex items-center justify-center gap-3 h-12 px-5 bg-ink text-white border border-ink rounded-xl text-sm font-semibold hover:bg-brand hover:border-brand transition-all shadow-md shadow-brand/10"
+          disabled={!clientId}
+          className="w-full group flex items-center justify-center gap-3 h-12 px-5 bg-ink text-white border border-ink rounded-xl text-sm font-semibold hover:bg-brand hover:border-brand transition-all shadow-md shadow-brand/10 disabled:opacity-50 disabled:hover:bg-ink disabled:hover:border-ink"
         >
           <svg width="20" height="20" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>

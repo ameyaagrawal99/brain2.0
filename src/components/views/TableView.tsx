@@ -3,7 +3,7 @@ import { useFilters } from '@/hooks/useFilters'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { parseTags, formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import { BookOpen, Search } from 'lucide-react'
+import { BookOpen, CalendarDays, CheckCircle2, Clock3, Search, Tag } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { CardSkeleton } from '@/components/ui/Skeleton'
 import { stripMarkdown } from '@/lib/markdown'
@@ -71,7 +71,67 @@ export function TableView() {
   }
 
   return (
-    <div className="overflow-x-auto px-3 sm:px-4 pb-6">
+    <div className="px-3 sm:px-4 pb-6">
+      <div className="sm:hidden space-y-2">
+        {filteredRows.map((row, i) => {
+          const tags = parseTags(row.tags).slice(0, 3)
+          const rawPreview = cleanVal(row.rewritten) || cleanVal(row.original) || ''
+          const preview = stripMarkdown(rawPreview).slice(0, 150)
+          const category = cleanVal(row.category)
+          const taskStatus = cleanVal(row.taskStatus)
+          return (
+            <button
+              key={row._rowIndex}
+              type="button"
+              onClick={() => openModal(row)}
+              className="w-full text-left rounded-xl border border-border bg-surface px-3.5 py-3 shadow-sm active:scale-[0.99] transition-all"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-surface2 border border-border flex items-center justify-center text-[11px] font-semibold text-ink3 shrink-0">
+                  {row.srNo || i + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-ink leading-snug line-clamp-2">
+                      {row.title || 'Untitled'}
+                    </h3>
+                    {taskStatus && (
+                      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium whitespace-nowrap', getStatusColor(taskStatus))}>
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        {taskStatus}
+                      </span>
+                    )}
+                  </div>
+                  {preview && (
+                    <p className="mt-1.5 text-xs text-ink2 leading-relaxed line-clamp-3">{preview}</p>
+                  )}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {category && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-brand/8 text-brand">
+                        {category}
+                      </span>
+                    )}
+                    {(row.dueDate || row.createdAt) && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-surface2 text-ink3 border border-border">
+                        {row.dueDate ? <Clock3 className="w-2.5 h-2.5" /> : <CalendarDays className="w-2.5 h-2.5" />}
+                        {formatDate(row.dueDate || row.createdAt)}
+                      </span>
+                    )}
+                    {tags.map((t) => (
+                      <span key={t} className="inline-flex items-center gap-1 text-[10px] bg-brand/8 text-brand px-1.5 py-0.5 rounded-full">
+                        <Tag className="w-2.5 h-2.5" />
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="hidden sm:block overflow-x-auto rounded-xl border border-border bg-surface shadow-sm">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border">
@@ -137,6 +197,7 @@ export function TableView() {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
