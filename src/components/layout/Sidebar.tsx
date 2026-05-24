@@ -94,7 +94,10 @@ export function Sidebar() {
   const toggleTag        = useBrainStore((s) => s.toggleTag)
   const setTagMatchMode  = useBrainStore((s) => s.setTagMatchMode)
   const setSortBy        = useBrainStore((s) => s.setSortBy)
+  const setFilters       = useBrainStore((s) => s.setFilters)
   const clearFilters     = useBrainStore((s) => s.clearFilters)
+  const sentimentFilter  = useBrainStore((s) => s.sentimentFilter)
+  const setSentimentFilter = useBrainStore((s) => s.setSentimentFilter)
   const demoMode         = useBrainStore((s) => s.settings.demoMode)
 
   const specialDays          = useBrainStore((s) => s.specialDays)
@@ -262,6 +265,12 @@ export function Sidebar() {
         selectedTags:  filters.selectedTags,
         tagMatchMode:  filters.tagMatchMode,
         sortBy:        filters.sortBy,
+        dateFrom:      filters.dateFrom,
+        dateTo:        filters.dateTo,
+        dueDateFrom:   filters.dueDateFrom,
+        dueDateTo:     filters.dueDateTo,
+        showToday:     filters.showToday,
+        sentimentFilter,
       }
       await saveQuickFilter(qf)
       setQuickFilters(prev => {
@@ -290,15 +299,22 @@ export function Sidebar() {
   }
 
   function handleApplyFilter(qf: QuickFilter) {
-    clearFilters()
-    setSearch(qf.search || '')
-    qf.categories?.forEach(toggleCategory)
-    qf.subCategories?.forEach(toggleSubCategory)
-    qf.statuses?.forEach(toggleStatus)
-    qf.persons?.forEach(togglePerson)
-    qf.selectedTags?.forEach(toggleTag)
-    if (qf.tagMatchMode) setTagMatchMode(qf.tagMatchMode)
-    setSortBy((qf.sortBy || 'date-desc') as Parameters<typeof setSortBy>[0])
+    setFilters({
+      search: qf.search || '',
+      categories: qf.categories ?? [],
+      subCategories: qf.subCategories ?? [],
+      statuses: qf.statuses ?? [],
+      persons: qf.persons ?? [],
+      selectedTags: qf.selectedTags ?? [],
+      tagMatchMode: qf.tagMatchMode ?? 'and',
+      sortBy: (qf.sortBy || 'date-desc') as Parameters<typeof setSortBy>[0],
+      dateFrom: qf.dateFrom ?? null,
+      dateTo: qf.dateTo ?? null,
+      dueDateFrom: qf.dueDateFrom ?? null,
+      dueDateTo: qf.dueDateTo ?? null,
+      showToday: qf.showToday ?? false,
+    })
+    setSentimentFilter(qf.sentimentFilter ?? null)
     toast.success(`Applied "${qf.name}"`)
     setShowSidebar(false)
   }
@@ -787,9 +803,12 @@ export function Sidebar() {
                   {filters.search && <p>Search: "{filters.search}"</p>}
                   {filters.categories.length > 0 && <p>Category: {filters.categories.join(', ')}</p>}
                   {filters.statuses.length > 0 && <p>Status: {filters.statuses.join(', ')}</p>}
+                  {(filters.dateFrom || filters.dateTo) && <p>Date: {filters.dateFrom ?? '…'} → {filters.dateTo ?? '…'}</p>}
+                  {(filters.dueDateFrom || filters.dueDateTo) && <p>Due: {filters.dueDateFrom ?? '…'} → {filters.dueDateTo ?? '…'}</p>}
+                  {sentimentFilter && <p>Sentiment: {sentimentFilter.kind} / {sentimentFilter.value}</p>}
                   {filters.persons.length > 0 && <p>People: {filters.persons.join(', ')}</p>}
                   {filters.selectedTags.length > 0 && <p>Tags: {filters.selectedTags.join(', ')}</p>}
-                  {!filters.search && !filters.categories.length && !filters.statuses.length && !filters.selectedTags.length && !filters.persons.length && (
+                  {!filters.search && !filters.categories.length && !filters.statuses.length && !filters.selectedTags.length && !filters.persons.length && !filters.dateFrom && !filters.dateTo && !filters.dueDateFrom && !filters.dueDateTo && !sentimentFilter && (
                     <p className="text-ink3 italic">No filters active</p>
                   )}
                 </div>
@@ -820,6 +839,9 @@ export function Sidebar() {
                             {[
                               qf.categories?.join(', '),
                               qf.statuses?.join(', '),
+                              qf.dateFrom || qf.dateTo ? 'date range' : '',
+                              qf.dueDateFrom || qf.dueDateTo ? 'due date' : '',
+                              qf.sentimentFilter ? 'sentiment' : '',
                               qf.search && `"${qf.search}"`,
                             ].filter(Boolean).join(' · ') || 'All entries'}
                           </p>

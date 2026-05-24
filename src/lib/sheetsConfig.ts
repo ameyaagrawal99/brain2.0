@@ -1,5 +1,6 @@
 import { SHEET_ID, SHEETS_BASE, CONFIG_SHEET_NAME, CONFIG_RANGE, CONFIG_TYPES } from '@/constants/sheet'
 import type { SpecialDay } from '@/types/sheet'
+import type { SentimentFilter } from '@/lib/sentiment'
 import { logger } from './logger'
 
 export interface QuickFilter {
@@ -12,6 +13,12 @@ export interface QuickFilter {
   selectedTags:  string[]
   tagMatchMode:  'and' | 'or'
   sortBy:        string
+  dateFrom?:     string | null
+  dateTo?:       string | null
+  dueDateFrom?:  string | null
+  dueDateTo?:    string | null
+  showToday?:    boolean
+  sentimentFilter?: SentimentFilter | null
 }
 import { sheetsFetch } from './sheets'
 

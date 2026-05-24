@@ -5,6 +5,7 @@ interface AIResult {
   rewritten?:   string
   tags?:        string
   category?:    string
+  subCategory?: string
   actionItems?: string
   title?:       string
 }
@@ -35,7 +36,7 @@ function parseContent(action: string, content: string): AIResult {
     try {
       const m = content.match(/\{[\s\S]*\}/)
       const p = m ? JSON.parse(m[0]) : {}
-      return { title: p.title, rewritten: p.rewritten, tags: p.tags, category: p.category, actionItems: p.actionItems }
+      return { title: p.title, rewritten: p.rewritten, tags: p.tags, category: p.category, subCategory: p.subCategory, actionItems: p.actionItems }
     } catch { return { rewritten: content } }
   }
   if (action === 'rewrite')    return { rewritten: content.trim() }
@@ -44,7 +45,7 @@ function parseContent(action: string, content: string): AIResult {
   if (action === 'categorize') {
     const cat = content.match(/Category:\s*([^,\n]+)/i)
     const sub = content.match(/SubCategory:\s*([^\n]+)/i)
-    return { category: cat?.[1]?.trim(), actionItems: sub?.[1]?.trim() }
+    return { category: cat?.[1]?.trim(), subCategory: sub?.[1]?.trim() }
   }
   if (action === 'actions') return { actionItems: content.trim() }
   return {}

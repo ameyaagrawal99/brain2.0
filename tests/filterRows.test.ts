@@ -38,6 +38,11 @@ test('filters by date ranges and today fallback', () => {
   assert.deepEqual(filterAndSortRows(rows, { showToday: true }, null, '2026-05-24').map((r) => r.title), ['Ship feature'])
 })
 
+test('filters by due date ranges independently of created dates', () => {
+  assert.deepEqual(filterAndSortRows(rows, { dueDateFrom: '2026-05-24', dueDateTo: '2026-05-24' }, null).map((r) => r.title), ['Ship feature'])
+  assert.deepEqual(filterAndSortRows(rows, { dueDateTo: '2026-05-23' }, null).map((r) => r.title), [])
+})
+
 test('filters by status, tags, people, and category', () => {
   assert.deepEqual(filterAndSortRows(rows, { statuses: ['blocked'] }, null).map((r) => r.title), ['Blocked item'])
   assert.deepEqual(filterAndSortRows(rows, { selectedTags: ['work', 'focus'], tagMatchMode: 'and' }, null).map((r) => r.title), ['Ship feature'])
