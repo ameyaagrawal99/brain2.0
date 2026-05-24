@@ -56,6 +56,13 @@ export default defineConfig({
             url: './?view=board',
             icons: [{ src: 'icons/icon-96.png', sizes: '96x96', type: 'image/png' }],
           },
+          {
+            name: 'Memory OS',
+            short_name: 'Memory',
+            description: 'Open your structured memory and writing source workspace',
+            url: './?view=memory',
+            icons: [{ src: 'icons/icon-96.png', sizes: '96x96', type: 'image/png' }],
+          },
         ],
       },
       workbox: {
