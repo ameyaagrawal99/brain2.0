@@ -20,6 +20,7 @@ const TableView = lazy(() => import('@/components/views/TableView').then((m) => 
 const TaskBoard = lazy(() => import('@/components/views/TaskBoard').then((m) => ({ default: m.TaskBoard })))
 const GraphView = lazy(() => import('@/components/views/GraphView').then((m) => ({ default: m.GraphView })))
 const DashboardView = lazy(() => import('@/components/views/DashboardView').then((m) => ({ default: m.DashboardView })))
+const MemoryOSView = lazy(() => import('@/components/views/MemoryOSView').then((m) => ({ default: m.MemoryOSView })))
 const DetailModal = lazy(() => import('@/components/modal/DetailModal').then((m) => ({ default: m.DetailModal })))
 const NewRowModal = lazy(() => import('@/components/modal/NewRowModal').then((m) => ({ default: m.NewRowModal })))
 const MilestoneModal = lazy(() => import('@/components/modal/MilestoneModal').then((m) => ({ default: m.MilestoneModal })))
@@ -115,6 +116,7 @@ export function AppShell() {
     if (action === 'new-entry')     setShowNewRow(true)
     if (action === 'new-milestone') setShowNewMilestone(true)
     if (view === 'board')           useBrainStore.getState().setViewMode('board')
+    if (view === 'memory')          useBrainStore.getState().setViewMode('memory')
     if (action || view)             window.history.replaceState({}, '', window.location.pathname)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -149,10 +151,10 @@ export function AppShell() {
       <MilestoneBanner />
 
       {/* Filter / search bar — hidden on dashboard view */}
-      {viewMode !== 'stats' && <FilterBar />}
+      {viewMode !== 'stats' && viewMode !== 'memory' && <FilterBar />}
 
       {/* Stats strip — hidden on dashboard view */}
-      {viewMode !== 'stats' && (
+      {viewMode !== 'stats' && viewMode !== 'memory' && (
         <div className="sm:ml-14">
           <StatsBar />
         </div>
@@ -169,6 +171,7 @@ export function AppShell() {
           {viewMode === 'board' && <TaskBoard />}
           {viewMode === 'graph' && <GraphView />}
           {viewMode === 'stats' && <DashboardView />}
+          {viewMode === 'memory' && <MemoryOSView />}
         </Suspense>
       </main>
 
