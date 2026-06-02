@@ -129,8 +129,12 @@ export function useAuth() {
     try {
       await loadGisScript()
       requestToken(false)
-    } catch (e) { console.error(e) }
-  }, [])
+    } catch (e) {
+      const error = e instanceof Error ? e.message : 'Google sign-in failed'
+      logger.error('[Auth] Sign-in failed:', e)
+      setAuthState({ isAuthenticated: false, token: null, error, loading: false })
+    }
+  }, [setAuthState])
 
   const signOut = useCallback(() => {
     revokeToken()
