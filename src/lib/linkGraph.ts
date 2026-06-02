@@ -88,6 +88,23 @@ export interface LinkEdge {
   kind: 'explicit' | 'mention' // explicit = links field; mention = body text
 }
 
+export interface RelatedMemory {
+  row: BrainRow
+  score: number
+  reasons: string[]
+}
+
+function splitList(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(/[,\n#;]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+function titleKey(row: BrainRow): string {
+  return row.title?.trim().toLowerCase() ?? ''
+}
+
 /** Build a list of typed link edges from all rows */
 export function buildLinkEdges(rows: BrainRow[]): LinkEdge[] {
   const edges: LinkEdge[] = []
@@ -148,6 +165,83 @@ export function resolveLinkedRowsTyped(
     }
   }
   return result
+}
+
+/** Find entries that link back to `row` from links or body wiki mentions. */
+export function getBacklinks(row: BrainRow, allRows: BrainRow[]): LinkedRowWithType[] {
+  const target = titleKey(row)
+  if (!target) return []
+
+  const backlinks: LinkedRowWithType[] = []
+  const seen = new Set<number>()
+  allRows.forEach((candidate) => {
+    if (candidate._rowIndex === row._rowIndex) return
+    for (const linked of resolveLinkedRowsTyped(candidate, allRows)) {
+      if (titleKey(linked.row) !== target || seen.has(candidate._rowIndex)) continue
+      backlinks.push({ row: candidate, type: linked.type })
+      seen.add(candidate._rowIndex)
+    }
+  })
+  return backlinks
+}
+
+/** Entries with neither outgoing links nor incoming backlinks. */
+export function getOrphanRows(rows: BrainRow[]): BrainRow[] {
+  return rows.filter((row) =>
+    resolveLinkedRowsTyped(row, rows).length === 0 && getBacklinks(row, rows).length === 0
+  )
+}
+
+/** Heuristic suggestions for nearby memories without writing anything to the sheet. */
+export function getRelatedMemories(row: BrainRow, allRows: BrainRow[], limit = 6): RelatedMemory[] {
+  const currentTags = new Set(splitList(row.tags))
+  const currentPeople = new Set(splitList(row.people))
+  const currentTitle = titleKey(row)
+  const explicitLinks = new Set(resolveLinkedRows(row, allRows).map((r) => r._rowIndex))
+  const backlinkRows = new Set(getBacklinks(row, allRows).map(({ row: r }) => r._rowIndex))
+
+  return allRows
+    .filter((candidate) => candidate._rowIndex !== row._rowIndex)
+    .map((candidate) => {
+      let score = 0
+      const reasons: string[] = []
+
+      if (explicitLinks.has(candidate._rowIndex)) {
+        score += 8
+        reasons.push('linked')
+      }
+      if (backlinkRows.has(candidate._rowIndex)) {
+        score += 7
+        reasons.push('backlink')
+      }
+      if (row.category && candidate.category && row.category.toLowerCase() === candidate.category.toLowerCase()) {
+        score += 3
+        reasons.push(`same category: ${row.category}`)
+      }
+
+      const sharedTags = splitList(candidate.tags).filter((tag) => currentTags.has(tag))
+      if (sharedTags.length > 0) {
+        score += Math.min(5, sharedTags.length * 2)
+        reasons.push(`shared tags: ${sharedTags.slice(0, 3).join(', ')}`)
+      }
+
+      const sharedPeople = splitList(candidate.people).filter((person) => currentPeople.has(person))
+      if (sharedPeople.length > 0) {
+        score += Math.min(4, sharedPeople.length * 2)
+        reasons.push(`shared people: ${sharedPeople.slice(0, 2).join(', ')}`)
+      }
+
+      const candidateText = [candidate.title, candidate.original, candidate.rewritten, candidate.actionItems].join('\n').toLowerCase()
+      if (currentTitle && candidateText.includes(currentTitle)) {
+        score += 4
+        reasons.push('mentions this title')
+      }
+
+      return { row: candidate, score, reasons }
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || (b.row.updatedAt || b.row.createdAt).localeCompare(a.row.updatedAt || a.row.createdAt))
+    .slice(0, limit)
 }
 
 /**
