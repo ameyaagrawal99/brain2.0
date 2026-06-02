@@ -55,6 +55,41 @@ npm run build
 
 The workflow runs install, tests, production dependency audit, build, and Pages deployment. The production base path is `/brain2.0/`.
 
+## Claude MCP Server
+
+Brain 2.0 includes a local MCP server so Claude Desktop can read and safely update your Google Sheet-backed brain.
+
+```bash
+export BRAIN_SHEET_ID="your-google-sheet-id"
+export GOOGLE_ACCESS_TOKEN="your-google-oauth-access-token"
+export MCP_AUTH_TOKEN="choose-a-local-secret"
+npm run mcp
+```
+
+Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "brain2": {
+      "url": "http://localhost:3001/mcp",
+      "headers": {
+        "Authorization": "Bearer choose-a-local-secret"
+      }
+    }
+  }
+}
+```
+
+Available tools include `brain_list`, `brain_search`, `brain_get_entry`, `brain_stats`, `brain_overdue`, `brain_digest`, `brain_create_entry`, `brain_update_entry`, `brain_update_status`, and `brain_bulk_update_status`.
+
+Write safety:
+
+- `brain_create_entry`, `brain_update_entry`, and `brain_update_status` support `dryRun: true`.
+- `brain_bulk_update_status` previews by default and only writes when called with `confirm: true` and `dryRun: false`.
+- Bulk writes are capped by `MCP_MAX_BULK_WRITE` (default `25`).
+- Set `BRAIN_SHEET_NAME` if your data tab is not `Sheet1`.
+
 ## Sheet Structure
 
 The app expects these columns in order:
