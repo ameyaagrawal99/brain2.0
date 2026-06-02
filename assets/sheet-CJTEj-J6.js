@@ -1,0 +1,1 @@
+const e={references:"References",related:"Related to",supports:"Supports",contradicts:"Contradicts",partOf:"Part of",untyped:"Linked"},t={references:"#6366f1",related:"#8b5cf6",supports:"#10b981",contradicts:"#ef4444",partOf:"#f59e0b",untyped:"#94a3b8"};export{e as L,t as a};
