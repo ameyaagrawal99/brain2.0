@@ -165,7 +165,7 @@ export function useSheetSync() {
   /** Redo the last undone save for a given entry */
   const redoRow = useCallback(async (rowIndex: number) => {
     const entry = popFuture(rowIndex)
-    if (!entry) { toast('Nothing to redo'); return }
+    if (!entry) { toast('Nothing to redo for this entry'); return }
 
     // Snapshot current for undo
     const current = rows.find((r) => r._rowIndex === rowIndex)
