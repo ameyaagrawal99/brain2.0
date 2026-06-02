@@ -19,6 +19,8 @@ A polished Google Sheets-powered personal knowledge base for notes, tasks, miles
 ```bash
 npm install
 echo "VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com" > .env.local
+# Optional when using your own sheet:
+echo "VITE_GOOGLE_SHEET_ID=your-google-sheet-id" >> .env.local
 npm run dev
 ```
 
@@ -47,8 +49,9 @@ npm run build
 ## Deploy To GitHub Pages
 
 1. Add the repo secret `VITE_GOOGLE_CLIENT_ID`.
-2. Ensure GitHub Pages is configured for GitHub Actions.
-3. Push to `main`.
+2. Optional: add `VITE_GOOGLE_SHEET_ID` if the deployment should use a different sheet.
+3. Ensure GitHub Pages is configured for GitHub Actions.
+4. Push to `main`.
 
 The workflow runs install, tests, production dependency audit, build, and Pages deployment. The production base path is `/brain2.0/`.
 
