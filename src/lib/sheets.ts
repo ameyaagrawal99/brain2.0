@@ -4,6 +4,8 @@ import { BrainRow } from '@/types/sheet'
 import { getAccessToken } from './gsi'
 import { logger } from './logger'
 
+let sheetIdCache: number | null = null
+
 export function authHeaders(): HeadersInit {
   const token = getAccessToken()
   if (!token) {
@@ -59,13 +61,30 @@ export async function appendRow(row: Omit<BrainRow, '_rowIndex' | '_dirty'>): Pr
   })
 }
 
+async function getDataSheetId(): Promise<number> {
+  if (sheetIdCache !== null) return sheetIdCache
+
+  const metaUrl = `${SHEETS_BASE}/${SHEET_ID}?fields=sheets.properties`
+  const meta = await sheetsFetch(metaUrl)
+  const sheets = (meta as { sheets?: { properties: { title: string; sheetId: number } }[] }).sheets ?? []
+  const dataSheet = sheets.find((s) => s.properties.title === SHEET_NAME)
+
+  if (!dataSheet) {
+    throw new Error(`Sheet tab "${SHEET_NAME}" not found`)
+  }
+
+  sheetIdCache = dataSheet.properties.sheetId
+  return sheetIdCache
+}
+
 export async function deleteRow(rowIndex: number): Promise<void> {
+  const sheetId = await getDataSheetId()
   const url = `${SHEETS_BASE}/${SHEET_ID}:batchUpdate`
   const body = {
     requests: [{
       deleteDimension: {
         range: {
-          sheetId: 0,
+          sheetId,
           dimension: 'ROWS',
           startIndex: rowIndex - 1,
           endIndex: rowIndex,
