@@ -1,4 +1,6 @@
-export const SHEET_ID   = '1NAXIJpRcYgQpEFV9jYMfYLR6c8WtNnps36_WxvgCesc'
+const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+
+export const SHEET_ID   = env?.VITE_GOOGLE_SHEET_ID ?? '1NAXIJpRcYgQpEFV9jYMfYLR6c8WtNnps36_WxvgCesc'
 export const SHEET_NAME = 'Sheet1'
 export const DATA_RANGE = `${SHEET_NAME}!A:Q`   // A–Q covers 17 cols (16 data + 1 buffer)
 export const SHEETS_SCOPE   = 'https://www.googleapis.com/auth/spreadsheets'
