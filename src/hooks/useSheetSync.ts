@@ -106,9 +106,25 @@ export function useSheetSync() {
     const before = rowToEditableSnapshot(existing)
 
     const updated = { ...existing, ...fields, updatedAt: new Date().toISOString() }
-    updateRowLocally(rowIndex, fields)
 
     try {
+      const remoteRows = await fetchRows()
+      const remote = remoteRows.find((r) => r._rowIndex === rowIndex)
+      if (!remote) {
+        toast.error('This entry no longer exists in Google Sheets. Refreshing your data.')
+        setRows(remoteRows)
+        return false
+      }
+
+      const remoteUpdated = remote.updatedAt?.trim()
+      const localUpdated = existing.updatedAt?.trim()
+      if (remoteUpdated && localUpdated && remoteUpdated !== localUpdated) {
+        toast.error('This entry changed in Google Sheets. Review the refreshed version before saving again.')
+        setRows(remoteRows)
+        return false
+      }
+
+      updateRowLocally(rowIndex, fields)
       await updateRow(updated)
       await refresh()
       toast.success('Saved')
@@ -149,7 +165,7 @@ export function useSheetSync() {
   /** Redo the last undone save for a given entry */
   const redoRow = useCallback(async (rowIndex: number) => {
     const entry = popFuture(rowIndex)
-    if (!entry) { toast('Nothing to redo for this entry'); return }
+    if (!entry) { toast('Nothing to redo'); return }
 
     // Snapshot current for undo
     const current = rows.find((r) => r._rowIndex === rowIndex)
