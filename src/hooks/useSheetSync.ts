@@ -1,12 +1,13 @@
 import { useCallback } from 'react'
 import { fetchRows, updateRow, appendRow, deleteRow } from '@/lib/sheets'
 import { ensureConfigSheet, fetchConfig, fetchSpecialDays, appendSpecialDay, deleteSpecialDay, updateSpecialDay } from '@/lib/sheetsConfig'
+import { SHEET_ID } from '@/constants/sheet'
 import { useBrainStore } from '@/store/useBrainStore'
 import { EditableFields, SpecialDay } from '@/types/sheet'
 import { logger } from '@/lib/logger'
 import toast from 'react-hot-toast'
 
-const CONFIG_READY_KEY = 'brain2_config_sheet_ready'
+const CONFIG_READY_KEY = `brain2_config_sheet_ready:${SHEET_ID}`
 
 function hasConfigReadyHint(): boolean {
   try { return localStorage.getItem(CONFIG_READY_KEY) === '1' } catch { return false }
@@ -52,7 +53,6 @@ export function useSheetSync() {
   const clearFuture         = useBrainStore((s) => s.clearFuture)
   const setLastBulkRows     = useBrainStore((s) => s.setLastBulkRows)
   const lastBulkRows        = useBrainStore((s) => s.lastBulkRows)
-  const entryHistory        = useBrainStore((s) => s.entryHistory)
 
   const refresh = useCallback(async () => {
     setSyncing(true)
@@ -122,9 +122,10 @@ export function useSheetSync() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Save failed'
       toast.error(msg)
+      setRows(rows)
       return false
     }
-  }, [rows, updateRowLocally, refresh, pushHistory, clearFuture])
+  }, [rows, updateRowLocally, refresh, pushHistory, clearFuture, setRows])
 
   /** Undo the last save for a given entry — re-saves the previous field values */
   const undoRow = useCallback(async (rowIndex: number) => {
@@ -166,8 +167,10 @@ export function useSheetSync() {
 
     let undone = 0
     for (const rowIndex of lastBulkRows) {
-      const stack = entryHistory[rowIndex] ?? []
-      const bulkEntry = stack.find((e) => e.label === 'AI: Enhance all')
+      let bulkEntry = popHistory(rowIndex)
+      while (bulkEntry && bulkEntry.label !== 'AI: Enhance all') {
+        bulkEntry = popHistory(rowIndex)
+      }
       if (!bulkEntry) continue
 
       const current = rows.find((r) => r._rowIndex === rowIndex)
@@ -178,8 +181,6 @@ export function useSheetSync() {
           savedAt: new Date().toISOString(),
         })
       }
-      // pop everything up to and including the bulk entry from history
-      popHistory(rowIndex)
 
       await saveRow(rowIndex, bulkEntry.fields, '__undo__')
       undone++
@@ -191,7 +192,7 @@ export function useSheetSync() {
     } else {
       toast('Bulk history already cleared')
     }
-  }, [lastBulkRows, entryHistory, rows, popHistory, pushFuture, saveRow, setLastBulkRows])
+  }, [lastBulkRows, rows, popHistory, pushFuture, saveRow, setLastBulkRows])
 
   const createRow = useCallback(async (fields: Partial<EditableFields> & { title: string }) => {
     try {
