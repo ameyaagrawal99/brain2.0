@@ -21,6 +21,7 @@ const TaskBoard = lazy(() => import('@/components/views/TaskBoard').then((m) => 
 const GraphView = lazy(() => import('@/components/views/GraphView').then((m) => ({ default: m.GraphView })))
 const DashboardView = lazy(() => import('@/components/views/DashboardView').then((m) => ({ default: m.DashboardView })))
 const MemoryOSView = lazy(() => import('@/components/views/MemoryOSView').then((m) => ({ default: m.MemoryOSView })))
+const MindmapView = lazy(() => import('@/components/views/MindmapView').then((m) => ({ default: m.MindmapView })))
 const DetailModal = lazy(() => import('@/components/modal/DetailModal').then((m) => ({ default: m.DetailModal })))
 const NewRowModal = lazy(() => import('@/components/modal/NewRowModal').then((m) => ({ default: m.NewRowModal })))
 const MilestoneModal = lazy(() => import('@/components/modal/MilestoneModal').then((m) => ({ default: m.MilestoneModal })))
@@ -150,11 +151,11 @@ export function AppShell() {
       <PWAInstallBanner />
       <MilestoneBanner />
 
-      {/* Filter / search bar — hidden on dashboard view */}
-      {viewMode !== 'stats' && viewMode !== 'memory' && <FilterBar />}
+      {/* Filter / search bar — hidden on dashboard/memory/mindmap view */}
+      {viewMode !== 'stats' && viewMode !== 'memory' && viewMode !== 'mindmap' && <FilterBar />}
 
-      {/* Stats strip — hidden on dashboard view */}
-      {viewMode !== 'stats' && viewMode !== 'memory' && (
+      {/* Stats strip — hidden on dashboard/memory/mindmap view */}
+      {viewMode !== 'stats' && viewMode !== 'memory' && viewMode !== 'mindmap' && (
         <div className="sm:ml-14">
           <StatsBar />
         </div>
@@ -172,6 +173,7 @@ export function AppShell() {
           {viewMode === 'graph' && <GraphView />}
           {viewMode === 'stats' && <DashboardView />}
           {viewMode === 'memory' && <MemoryOSView />}
+          {viewMode === 'mindmap' && <MindmapView />}
         </Suspense>
       </main>
 
