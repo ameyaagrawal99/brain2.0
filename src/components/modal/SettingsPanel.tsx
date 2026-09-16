@@ -666,6 +666,15 @@ export function SettingsPanel() {
             Sign out
           </Button>
         </div>
+
+        {/* Version footer */}
+        <div className="mt-6 pt-4 border-t border-border text-center space-y-0.5">
+          <p className="text-[11px] font-semibold text-ink3">Brain 2.0 · v{__APP_VERSION__}</p>
+          <p className="text-[10px] text-ink3/60">
+            Deployed {new Date(__BUILD_TIME__).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+            {' · '}{new Date(__BUILD_TIME__).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
       </div>
     </Modal>
   )
