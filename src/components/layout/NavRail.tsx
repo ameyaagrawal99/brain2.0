@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutGrid, Table2, Kanban, GitBranch, Sparkles, Settings,
-  SlidersHorizontal, LayoutDashboard, Brain, LibraryBig,
+  SlidersHorizontal, LayoutDashboard, Brain, LibraryBig, Network,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
@@ -22,7 +22,8 @@ const VIEWS: NavItem[] = [
   { id: 'table', icon: Table2,          label: 'Table',     mode: 'table' },
   { id: 'board', icon: Kanban,          label: 'Board',     mode: 'board' },
   { id: 'graph', icon: GitBranch,       label: 'Graph',     mode: 'graph' },
-  { id: 'memory', icon: LibraryBig,     label: 'Memory OS', mode: 'memory' },
+  { id: 'memory',   icon: LibraryBig,  label: 'Memory OS', mode: 'memory' },
+  { id: 'mindmap',  icon: Network,     label: 'Mindmap',   mode: 'mindmap' },
 ]
 
 interface TooltipProps { label: string; children: React.ReactNode }

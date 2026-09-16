@@ -50,7 +50,7 @@ export type SortKey =
   | 'num-asc'
   | 'num-desc'
 
-export type ViewMode = 'card' | 'table' | 'board' | 'graph' | 'stats' | 'memory'
+export type ViewMode = 'card' | 'table' | 'board' | 'graph' | 'stats' | 'memory' | 'mindmap'
 
 /** Relationship type for typed wiki-links [[Title|type]] */
 export type LinkType =
