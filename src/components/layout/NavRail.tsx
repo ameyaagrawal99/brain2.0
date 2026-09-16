@@ -155,9 +155,16 @@ export function NavRail() {
         </div>
       )}
 
+      {/* Version badge */}
+      <div className="mb-1 flex flex-col items-center gap-0.5">
+        <span className="text-[8px] font-semibold text-ink3/60 leading-none tabular-nums">
+          v{__APP_VERSION__}
+        </span>
+      </div>
+
       {/* Settings */}
       <div className="px-2 w-full">
-        <Tooltip label="Settings">
+        <Tooltip label={`Settings · Built ${new Date(__BUILD_TIME__).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}>
           <button
             onClick={() => setShowSettings(true)}
             aria-label="Settings"

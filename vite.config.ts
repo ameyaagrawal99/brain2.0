@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: string }
 
 export default defineConfig({
   plugins: [
@@ -115,6 +118,7 @@ export default defineConfig({
     // Injected at build time so the running app can show "which build is deployed"
     __BUILD_TIME__:   JSON.stringify(new Date().toISOString()),
     __COMMIT_SHA__:   JSON.stringify(process.env.VITE_COMMIT_SHA ?? 'dev'),
+    __APP_VERSION__:  JSON.stringify(pkg.version),
   },
   server: {
     host: '0.0.0.0',
