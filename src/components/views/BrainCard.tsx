@@ -115,9 +115,25 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
   const theme = getCatTheme(row.category, categoryColors)
 
   const rawText = row.rewritten || row.original || ''
+  const strippedText = isFormula(rawText) ? '' : stripMarkdown(rawText)
+
+  // When title is absent, pull the first sentence as a display title
+  const displayTitle = (() => {
+    if (row.title && !isFormula(row.title)) return { text: row.title, derived: false }
+    if (!strippedText) return { text: 'Untitled', derived: false }
+    const firstSentence = strippedText.split(/[.!?\n]/)[0].trim().slice(0, 80)
+    return firstSentence.length > 8
+      ? { text: firstSentence, derived: true }
+      : { text: 'Untitled', derived: false }
+  })()
+
   const preview = (() => {
-    if (isFormula(rawText)) return ''
-    return stripMarkdown(rawText).slice(0, 180)
+    if (!strippedText) return ''
+    // If we used the text as a title, skip it in the preview
+    const body = displayTitle.derived
+      ? strippedText.slice(displayTitle.text.length).trimStart()
+      : strippedText
+    return body.slice(0, 160)
   })()
 
   const actionItems = (() => {
@@ -135,7 +151,7 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
   const hasImage = row.mediaUrl && isImageUrl(row.mediaUrl)
   const hasSearch = !!searchQuery?.trim()
 
-  const titleHtml   = hasSearch ? highlight(row.title || 'Untitled', searchQuery) : ''
+  const titleHtml   = hasSearch ? highlight(displayTitle.text, searchQuery) : ''
   const previewHtml = hasSearch ? highlight(preview, searchQuery) : ''
 
   const statusInfo = row.taskStatus && !isFormula(row.taskStatus)
@@ -202,7 +218,7 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
     >
       {/* Category color bar — top */}
       {theme && (
-        <div className={cn('h-[3px] w-full', theme.bar)} />
+        <div className={cn('h-1 w-full', theme.bar)} />
       )}
 
       {/* Selection checkbox */}
@@ -281,11 +297,18 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
 
         {/* Title */}
         {hasSearch ? (
-          <h3 className="text-[15px] font-semibold text-ink leading-snug line-clamp-2"
-            dangerouslySetInnerHTML={{ __html: titleHtml || 'Untitled' }} />
+          <h3 className={cn(
+            'text-[15px] leading-snug line-clamp-2',
+            displayTitle.derived ? 'font-normal text-ink2 italic' : 'font-semibold text-ink',
+          )}
+            dangerouslySetInnerHTML={{ __html: titleHtml }} />
         ) : (
-          <h3 className="text-[15px] font-semibold text-ink leading-snug line-clamp-2">
-            {row.title || 'Untitled'}
+          <h3 className={cn(
+            'text-[15px] leading-snug line-clamp-2',
+            displayTitle.derived ? 'font-normal text-ink2 italic' : 'font-semibold text-ink',
+            !displayTitle.derived && !row.title && 'text-ink3',
+          )}>
+            {displayTitle.text}
           </h3>
         )}
 
