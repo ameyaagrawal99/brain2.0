@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutGrid, Table2, Kanban, Plus, Sparkles, X, FileText, LayoutDashboard, LibraryBig, Network } from 'lucide-react'
+import { LayoutGrid, Table2, Kanban, Plus, Sparkles, X, FileText, LayoutDashboard, LibraryBig, Network, BookOpen } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
 import { ViewMode } from '@/types/sheet'
@@ -12,6 +12,7 @@ const TABS: { mode: ViewMode; Icon: typeof LayoutGrid; label: string }[] = [
   { mode: 'board', Icon: Kanban,          label: 'Board' },
   { mode: 'memory',  Icon: LibraryBig,  label: 'Brain' },
   { mode: 'mindmap', Icon: Network,     label: 'Mindmap' },
+  { mode: 'wiki',    Icon: BookOpen,    label: 'Wiki' },
 ]
 
 export function BottomNav() {

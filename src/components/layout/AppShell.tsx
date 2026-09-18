@@ -22,6 +22,7 @@ const GraphView = lazy(() => import('@/components/views/GraphView').then((m) => 
 const DashboardView = lazy(() => import('@/components/views/DashboardView').then((m) => ({ default: m.DashboardView })))
 const MemoryOSView = lazy(() => import('@/components/views/MemoryOSView').then((m) => ({ default: m.MemoryOSView })))
 const MindmapView = lazy(() => import('@/components/views/MindmapView').then((m) => ({ default: m.MindmapView })))
+const WikiView = lazy(() => import('@/components/views/WikiView').then((m) => ({ default: m.WikiView })))
 const DetailModal = lazy(() => import('@/components/modal/DetailModal').then((m) => ({ default: m.DetailModal })))
 const NewRowModal = lazy(() => import('@/components/modal/NewRowModal').then((m) => ({ default: m.NewRowModal })))
 const MilestoneModal = lazy(() => import('@/components/modal/MilestoneModal').then((m) => ({ default: m.MilestoneModal })))
@@ -118,6 +119,7 @@ export function AppShell() {
     if (action === 'new-milestone') setShowNewMilestone(true)
     if (view === 'board')           useBrainStore.getState().setViewMode('board')
     if (view === 'memory')          useBrainStore.getState().setViewMode('memory')
+    if (view === 'wiki')            useBrainStore.getState().setViewMode('wiki')
     if (action || view)             window.history.replaceState({}, '', window.location.pathname)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -152,10 +154,10 @@ export function AppShell() {
       <MilestoneBanner />
 
       {/* Filter / search bar — hidden on dashboard/memory/mindmap view */}
-      {viewMode !== 'stats' && viewMode !== 'memory' && viewMode !== 'mindmap' && <FilterBar />}
+      {viewMode !== 'stats' && viewMode !== 'memory' && viewMode !== 'mindmap' && viewMode !== 'wiki' && <FilterBar />}
 
-      {/* Stats strip — hidden on dashboard/memory/mindmap view */}
-      {viewMode !== 'stats' && viewMode !== 'memory' && viewMode !== 'mindmap' && (
+      {/* Stats strip — hidden on dashboard/memory/mindmap/wiki view */}
+      {viewMode !== 'stats' && viewMode !== 'memory' && viewMode !== 'mindmap' && viewMode !== 'wiki' && (
         <div className="sm:ml-14">
           <StatsBar />
         </div>
@@ -174,6 +176,7 @@ export function AppShell() {
           {viewMode === 'stats' && <DashboardView />}
           {viewMode === 'memory' && <MemoryOSView />}
           {viewMode === 'mindmap' && <MindmapView />}
+          {viewMode === 'wiki' && <WikiView />}
         </Suspense>
       </main>
 
