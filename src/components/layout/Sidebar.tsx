@@ -447,7 +447,7 @@ export function Sidebar() {
       <aside className={cn(
         'fixed z-40 inset-y-0 left-0 sm:left-14',
         'bg-surface border-r border-border flex flex-col',
-        'w-[300px] shadow-xl',
+        'w-[280px] sm:w-[300px] shadow-xl',
         'animate-slideInLeft',
       )}>
         {/* Header */}
@@ -466,9 +466,9 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Tabs — single scrollable row */}
+        {/* Tabs — compact grid that fits all items without scroll */}
         <div className="shrink-0 border-b border-border bg-surface">
-          <div className="flex overflow-x-auto scrollbar-hide px-1 py-1 gap-0.5">
+          <div className="grid grid-cols-4 px-1.5 py-1.5 gap-1">
             {TABS.map(({ key, label, icon: Icon }) => {
               const isActive = tab === key
               const todayStr = toLocalISODate()
@@ -482,22 +482,24 @@ export function Sidebar() {
                   key={key}
                   onClick={() => setTab(key)}
                   className={cn(
-                    'relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap shrink-0',
+                    'relative flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all leading-tight text-center',
                     isActive
                       ? 'bg-brand/10 text-brand shadow-sm'
                       : 'text-ink3 hover:text-ink hover:bg-hover',
                   )}
                 >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <div className="relative">
+                    <Icon className="w-4 h-4" />
+                    {taskBadge && (
+                      <span className="absolute -top-1 -right-1.5 bg-brand text-white text-[7px] font-bold rounded-full w-3 h-3 flex items-center justify-center leading-none">
+                        {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
+                      </span>
+                    )}
+                    {milestoneAlert && (
+                      <span className="absolute -top-0.5 -right-1 w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                    )}
+                  </div>
                   {label}
-                  {taskBadge && (
-                    <span className="bg-brand text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
-                      {pendingTaskCount > 9 ? '9+' : pendingTaskCount}
-                    </span>
-                  )}
-                  {milestoneAlert && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                  )}
                 </button>
               )
             })}

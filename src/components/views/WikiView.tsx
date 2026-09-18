@@ -124,7 +124,7 @@ function PageCard({
       {!compact && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {page.stats.themes.slice(0, 4).map((theme) => (
-            <span key={theme} className="inline-flex px-2 py-0.5 rounded-full bg-brand/8 text-[10px] font-medium text-brand capitalize">
+            <span key={theme} className="inline-flex px-2 py-0.5 rounded-full bg-brand/10 dark:bg-brand/15 text-[10px] font-medium text-brand capitalize">
               {theme}
             </span>
           ))}
@@ -186,21 +186,21 @@ function WikiPageDetail({
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-          <div className="rounded-lg bg-surface2/60 p-3">
+          <div className="rounded-lg bg-surface2 p-3">
             <p className="text-[11px] text-ink3 font-medium">Entries</p>
             <p className="text-lg font-bold text-ink">{page.stats.entryCount}</p>
           </div>
-          <div className="rounded-lg bg-surface2/60 p-3">
+          <div className="rounded-lg bg-surface2 p-3">
             <p className="text-[11px] text-ink3 font-medium">Wiki Links</p>
             <p className="text-lg font-bold text-ink">{page.stats.linkCount}</p>
           </div>
-          <div className="rounded-lg bg-surface2/60 p-3">
+          <div className="rounded-lg bg-surface2 p-3">
             <p className="text-[11px] text-ink3 font-medium">Actions</p>
             <p className="text-lg font-bold text-ink">
               {page.stats.completedCount}/{page.stats.actionItemCount}
             </p>
           </div>
-          <div className="rounded-lg bg-surface2/60 p-3">
+          <div className="rounded-lg bg-surface2 p-3">
             <p className="text-[11px] text-ink3 font-medium">Date Range</p>
             <p className="text-xs font-semibold text-ink">
               {page.stats.dateRange
@@ -222,7 +222,7 @@ function WikiPageDetail({
                   onClick={() => themePage && onNavigate(themeKey)}
                   className={cn(
                     'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium capitalize',
-                    themePage ? 'bg-brand/8 text-brand hover:bg-brand/15 cursor-pointer' : 'bg-surface2 text-ink3',
+                    themePage ? 'bg-brand/10 dark:bg-brand/15 text-brand hover:bg-brand/20 cursor-pointer' : 'bg-surface2 text-ink3',
                   )}
                 >
                   <Lightbulb className="w-3 h-3" />
@@ -259,7 +259,7 @@ function WikiPageDetail({
                 <button
                   key={rp.key}
                   onClick={() => onNavigate(rp.key)}
-                  className="flex items-center gap-2 rounded-lg bg-surface2/60 p-2.5 hover:bg-hover transition-colors text-left"
+                  className="flex items-center gap-2 rounded-lg bg-surface2 p-2.5 hover:bg-hover transition-colors text-left"
                 >
                   <RPIcon className="w-3.5 h-3.5 text-ink3 shrink-0" />
                   <span className="text-xs font-medium text-ink truncate capitalize">{rp.title}</span>
@@ -293,7 +293,7 @@ function WikiPageDetail({
               <button
                 key={entry._rowIndex}
                 onClick={() => onOpenEntry(entry)}
-                className="w-full text-left rounded-lg bg-surface2/60 p-3 hover:bg-hover transition-colors"
+                className="w-full text-left rounded-lg bg-surface2 p-3 hover:bg-hover transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -311,7 +311,7 @@ function WikiPageDetail({
                     {ctx.memoryType}
                   </span>
                   {ctx.outLinks.length > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand/8 text-brand font-medium">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand/10 dark:bg-brand/15 text-brand font-medium">
                       {ctx.outLinks.length} link{ctx.outLinks.length !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -337,7 +337,7 @@ function WikiPageDetail({
                         e.stopPropagation()
                         onNavigate(`tag:${t.toLowerCase()}`)
                       }}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-surface2 text-ink3 hover:text-brand hover:bg-brand/8 cursor-pointer"
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-surface2 text-ink3 hover:text-brand hover:bg-brand/10 dark:hover:bg-brand/15 cursor-pointer"
                     >
                       #{t}
                     </span>
@@ -439,7 +439,7 @@ export function WikiView() {
       <div className="pt-4 sm:pt-6 pb-4">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1 text-xs font-semibold text-brand mb-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/10 dark:bg-brand/15 px-3 py-1 text-xs font-semibold text-brand mb-3">
               <BookOpen className="w-3.5 h-3.5" />
               Connected Intelligence
             </div>
@@ -502,7 +502,7 @@ export function WikiView() {
       </div>
 
       {/* Search + tabs */}
-      <div className="sticky top-[6.2rem] sm:top-[6.5rem] z-10 -mx-3 sm:-mx-5 px-3 sm:px-5 py-2 bg-bg/90 backdrop-blur-md border-y border-border/70">
+      <div className="sticky top-[6.2rem] sm:top-[6.5rem] z-10 -mx-3 sm:-mx-5 px-3 sm:px-5 py-2 bg-bg/95 backdrop-blur-md border-y border-border/70">
         <div className="flex flex-col lg:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink3" />
