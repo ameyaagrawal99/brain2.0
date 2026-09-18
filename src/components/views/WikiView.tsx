@@ -532,7 +532,7 @@ export function WikiView() {
             <button
               key={key}
               type="button"
-              onClick={() => { setTab(key); if (key !== 'page') setActivePage(null) }}
+              onClick={() => { setTab(key); setActivePage(null) }}
               className={cn(
                 'inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold border transition-colors whitespace-nowrap',
                 tab === key ? 'bg-brand text-white border-brand' : 'bg-surface text-ink2 border-border hover:bg-hover',
