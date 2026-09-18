@@ -5,6 +5,7 @@ import { SHEET_ID } from '@/constants/sheet'
 import { useBrainStore } from '@/store/useBrainStore'
 import { EditableFields, SpecialDay } from '@/types/sheet'
 import { logger } from '@/lib/logger'
+import { findMalformedCategories, type CategoryFix } from '@/lib/categoryCleanup'
 import toast from 'react-hot-toast'
 
 const CONFIG_READY_KEY = `brain2_config_sheet_ready:${SHEET_ID}`
@@ -288,5 +289,34 @@ export function useSheetSync() {
     }
   }, [refreshConfig])
 
-  return { refresh, refreshConfig, saveRow, createRow, removeRow, undoRow, redoRow, undoBulk, setLastBulkRows, createSpecialDay, removeSpecialDay, updateSpecialDayEntry }
+  const scanMalformedCategories = useCallback((): CategoryFix[] => {
+    const builtIn = ['Journal', 'Work', 'Learning', 'Health', 'Finance', 'Ideas', 'Personal', 'Other']
+    const fromRows = [...new Set(rows.map((r) => r.category?.trim()).filter(Boolean))]
+    const allCats = [...new Set([...builtIn, ...fromRows])]
+    const validCats = allCats.filter((c) => !c.startsWith('=') && c.length < 80)
+    return findMalformedCategories(rows, validCats)
+  }, [rows])
+
+  const fixCategories = useCallback(async (fixes: CategoryFix[]) => {
+    let fixed = 0
+    for (const fix of fixes) {
+      const row = rows.find((r) => r._rowIndex === fix.rowIndex)
+      if (!row) continue
+      const updated = { ...row, category: fix.newCategory, updatedAt: new Date().toISOString() }
+      try {
+        await updateRow(updated)
+        updateRowLocally(fix.rowIndex, { category: fix.newCategory })
+        fixed++
+      } catch (err) {
+        logger.error('[fixCategories] failed for row', fix.rowIndex, err)
+      }
+    }
+    if (fixed > 0) {
+      await refresh()
+      toast.success(`Fixed ${fixed} categories`)
+    }
+    return fixed
+  }, [rows, updateRowLocally, refresh])
+
+  return { refresh, refreshConfig, saveRow, createRow, removeRow, undoRow, redoRow, undoBulk, setLastBulkRows, createSpecialDay, removeSpecialDay, updateSpecialDayEntry, scanMalformedCategories, fixCategories }
 }
