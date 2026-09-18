@@ -7,8 +7,10 @@ import { fetchGoogleContacts, ContactsError } from '@/lib/contacts'
 import { requestContactsAccess } from '@/lib/gsi'
 import { cn, COLOR_PALETTE } from '@/lib/utils'
 import { requestNotificationPermission, getNotificationPermission } from '@/hooks/useNotifications'
-import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogIn, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2, Bot } from 'lucide-react'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogIn, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2, Bot, Wrench } from 'lucide-react'
 import { useState } from 'react'
+import { useSheetSync } from '@/hooks/useSheetSync'
+import type { CategoryFix } from '@/lib/categoryCleanup'
 import type { AIProvider } from '@/store/useBrainStore'
 import toast from 'react-hot-toast'
 
@@ -48,6 +50,10 @@ export function SettingsPanel() {
   const [savingTag, setSavingTag] = useState(false)
   const [savingColor, setSavingColor] = useState<string | null>(null)
   const [connectingContacts, setConnectingContacts] = useState(false)
+  const [categoryFixes, setCategoryFixes] = useState<CategoryFix[]>([])
+  const [fixingCats, setFixingCats] = useState(false)
+  const [scannedOnce, setScannedOnce] = useState(false)
+  const { scanMalformedCategories, fixCategories } = useSheetSync()
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   // All visible categories: built-in + from rows + custom (deduped)
@@ -436,6 +442,65 @@ export function SettingsPanel() {
                     </button>
                   </span>
                 ))}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {!settings.demoMode && (
+          <Section title="Fix malformed categories" icon={<Wrench className="w-3.5 h-3.5" />}>
+            <p className="text-xs text-ink3 mb-2">
+              Scan for categories with formula artifacts (like =AI()) and auto-assign proper ones based on entry content.
+            </p>
+            {!scannedOnce ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const fixes = scanMalformedCategories()
+                  setCategoryFixes(fixes)
+                  setScannedOnce(true)
+                  if (fixes.length === 0) toast.success('All categories look good!')
+                }}
+              >
+                Scan categories
+              </Button>
+            ) : categoryFixes.length === 0 ? (
+              <p className="text-xs text-green-600 dark:text-green-400">No malformed categories found.</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                  Found {categoryFixes.length} entries with bad categories:
+                </p>
+                <div className="max-h-40 overflow-y-auto space-y-1.5 text-xs">
+                  {categoryFixes.slice(0, 20).map((fix) => (
+                    <div key={fix.rowIndex} className="flex items-center gap-2 bg-surface2 rounded-lg px-2 py-1.5">
+                      <span className="truncate flex-1 text-ink">{fix.title}</span>
+                      <span className="text-red-500 line-through shrink-0 max-w-[80px] truncate">{fix.oldCategory}</span>
+                      <span className="text-ink3 shrink-0">&#8594;</span>
+                      <span className="text-green-600 dark:text-green-400 font-medium shrink-0">{fix.newCategory}</span>
+                    </div>
+                  ))}
+                  {categoryFixes.length > 20 && (
+                    <p className="text-ink3">...and {categoryFixes.length - 20} more</p>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={fixingCats}
+                  onClick={async () => {
+                    setFixingCats(true)
+                    try {
+                      await fixCategories(categoryFixes)
+                      setCategoryFixes([])
+                    } finally {
+                      setFixingCats(false)
+                    }
+                  }}
+                >
+                  Fix all {categoryFixes.length} categories
+                </Button>
               </div>
             )}
           </Section>
