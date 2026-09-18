@@ -79,6 +79,12 @@ export interface EntryWikiContext {
   sharedPeoplePages: string[]
 }
 
+interface CachedSentiment {
+  comparative: number
+  emotions: Record<Emotion, number>
+  label: string
+}
+
 function pageKey(kind: WikiPageKind, name: string): string {
   return `${kind}:${name.toLowerCase().trim()}`
 }
@@ -90,7 +96,14 @@ function splitList(value: string | undefined): string[] {
     .filter(Boolean)
 }
 
-function computePageStats(entries: BrainRow[]): WikiPageStats {
+function getSentimentText(row: BrainRow): string {
+  return [row.title, row.original, row.rewritten, row.actionItems].filter(Boolean).join(' ')
+}
+
+function computePageStats(
+  entries: BrainRow[],
+  sentimentCache: Map<number, CachedSentiment>,
+): WikiPageStats {
   let totalSentiment = 0
   const emotionCounts: Record<Emotion, number> = {
     joy: 0, trust: 0, anticipation: 0, surprise: 0,
@@ -105,8 +118,7 @@ function computePageStats(entries: BrainRow[]): WikiPageStats {
   let latest = ''
 
   for (const row of entries) {
-    const text = [row.title, row.original, row.rewritten, row.actionItems].filter(Boolean).join(' ')
-    const sent = analyzeSentiment(text)
+    const sent = sentimentCache.get(row._rowIndex)!
     totalSentiment += sent.comparative
 
     for (const e of Object.keys(sent.emotions) as Emotion[]) {
@@ -163,42 +175,17 @@ function computePageStats(entries: BrainRow[]): WikiPageStats {
   }
 }
 
-function findRelatedPages(
-  currentKey: string,
-  currentEntries: Set<number>,
-  pageEntryMap: Map<string, Set<number>>,
-  pageIndex: Map<string, { title: string; kind: WikiPageKind }>,
-): WikiPage['relatedPages'] {
-  const related: WikiPage['relatedPages'] = []
-
-  for (const [key, entrySet] of pageEntryMap) {
-    if (key === currentKey) continue
-    let shared = 0
-    for (const idx of currentEntries) {
-      if (entrySet.has(idx)) shared++
-    }
-    if (shared > 0) {
-      const meta = pageIndex.get(key)
-      if (meta) {
-        related.push({ key, title: meta.title, kind: meta.kind, sharedCount: shared })
-      }
-    }
-  }
-
-  return related.sort((a, b) => b.sharedCount - a.sharedCount).slice(0, 20)
-}
-
 function generateInsights(
   pages: Map<string, WikiPage>,
   connections: WikiConnection[],
   rows: BrainRow[],
+  sentimentCache: Map<number, CachedSentiment>,
 ): WikiInsight[] {
   const insights: WikiInsight[] = []
 
   const catPages = [...pages.values()].filter((p) => p.kind === 'category')
   const tagPages = [...pages.values()].filter((p) => p.kind === 'tag')
 
-  // Pattern: heavily connected clusters
   for (const conn of connections.slice(0, 10)) {
     if (conn.strength >= 5) {
       insights.push({
@@ -211,7 +198,6 @@ function generateInsights(
     }
   }
 
-  // Pattern: largest categories
   const sorted = catPages.sort((a, b) => b.entries.length - a.entries.length)
   if (sorted.length >= 2) {
     const top = sorted[0]
@@ -225,7 +211,6 @@ function generateInsights(
     })
   }
 
-  // Gap: orphan entries (no tags, no links, no people)
   const orphans = rows.filter(
     (r) => !r.tags?.trim() && !r.links?.trim() && !r.people?.trim(),
   )
@@ -239,15 +224,14 @@ function generateInsights(
     })
   }
 
-  // Trend: sentiment shifts over time
   const monthSentiments = new Map<string, number[]>()
   for (const row of rows) {
     const month = row.createdAt?.slice(0, 7)
     if (!month) continue
-    const text = [row.title, row.original, row.rewritten].filter(Boolean).join(' ')
-    const s = analyzeSentiment(text)
+    const sent = sentimentCache.get(row._rowIndex)
+    if (!sent) continue
     const arr = monthSentiments.get(month) ?? []
-    arr.push(s.comparative)
+    arr.push(sent.comparative)
     monthSentiments.set(month, arr)
   }
 
@@ -273,7 +257,6 @@ function generateInsights(
     }
   }
 
-  // Tags that appear across many categories = cross-cutting concerns
   for (const tp of tagPages) {
     const categories = new Set<string>()
     for (const e of tp.entries) {
@@ -293,7 +276,10 @@ function generateInsights(
   return insights.sort((a, b) => b.strength - a.strength)
 }
 
-function buildTimeline(rows: BrainRow[]): WikiTimelineMonth[] {
+function buildTimeline(
+  rows: BrainRow[],
+  sentimentCache: Map<number, CachedSentiment>,
+): WikiTimelineMonth[] {
   const groups = new Map<string, BrainRow[]>()
   for (const row of rows) {
     const month = row.createdAt?.slice(0, 7) || 'Undated'
@@ -315,12 +301,12 @@ function buildTimeline(rows: BrainRow[]): WikiTimelineMonth[] {
         for (const t of parseTags(e.tags)) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1)
       }
 
-      const texts = entries.map((e) =>
-        [e.title, e.original, e.rewritten].filter(Boolean).join(' '),
-      )
       let totalComp = 0
-      for (const t of texts) totalComp += analyzeSentiment(t).comparative
-      const avg = texts.length > 0 ? totalComp / texts.length : 0
+      for (const e of entries) {
+        const sent = sentimentCache.get(e._rowIndex)
+        if (sent) totalComp += sent.comparative
+      }
+      const avg = entries.length > 0 ? totalComp / entries.length : 0
 
       return {
         month,
@@ -335,7 +321,7 @@ function buildTimeline(rows: BrainRow[]): WikiTimelineMonth[] {
 export function buildEntryContext(row: BrainRow, allRows: BrainRow[]): EntryWikiContext {
   const mt = classifyMemoryType(row)
   const themes = extractThemes(row)
-  const text = [row.title, row.original, row.rewritten, row.actionItems].filter(Boolean).join(' ')
+  const text = getSentimentText(row)
   const sent = analyzeSentiment(text)
   const emotionEntries = (Object.keys(sent.emotions) as Emotion[])
     .map((e) => ({ e, c: sent.emotions[e] }))
@@ -374,9 +360,21 @@ export function buildEntryContext(row: BrainRow, allRows: BrainRow[]): EntryWiki
 }
 
 export function buildWikiIntelligence(rows: BrainRow[]): WikiIntelligence {
+  const sentimentCache = new Map<number, CachedSentiment>()
+  for (const row of rows) {
+    const text = getSentimentText(row)
+    const sent = analyzeSentiment(text)
+    sentimentCache.set(row._rowIndex, {
+      comparative: sent.comparative,
+      emotions: { ...sent.emotions },
+      label: sent.label,
+    })
+  }
+
   const pages = new Map<string, WikiPage>()
   const pageEntryMap = new Map<string, Set<number>>()
   const pageIndex = new Map<string, { title: string; kind: WikiPageKind }>()
+  const pageTags = new Map<string, Set<string>>()
 
   function ensurePage(kind: WikiPageKind, name: string): string {
     const key = pageKey(kind, name)
@@ -391,112 +389,130 @@ export function buildWikiIntelligence(rows: BrainRow[]): WikiIntelligence {
       })
       pageEntryMap.set(key, new Set())
       pageIndex.set(key, { title: name, kind })
+      pageTags.set(key, new Set())
     }
     return key
   }
 
-  function addEntry(key: string, row: BrainRow) {
-    const page = pages.get(key)
-    if (!page) return
-    if (!page.entries.some((e) => e._rowIndex === row._rowIndex)) {
-      page.entries.push(row)
-      pageEntryMap.get(key)?.add(row._rowIndex)
-    }
-  }
+  const rowPageMembership = new Map<number, string[]>()
 
-  // Build pages from entries
   for (const row of rows) {
-    // Category page
+    const memberPages: string[] = []
+
     if (row.category?.trim()) {
       const key = ensurePage('category', row.category.trim())
-      addEntry(key, row)
+      memberPages.push(key)
     }
 
-    // Tag pages
     for (const tag of parseTags(row.tags)) {
       const key = ensurePage('tag', tag)
-      addEntry(key, row)
+      memberPages.push(key)
     }
 
-    // People pages
     for (const person of splitList(row.people)) {
       const key = ensurePage('person', person)
-      addEntry(key, row)
+      memberPages.push(key)
     }
 
-    // Status pages
     if (row.taskStatus?.trim()) {
       const key = ensurePage('status', row.taskStatus.trim())
-      addEntry(key, row)
+      memberPages.push(key)
     }
 
-    // Theme pages (derived)
     for (const theme of extractThemes(row)) {
       const key = ensurePage('theme', theme)
-      addEntry(key, row)
+      memberPages.push(key)
     }
+
+    const rowTags = parseTags(row.tags)
+
+    for (const key of memberPages) {
+      const entrySet = pageEntryMap.get(key)!
+      if (!entrySet.has(row._rowIndex)) {
+        entrySet.add(row._rowIndex)
+        pages.get(key)!.entries.push(row)
+        const tagSet = pageTags.get(key)!
+        for (const t of rowTags) tagSet.add(t)
+      }
+    }
+
+    rowPageMembership.set(row._rowIndex, memberPages)
   }
 
-  // Compute stats for each page
   for (const [, page] of pages) {
-    page.stats = computePageStats(page.entries)
+    page.stats = computePageStats(page.entries, sentimentCache)
   }
 
-  // Find related pages
   for (const [key, entrySet] of pageEntryMap) {
     const page = pages.get(key)
-    if (page) {
-      page.relatedPages = findRelatedPages(key, entrySet, pageEntryMap, pageIndex)
+    if (!page) continue
+    const related: WikiPage['relatedPages'] = []
+    for (const [otherKey, otherSet] of pageEntryMap) {
+      if (otherKey === key) continue
+      let shared = 0
+      for (const idx of entrySet) {
+        if (otherSet.has(idx)) shared++
+      }
+      if (shared > 0) {
+        const meta = pageIndex.get(otherKey)
+        if (meta) {
+          related.push({ key: otherKey, title: meta.title, kind: meta.kind, sharedCount: shared })
+        }
+      }
+    }
+    page.relatedPages = related.sort((a, b) => b.sharedCount - a.sharedCount).slice(0, 20)
+  }
+
+  // Build connections using inverted index instead of O(P^2) pair iteration
+  const connectionMap = new Map<string, { shared: number }>()
+
+  for (const [, memberPages] of rowPageMembership) {
+    if (memberPages.length < 2) continue
+    // Cap per-row pairs to avoid blowup from rows with many memberships
+    const capped = memberPages.length > 20 ? memberPages.slice(0, 20) : memberPages
+    for (let i = 0; i < capped.length; i++) {
+      for (let j = i + 1; j < capped.length; j++) {
+        const a = capped[i] < capped[j] ? capped[i] : capped[j]
+        const b = capped[i] < capped[j] ? capped[j] : capped[i]
+        const connKey = `${a}|${b}`
+        const existing = connectionMap.get(connKey)
+        if (existing) {
+          existing.shared++
+        } else {
+          connectionMap.set(connKey, { shared: 1 })
+        }
+      }
     }
   }
 
-  // Build connections between pages
   const connections: WikiConnection[] = []
-  const connSeen = new Set<string>()
+  for (const [connKey, { shared }] of connectionMap) {
+    const [keyA, keyB] = connKey.split('|')
+    const metaA = pageIndex.get(keyA)
+    const metaB = pageIndex.get(keyB)
+    if (!metaA || !metaB) continue
 
-  for (const [keyA, setA] of pageEntryMap) {
-    for (const [keyB, setB] of pageEntryMap) {
-      if (keyA >= keyB) continue
-      const connKey = `${keyA}|${keyB}`
-      if (connSeen.has(connKey)) continue
-
-      let shared = 0
-      for (const idx of setA) {
-        if (setB.has(idx)) shared++
+    const tagsA = pageTags.get(keyA)
+    const tagsB = pageTags.get(keyB)
+    const sharedTags: string[] = []
+    if (tagsA && tagsB) {
+      for (const t of tagsA) {
+        if (tagsB.has(t)) sharedTags.push(t)
       }
-      if (shared === 0) continue
-
-      connSeen.add(connKey)
-
-      const metaA = pageIndex.get(keyA)
-      const metaB = pageIndex.get(keyB)
-      if (!metaA || !metaB) continue
-
-      // Find shared tags between the two pages' entries
-      const tagsA = new Set<string>()
-      const tagsB = new Set<string>()
-      for (const e of pages.get(keyA)?.entries ?? []) {
-        for (const t of parseTags(e.tags)) tagsA.add(t)
-      }
-      for (const e of pages.get(keyB)?.entries ?? []) {
-        for (const t of parseTags(e.tags)) tagsB.add(t)
-      }
-      const sharedTags = [...tagsA].filter((t) => tagsB.has(t))
-
-      connections.push({
-        from: keyA,
-        to: keyB,
-        strength: shared + sharedTags.length * 0.5,
-        sharedEntries: shared,
-        sharedTags,
-        relationship: shared >= 5 ? 'strong' : shared >= 2 ? 'moderate' : 'weak',
-      })
     }
+
+    connections.push({
+      from: keyA,
+      to: keyB,
+      strength: shared + sharedTags.length * 0.5,
+      sharedEntries: shared,
+      sharedTags,
+      relationship: shared >= 5 ? 'strong' : shared >= 2 ? 'moderate' : 'weak',
+    })
   }
 
   connections.sort((a, b) => b.strength - a.strength)
 
-  // Build clusters (pages with high mutual connectivity)
   const clusters: WikiCluster[] = []
   const catPages = [...pages.values()].filter((p) => p.kind === 'category' && p.entries.length >= 2)
   for (const cp of catPages) {
@@ -509,8 +525,8 @@ export function buildWikiIntelligence(rows: BrainRow[]): WikiIntelligence {
   }
   clusters.sort((a, b) => b.cohesion - a.cohesion)
 
-  const insights = generateInsights(pages, connections, rows)
-  const timeline = buildTimeline(rows)
+  const insights = generateInsights(pages, connections, rows, sentimentCache)
+  const timeline = buildTimeline(rows, sentimentCache)
 
   return { pages, connections, clusters, insights, timeline }
 }
