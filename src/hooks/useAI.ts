@@ -113,9 +113,32 @@ async function callClaude(
   return (data.content?.[0]?.text as string) ?? ''
 }
 
+/* ── Call Ollama ────────────────────────────────────────────────── */
+async function callOllama(
+  baseUrl: string,
+  messages: { role: 'system' | 'user'; content: string }[],
+  model: string,
+  temperature: number,
+  signal: AbortSignal,
+): Promise<string> {
+  const url = baseUrl.replace(/\/+$/, '')
+  const res = await fetch(`${url}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages, stream: false, options: { temperature } }),
+    signal,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `Ollama error ${res.status}`)
+  }
+  const data = await res.json()
+  return data.message?.content ?? ''
+}
+
 /* ── Chat-style call (used by AIPanel) ───────────────────────────── */
 export async function callAI(opts: {
-  provider: 'openai' | 'claude'
+  provider: 'openai' | 'claude' | 'ollama'
   key: string
   model?: string
   systemMsg?: string
@@ -123,16 +146,26 @@ export async function callAI(opts: {
   maxTokens?: number
   temperature?: number
   signal?: AbortSignal
+  ollamaUrl?: string
 }): Promise<string> {
   const {
     provider, key, systemMsg = '', userMsg,
-    model = provider === 'claude' ? 'claude-3-5-haiku-20241022' : 'gpt-4o-mini',
+    model = provider === 'claude' ? 'claude-3-5-haiku-20241022'
+          : provider === 'ollama' ? 'llama3.2'
+          : 'gpt-4o-mini',
     maxTokens = 1200, temperature = 0.7,
     signal = new AbortController().signal,
+    ollamaUrl = 'http://localhost:11434',
   } = opts
 
   if (provider === 'claude') {
     return callClaude(key, systemMsg, userMsg, model, temperature, maxTokens, signal)
+  }
+  if (provider === 'ollama') {
+    const messages: { role: 'system' | 'user'; content: string }[] = []
+    if (systemMsg.trim()) messages.push({ role: 'system', content: systemMsg.trim() })
+    messages.push({ role: 'user', content: userMsg })
+    return callOllama(ollamaUrl, messages, model, temperature, signal)
   }
   const messages: { role: 'system' | 'user'; content: string }[] = []
   if (systemMsg.trim()) messages.push({ role: 'system', content: systemMsg.trim() })
@@ -158,10 +191,12 @@ export function useAI() {
     text:   string,
     options: AIRunOptions = {},
   ): Promise<AIResult> => {
-    const { aiProvider, openAiKey, claudeApiKey } = settings
-    const activeKey = aiProvider === 'claude' ? claudeApiKey : openAiKey
+    const { aiProvider, openAiKey, claudeApiKey, ollamaUrl, ollamaModel } = settings
+    const activeKey = aiProvider === 'claude' ? claudeApiKey
+                    : aiProvider === 'ollama' ? 'ollama'
+                    : openAiKey
 
-    if (!activeKey) {
+    if (aiProvider !== 'ollama' && !activeKey) {
       const label = aiProvider === 'claude' ? 'Claude (Anthropic)' : 'OpenAI'
       setError(`${label} API key not set. Go to Settings → AI.`)
       return {}
@@ -174,7 +209,9 @@ export function useAI() {
     setError(null)
 
     const { systemInstruction, temperature = 0.7, maxTokens = 800 } = options
-    const defaultModel = aiProvider === 'claude' ? 'claude-3-5-haiku-20241022' : 'gpt-4o-mini'
+    const defaultModel = aiProvider === 'claude' ? 'claude-3-5-haiku-20241022'
+                       : aiProvider === 'ollama' ? (ollamaModel || 'llama3.2')
+                       : 'gpt-4o-mini'
     const model = options.model ?? defaultModel
 
     const globalInstr = aiInstructions.global?.trim()
@@ -185,6 +222,11 @@ export function useAI() {
       let content: string
       if (aiProvider === 'claude') {
         content = await callClaude(activeKey, combined, promptText, model, temperature, maxTokens, controller.signal)
+      } else if (aiProvider === 'ollama') {
+        const messages: { role: 'system' | 'user'; content: string }[] = []
+        if (combined) messages.push({ role: 'system', content: combined })
+        messages.push({ role: 'user', content: promptText })
+        content = await callOllama(ollamaUrl || 'http://localhost:11434', messages, model, temperature, controller.signal)
       } else {
         const messages: { role: 'system' | 'user'; content: string }[] = []
         if (combined) messages.push({ role: 'system', content: combined })
