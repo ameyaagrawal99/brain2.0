@@ -169,9 +169,9 @@ export function AIPanel() {
   const setSelectionMode    = useBrainStore((s) => s.setSelectionMode)
   const clearCardSelection  = useBrainStore((s) => s.clearCardSelection)
   const { saveRow, undoBulk, setLastBulkRows } = useSheetSync()
-  const { run: runAI, loading: aiLoading, abort: abortAI } = useAI()
-  const { run: runRelate, loading: relateLoading }         = useAI()
-  const { run: runLinks,  loading: linksLoading }          = useAI()
+  const { run: runAI, loading: aiLoading, abort: abortAI, error: aiError, clearError: clearAIError } = useAI()
+  const { run: runRelate, loading: relateLoading, error: relateError }         = useAI()
+  const { run: runLinks,  loading: linksLoading, error: linksError }          = useAI()
   const stopRef = useRef(false)
   const { filteredRows } = useFilters()
 
@@ -750,6 +750,27 @@ Rules:
                   Open Settings →
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* AI ERROR BANNER */}
+          {(aiError || relateError || linksError) && mode !== 'export' && (
+            <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-3 flex items-start gap-2">
+              <span className="text-red-500 text-sm shrink-0 mt-0.5">!</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-red-700 dark:text-red-300">AI request failed</p>
+                <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5 break-words">
+                  {aiError || relateError || linksError}
+                </p>
+                {settings.aiProvider === 'ollama' && (
+                  <p className="text-[11px] text-red-500 dark:text-red-400/80 mt-1">
+                    Make sure Ollama is running locally and the URL in Settings is correct.
+                  </p>
+                )}
+              </div>
+              <button onClick={clearAIError} className="text-red-400 hover:text-red-600 shrink-0">
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
