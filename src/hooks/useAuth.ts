@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useBrainStore } from '@/store/useBrainStore'
-import { initTokenClient, requestToken, revokeToken, hasSessionHint, initOneTapFallback, loadGisScript } from '@/lib/gsi'
+import { initTokenClient, requestToken, revokeToken, hasSessionHint, initOneTapFallback, loadGisScript, loadGisScriptWithRetry } from '@/lib/gsi'
 import { getAuthStartupPolicy } from '@/lib/startupPolicy'
 import { logger } from '@/lib/logger'
 
@@ -28,7 +28,7 @@ export function useAuth() {
       setAuthState({ isAuthenticated: false, token: null, error: null, loading: false })
     }
 
-    loadGisScript()
+    loadGisScriptWithRetry()
       .then(() => {
         if (cancelled || initialized.current) return
         initialized.current = true
