@@ -357,7 +357,7 @@ export function SettingsPanel() {
         <Section title="AI provider" icon={<Bot className="w-3.5 h-3.5" />}>
           {/* Provider toggle */}
           <div className="flex gap-2 mb-3">
-            {(['openai', 'claude'] as AIProvider[]).map((p) => (
+            {(['openai', 'claude', 'ollama'] as AIProvider[]).map((p) => (
               <button
                 key={p}
                 onClick={() => updateSettings({ aiProvider: p })}
@@ -368,7 +368,7 @@ export function SettingsPanel() {
                     : 'bg-surface2 text-ink2 border-border hover:bg-hover'
                 )}
               >
-                {p === 'openai' ? 'OpenAI (GPT)' : 'Claude (Anthropic)'}
+                {p === 'openai' ? 'OpenAI (GPT)' : p === 'claude' ? 'Claude (Anthropic)' : 'Ollama (Local)'}
               </button>
             ))}
           </div>
@@ -404,7 +404,30 @@ export function SettingsPanel() {
               </button>
             </div>
           )}
-          <p className="text-xs text-ink3 mb-3">Stored locally in your browser. Used for all AI features.</p>
+
+          {/* Ollama settings */}
+          {settings.aiProvider === 'ollama' && (
+            <div className="space-y-2 mb-2">
+              <input
+                type="text"
+                value={settings.ollamaUrl}
+                onChange={(e) => updateSettings({ ollamaUrl: e.target.value })}
+                className="w-full px-3 py-2.5 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 font-mono"
+                placeholder="http://localhost:11434"
+              />
+              <input
+                type="text"
+                value={settings.ollamaModel}
+                onChange={(e) => updateSettings({ ollamaModel: e.target.value })}
+                className="w-full px-3 py-2.5 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 font-mono"
+                placeholder="Model name (e.g. llama3.2, mistral, gemma2)"
+              />
+              <p className="text-xs text-ink3">Ollama runs locally. No API key needed. Make sure Ollama is running on the URL above.</p>
+            </div>
+          )}
+          {settings.aiProvider !== 'ollama' && (
+            <p className="text-xs text-ink3 mb-3">Stored locally in your browser. Used for all AI features.</p>
+          )}
 
           {/* Global AI instructions */}
           <p className="text-xs font-medium text-ink2 mb-1">Global AI instructions (prepended to every AI call)</p>

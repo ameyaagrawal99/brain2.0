@@ -8,7 +8,7 @@ export type ThemeMode  = 'light' | 'dark' | 'system'
 export type ThemeColor = 'indigo' | 'warm' | 'green' | 'rose'
 export type FontMode   = 'sans' | 'serif'
 
-export type AIProvider = 'openai' | 'claude'
+export type AIProvider = 'openai' | 'claude' | 'ollama'
 
 export interface AppSettings {
   themeMode:      ThemeMode
@@ -16,6 +16,8 @@ export interface AppSettings {
   fontMode:       FontMode
   openAiKey:      string
   claudeApiKey:   string
+  ollamaUrl:      string
+  ollamaModel:    string
   aiProvider:     AIProvider
   demoMode:       boolean
   notifyDueSoon:  boolean
@@ -28,6 +30,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   fontMode:       'sans',
   openAiKey:      '',
   claudeApiKey:   '',
+  ollamaUrl:      'http://localhost:11434',
+  ollamaModel:    'llama3.2',
   aiProvider:     'openai',
   demoMode:       false,
   notifyDueSoon:  true,

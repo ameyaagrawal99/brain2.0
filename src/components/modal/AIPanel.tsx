@@ -629,7 +629,7 @@ Rules:
     { key: 'export', label: 'Export',        icon: Download },
   ]
 
-  const hasKey = !!settings.openAiKey
+  const hasKey = settings.aiProvider === 'ollama' || !!(settings.aiProvider === 'claude' ? settings.claudeApiKey : settings.openAiKey)
 
   // Counts for bulk scope display
   const unenhancedCount  = rows.filter((r) => !r.rewritten && (r.original || r.title)).length
