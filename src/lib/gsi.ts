@@ -42,9 +42,13 @@ export function loadGisScript(): Promise<void> {
   if (typeof google !== 'undefined' && google?.accounts?.oauth2) return Promise.resolve()
   if (_gisScriptPromise) return _gisScriptPromise
 
-  _gisScriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]')
+  _gisScriptPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[src*="accounts.google.com/gsi/client"]')
     if (existing) {
+      if (typeof google !== 'undefined' && google?.accounts?.oauth2) {
+        resolve()
+        return
+      }
       existing.addEventListener('load', () => resolve(), { once: true })
       existing.addEventListener('error', () => reject(new Error('Failed to load Google Identity Services')), { once: true })
       return
@@ -57,9 +61,28 @@ export function loadGisScript(): Promise<void> {
     script.onload = () => resolve()
     script.onerror = () => reject(new Error('Failed to load Google Identity Services'))
     document.head.appendChild(script)
+  }).catch((err) => {
+    _gisScriptPromise = null
+    throw err
   })
 
   return _gisScriptPromise
+}
+
+export async function loadGisScriptWithRetry(maxRetries = 3): Promise<void> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await loadGisScript()
+      return
+    } catch (err) {
+      if (attempt === maxRetries) throw err
+      const delay = Math.min(1000 * 2 ** attempt, 4000)
+      logger.info(`[GSI] Script load failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`)
+      await new Promise((r) => setTimeout(r, delay))
+      const stale = document.querySelector<HTMLScriptElement>('script[src*="accounts.google.com/gsi/client"]')
+      if (stale) stale.remove()
+    }
+  }
 }
 
 /**
