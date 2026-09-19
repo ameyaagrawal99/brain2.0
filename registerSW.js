@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/brain2.0/sw.js', { scope: '/brain2.0/' })})}
