@@ -99,8 +99,9 @@ export function AppShell() {
   const showNewMilestone    = useBrainStore((s) => s.showNewMilestone)
   const setShowNewMilestone = useBrainStore((s) => s.setShowNewMilestone)
 
-  const { refresh, refreshConfig } = useSheetSync()
+  const { refresh, refreshConfig, scanMalformedCategories, fixCategories } = useSheetSync()
   const hasLoadedRef = useRef(false)
+  const categoryFixRan = useRef(false)
 
   useConfettiCheck()
   useNotifications()
@@ -128,10 +129,29 @@ export function AppShell() {
     if (demoMode) { setRows(DEMO_ROWS); hasLoadedRef.current = true; return }
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true
-      const t = setTimeout(() => { Promise.all([refresh(), refreshConfig()]).catch(() => {}) }, 100)
+      const t = setTimeout(() => {
+        Promise.all([refresh(), refreshConfig()]).catch(() => {})
+      }, 100)
       return () => clearTimeout(t)
     }
   }, [demoMode, refresh, refreshConfig, setRows])
+
+  // One-time auto-fix for malformed categories (=AI() formula artifacts, empty, etc.)
+  const rows = useBrainStore((s) => s.rows)
+  useEffect(() => {
+    if (demoMode || categoryFixRan.current || rows.length === 0) return
+    const FIXED_KEY = 'brain2_categories_autofix_v1'
+    try { if (localStorage.getItem(FIXED_KEY) === '1') { categoryFixRan.current = true; return } } catch {}
+    categoryFixRan.current = true
+    const fixes = scanMalformedCategories()
+    if (fixes.length === 0) {
+      try { localStorage.setItem(FIXED_KEY, '1') } catch {}
+      return
+    }
+    fixCategories(fixes).then(() => {
+      try { localStorage.setItem(FIXED_KEY, '1') } catch {}
+    }).catch(() => {})
+  }, [demoMode, rows.length, scanMalformedCategories, fixCategories])
 
   useEffect(() => {
     const isDesktop = window.innerWidth >= 640
