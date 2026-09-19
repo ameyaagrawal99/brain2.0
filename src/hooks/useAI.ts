@@ -122,14 +122,25 @@ async function callOllama(
   signal: AbortSignal,
 ): Promise<string> {
   const url = baseUrl.replace(/\/+$/, '')
-  const res = await fetch(`${url}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, stream: false, options: { temperature } }),
-    signal,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, stream: false, options: { temperature } }),
+      signal,
+    })
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw err
+    throw new Error(
+      `Cannot reach Ollama at ${url}. Make sure Ollama is running locally (ollama serve) and the URL is correct.`
+    )
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    if (res.status === 404 && text.includes('model')) {
+      throw new Error(`Model "${model}" not found. Run: ollama pull ${model}`)
+    }
     throw new Error(text || `Ollama error ${res.status}`)
   }
   const data = await res.json()
