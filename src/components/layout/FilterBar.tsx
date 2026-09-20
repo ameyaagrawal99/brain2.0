@@ -370,31 +370,41 @@ export function FilterBar() {
       {/* ── Main row ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-3 sm:px-4 py-2">
 
-        {/* Search */}
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink3 pointer-events-none" />
+        {/* Search - inspired by ameya.page */}
+        <label className="relative flex-1 min-w-0 flex items-center">
           <input
             ref={searchRef}
             type="search"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            placeholder="Search entries…"
-            className="w-full h-8 pl-8 pr-8 text-sm bg-surface2 border border-border rounded-lg
+            placeholder="Type here..."
+            className="w-full h-9 pl-3 pr-16 text-sm bg-surface2 border border-border rounded-xl
               text-ink placeholder:text-ink3
-              focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand
-              transition-[border-color,box-shadow]"
+              focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand
+              shadow-sm hover:shadow-md
+              transition-all duration-200"
           />
           {localSearch ? (
             <button onClick={() => { setLocalSearch(''); setSearch('') }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink p-0.5 rounded">
+              className="absolute right-9 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink p-0.5 rounded">
               <X className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:flex items-center
-              text-[9px] text-ink3 bg-surface border border-border rounded px-1 py-0.5 pointer-events-none font-medium">
-              ⌘K
+            <kbd className="absolute right-9 top-1/2 -translate-y-1/2 hidden sm:flex items-center justify-center
+              w-5 h-5 text-[11px] text-ink3 bg-surface border border-border rounded-md pointer-events-none font-mono font-semibold
+              shadow-[0_1px_0_1px] shadow-border/50">
+              /
             </kbd>
           )}
+          <svg
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink3 pointer-events-none"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 56.966 56.966"
+            fill="currentColor"
+          >
+            <path d="M55.146 51.887 41.588 37.786A22.926 22.926 0 0 0 46.984 23c0-12.682-10.318-23-23-23s-23 10.318-23 23 10.318 23 23 23c4.761 0 9.298-1.436 13.177-4.162l13.661 14.208c.571.593 1.339.92 2.162.92.779 0 1.518-.297 2.079-.837a3.004 3.004 0 0 0 .083-4.242zM23.984 6c9.374 0 17 7.626 17 17s-7.626 17-17 17-17-7.626-17-17 7.626-17 17-17z" />
+          </svg>
+        </label>
         </div>
 
         {/* Date indicator pill (quick access, mirrors section inside panel) */}
