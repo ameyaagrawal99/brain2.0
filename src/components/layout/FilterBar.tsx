@@ -370,8 +370,8 @@ export function FilterBar() {
       {/* ── Main row ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-3 sm:px-4 py-2">
 
-        {/* Search - pill style */}
-        <div className="relative flex-1 min-w-0 flex items-center bg-[#2f3640] rounded-full">
+        {/* Search - pill style, fully theme-driven (no hardcoded colors) */}
+        <div className="relative flex-1 min-w-0 flex items-center bg-surface2 border border-border rounded-full transition-colors">
           <input
             ref={searchRef}
             type="search"
@@ -379,12 +379,12 @@ export function FilterBar() {
             onChange={(e) => setLocalSearch(e.target.value)}
             placeholder="Search something"
             className="w-full h-11 pl-5 pr-14 text-sm bg-transparent border-0 rounded-full
-              text-white placeholder:text-white/50
+              text-ink placeholder:text-ink3
               focus:outline-none"
           />
           {localSearch && (
             <button onClick={() => { setLocalSearch(''); setSearch('') }}
-              className="absolute right-14 top-1/2 -translate-y-1/2 text-white/60 hover:text-white p-0.5 rounded">
+              className="absolute right-14 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink p-0.5 rounded">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -393,7 +393,7 @@ export function FilterBar() {
             onClick={() => searchRef.current?.focus()}
             aria-label="Search"
             className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center
-              bg-gradient-to-r from-[#2AF598] to-[#009EFD] text-white
+              bg-brand text-white
               transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:shadow-none"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 29 29" fill="none">

@@ -114,9 +114,10 @@
   --color-surface2: 251 243 228;
   --color-hover:    246 236 214;
 
-  /* Muted warm tan borders instead of a flat teal outline */
-  --color-border:   214 197 165;
-  --color-border2:  190 170 135;
+  /* Teal-tinted borders — the reference outlines every hr/input/button in pine,
+     not neutral gray, so borders carry the accent instead of sitting apart from it */
+  --color-border:   76  127 120;
+  --color-border2:  16  86  82;
 
   /* High-contrast near-black text, as used throughout the reference card */
   --color-text:    0   0   0;
@@ -135,13 +136,31 @@
   --shadow-md: 0px 12px 26px rgba(46, 34, 14, 0.10), 0px 4px 12px rgba(46, 34, 14, 0.08);
   --shadow-lg: 0px 24px 48px rgba(46, 34, 14, 0.12), 0px 8px 20px rgba(46, 34, 14, 0.08);
   --shadow-xl: 0px 40px 70px rgba(46, 34, 14, 0.12), 0px 12px 30px rgba(46, 34, 14, 0.10);
+
+  /* Distinct bold grotesk typeface, matching the reference's heavy 600–900 weights */
+  --font-sans: 'Space Grotesk', 'Inter', system-ui, sans-serif;
 }
 
-/* Section-header labels read closer to the reference card's uppercase ledger style */
+/* Bolder weights and tighter tracking, matching the reference's heavy ledger type */
+[data-app-theme="parchment"] body {
+  font-weight: 500;
+}
 [data-app-theme="parchment"] h1,
 [data-app-theme="parchment"] h2,
 [data-app-theme="parchment"] h3 {
+  font-weight: 700;
   letter-spacing: 0.01em;
+}
+[data-app-theme="parchment"] button {
+  font-weight: 600;
+}
+
+/* Flatten the glassy/blurred surfaces into solid paper — the reference card has
+   no translucency or frosted-glass effect, just flat ivory + a soft shadow */
+[data-app-theme="parchment"] .premium-surface {
+  background: rgb(var(--color-surface));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* ═══════════════════════════════════════════════════
