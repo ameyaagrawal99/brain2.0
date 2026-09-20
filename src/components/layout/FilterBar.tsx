@@ -370,41 +370,37 @@ export function FilterBar() {
       {/* ── Main row ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-3 sm:px-4 py-2">
 
-        {/* Search - inspired by ameya.page */}
-        <label className="relative flex-1 min-w-0 flex items-center">
+        {/* Search - pill style */}
+        <div className="relative flex-1 min-w-0 flex items-center bg-[#2f3640] rounded-full">
           <input
             ref={searchRef}
             type="search"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            placeholder="Type here..."
-            className="w-full h-9 pl-3 pr-16 text-sm bg-surface2 border border-border rounded-xl
-              text-ink placeholder:text-ink3
-              focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand
-              shadow-sm hover:shadow-md
-              transition-all duration-200"
+            placeholder="Search something"
+            className="w-full h-11 pl-5 pr-14 text-sm bg-transparent border-0 rounded-full
+              text-white placeholder:text-white/50
+              focus:outline-none"
           />
-          {localSearch ? (
+          {localSearch && (
             <button onClick={() => { setLocalSearch(''); setSearch('') }}
-              className="absolute right-9 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink p-0.5 rounded">
+              className="absolute right-14 top-1/2 -translate-y-1/2 text-white/60 hover:text-white p-0.5 rounded">
               <X className="w-3.5 h-3.5" />
             </button>
-          ) : (
-            <kbd className="absolute right-9 top-1/2 -translate-y-1/2 hidden sm:flex items-center justify-center
-              w-5 h-5 text-[11px] text-ink3 bg-surface border border-border rounded-md pointer-events-none font-mono font-semibold
-              shadow-[0_1px_0_1px] shadow-border/50">
-              /
-            </kbd>
           )}
-          <svg
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink3 pointer-events-none"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 56.966 56.966"
-            fill="currentColor"
+          <button
+            type="button"
+            onClick={() => searchRef.current?.focus()}
+            aria-label="Search"
+            className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center
+              bg-gradient-to-r from-[#2AF598] to-[#009EFD] text-white
+              transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:shadow-none"
           >
-            <path d="M55.146 51.887 41.588 37.786A22.926 22.926 0 0 0 46.984 23c0-12.682-10.318-23-23-23s-23 10.318-23 23 10.318 23 23 23c4.761 0 9.298-1.436 13.177-4.162l13.661 14.208c.571.593 1.339.92 2.162.92.779 0 1.518-.297 2.079-.837a3.004 3.004 0 0 0 .083-4.242zM23.984 6c9.374 0 17 7.626 17 17s-7.626 17-17 17-17-7.626-17-17 7.626-17 17-17z" />
-          </svg>
-        </label>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 29 29" fill="none">
+              <path d="M23.7953 23.9182L19.0585 19.1814M19.0585 19.1814C19.8188 18.4211 20.4219 17.5185 20.8333 16.5251C21.2448 15.5318 21.4566 14.4671 21.4566 13.3919C21.4566 12.3167 21.2448 11.252 20.8333 10.2587C20.4219 9.2653 19.8188 8.36271 19.0585 7.60242C18.2982 6.84214 17.3956 6.23905 16.4022 5.82759C15.4089 5.41612 14.3442 5.20435 13.269 5.20435C12.1938 5.20435 11.1291 5.41612 10.1358 5.82759C9.1424 6.23905 8.23981 6.84214 7.47953 7.60242C5.94407 9.13789 5.08145 11.2204 5.08145 13.3919C5.08145 15.5634 5.94407 17.6459 7.47953 19.1814C9.01499 20.7168 11.0975 21.5794 13.269 21.5794C15.4405 21.5794 17.523 20.7168 19.0585 19.1814Z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
 
         {/* Date indicator pill (quick access, mirrors section inside panel) */}
         {hasDate && (
