@@ -113,6 +113,24 @@ async function callClaude(
   return (data.content?.[0]?.text as string) ?? ''
 }
 
+/* ── Ollama helpers ─────────────────────────────────────────────── */
+export function normalizeOllamaUrl(raw: string): string {
+  return raw.replace(/\/+$/, '').replace(/\/(v1|api(\/chat)?)$/i, '')
+}
+
+export async function checkOllamaHealth(rawUrl: string): Promise<{ ok: boolean; models?: string[]; error?: string }> {
+  const url = normalizeOllamaUrl(rawUrl || 'http://localhost:11434')
+  try {
+    const res = await fetch(`${url}/api/tags`, { method: 'GET' })
+    if (!res.ok) return { ok: false, error: `Ollama responded with status ${res.status}` }
+    const data = await res.json()
+    const models = (data.models as { name: string }[])?.map((m) => m.name) ?? []
+    return { ok: true, models }
+  } catch {
+    return { ok: false, error: `Cannot reach Ollama at ${url}. Make sure Ollama is running (ollama serve).` }
+  }
+}
+
 /* ── Call Ollama ────────────────────────────────────────────────── */
 async function callOllama(
   baseUrl: string,
@@ -121,7 +139,7 @@ async function callOllama(
   temperature: number,
   signal: AbortSignal,
 ): Promise<string> {
-  const url = baseUrl.replace(/\/+$/, '')
+  const url = normalizeOllamaUrl(baseUrl)
   let res: Response
   try {
     res = await fetch(`${url}/api/chat`, {

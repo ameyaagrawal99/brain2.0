@@ -2,6 +2,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
 import { useAuth } from '@/hooks/useAuth'
+import { checkOllamaHealth } from '@/hooks/useAI'
 import { appendConfigCategory, appendConfigTag, deleteConfigItem, saveColorConfig, deleteColorConfig } from '@/lib/sheetsConfig'
 import { fetchGoogleContacts, ContactsError } from '@/lib/contacts'
 import { requestContactsAccess } from '@/lib/gsi'
@@ -422,7 +423,23 @@ export function SettingsPanel() {
                 className="w-full px-3 py-2.5 text-sm bg-surface2 border border-border rounded-lg text-ink placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-brand/50 font-mono"
                 placeholder="Model name (e.g. llama3.2, mistral, gemma2)"
               />
-              <p className="text-xs text-ink3">Ollama runs locally. No API key needed. Make sure Ollama is running on the URL above.</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const result = await checkOllamaHealth(settings.ollamaUrl)
+                    if (result.ok) {
+                      toast.success(`Ollama is running! Models: ${result.models?.join(', ') || 'none installed'}`)
+                    } else {
+                      toast.error(result.error || 'Cannot reach Ollama')
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium bg-brand/10 text-brand rounded-lg hover:bg-brand/20 transition-colors"
+                >
+                  Test Connection
+                </button>
+                <p className="text-xs text-ink3">No API key needed. Base URL only (e.g. http://localhost:11434).</p>
+              </div>
             </div>
           )}
           {settings.aiProvider !== 'ollama' && (
