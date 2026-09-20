@@ -101,6 +101,50 @@
 }
 
 /* ═══════════════════════════════════════════════════
+   APP THEME: PARCHMENT — warm ivory & deep pine ledger
+═══════════════════════════════════════════════════ */
+[data-app-theme="parchment"] {
+  /* Deep pine/teal accent, lifted from the checkout card's dividers & buttons */
+  --color-brand:   16  86  82;
+  --color-brand-l: 27  122 114;
+
+  /* Warm ivory surfaces, lifted from the card & input backgrounds */
+  --color-bg:       255 250 235;
+  --color-surface:  255 253 246;
+  --color-surface2: 251 243 228;
+  --color-hover:    246 236 214;
+
+  /* Muted warm tan borders instead of a flat teal outline */
+  --color-border:   214 197 165;
+  --color-border2:  190 170 135;
+
+  /* High-contrast near-black text, as used throughout the reference card */
+  --color-text:    0   0   0;
+  --color-text2:   61  56  46;
+  --color-text3:   122 111 90;
+
+  /* Card radius (19px) and tighter control radii (5–7px), lifted from the card */
+  --radius-sm:  5px;
+  --radius-md:  7px;
+  --radius-lg:  12px;
+  --radius-xl:  19px;
+
+  /* Soft warm-toned layered shadows instead of neutral black */
+  --shadow-xs: 0px 1px 2px rgba(46, 34, 14, 0.06);
+  --shadow-sm: 0px 2px 6px rgba(46, 34, 14, 0.08), 0px 1px 2px rgba(46, 34, 14, 0.06);
+  --shadow-md: 0px 12px 26px rgba(46, 34, 14, 0.10), 0px 4px 12px rgba(46, 34, 14, 0.08);
+  --shadow-lg: 0px 24px 48px rgba(46, 34, 14, 0.12), 0px 8px 20px rgba(46, 34, 14, 0.08);
+  --shadow-xl: 0px 40px 70px rgba(46, 34, 14, 0.12), 0px 12px 30px rgba(46, 34, 14, 0.10);
+}
+
+/* Section-header labels read closer to the reference card's uppercase ledger style */
+[data-app-theme="parchment"] h1,
+[data-app-theme="parchment"] h2,
+[data-app-theme="parchment"] h3 {
+  letter-spacing: 0.01em;
+}
+
+/* ═══════════════════════════════════════════════════
    BASE
 ═══════════════════════════════════════════════════ */
 

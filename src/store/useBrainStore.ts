@@ -7,10 +7,12 @@ import type { SentimentFilter } from '@/lib/sentiment'
 export type ThemeMode  = 'light' | 'dark' | 'system'
 export type ThemeColor = 'indigo' | 'warm' | 'green' | 'rose'
 export type FontMode   = 'sans' | 'serif'
+export type AppTheme   = 'default' | 'parchment'
 
 export type AIProvider = 'openai' | 'claude' | 'ollama'
 
 export interface AppSettings {
+  appTheme:       AppTheme
   themeMode:      ThemeMode
   themeColor:     ThemeColor
   fontMode:       FontMode
@@ -25,6 +27,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
+  appTheme:       'default',
   themeMode:      'light',
   themeColor:     'indigo',
   fontMode:       'sans',

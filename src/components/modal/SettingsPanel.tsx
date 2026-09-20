@@ -1,6 +1,6 @@
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { useBrainStore, AppSettings, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
+import { useBrainStore, AppSettings, AppTheme, ThemeMode, ThemeColor, FontMode } from '@/store/useBrainStore'
 import { useAuth } from '@/hooks/useAuth'
 import { checkOllamaHealth } from '@/hooks/useAI'
 import { appendConfigCategory, appendConfigTag, deleteConfigItem, saveColorConfig, deleteColorConfig } from '@/lib/sheetsConfig'
@@ -8,7 +8,7 @@ import { fetchGoogleContacts, ContactsError } from '@/lib/contacts'
 import { requestContactsAccess } from '@/lib/gsi'
 import { cn, COLOR_PALETTE } from '@/lib/utils'
 import { requestNotificationPermission, getNotificationPermission } from '@/hooks/useNotifications'
-import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogIn, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2, Bot, Wrench } from 'lucide-react'
+import { Eye, EyeOff, Sun, Moon, Monitor, Palette, Type, Bell, BellOff, LogIn, LogOut, RotateCcw, Plus, X, Tag, FolderOpen, Download, Users, CheckCircle2, Link2, Bot, Wrench, Layers } from 'lucide-react'
 import { useState } from 'react'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import type { CategoryFix } from '@/lib/categoryCleanup'
@@ -256,6 +256,11 @@ export function SettingsPanel() {
     }
   }
 
+  const appThemes: { value: AppTheme; label: string; description: string; bg: string; surface: string; accent: string }[] = [
+    { value: 'default',   label: 'Default',   description: 'Clean & modern',    bg: 'bg-white',      surface: 'bg-slate-100',  accent: 'bg-indigo-500' },
+    { value: 'parchment', label: 'Parchment', description: 'Warm ivory & pine', bg: 'bg-[#FFFAEB]',   surface: 'bg-[#FBF3E4]',  accent: 'bg-[#105652]' },
+  ]
+
   const themes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
     { value: 'light',  label: 'Light',  icon: Sun },
     { value: 'dark',   label: 'Dark',   icon: Moon },
@@ -280,47 +285,84 @@ export function SettingsPanel() {
     <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Settings" size="md">
       <div className="p-5 space-y-6 max-h-[80vh] overflow-y-auto">
 
-        {/* Theme Mode */}
-        <Section title="Appearance" icon={<Sun className="w-3.5 h-3.5" />}>
-          <div className="grid grid-cols-3 gap-2">
-            {themes.map(({ value, label, icon: Icon }) => (
+        {/* App Theme */}
+        <Section title="Theme" icon={<Layers className="w-3.5 h-3.5" />}>
+          <div className="grid grid-cols-2 gap-2">
+            {appThemes.map(({ value, label, description, bg, surface, accent }) => (
               <button
                 key={value}
-                onClick={() => updateSettings({ themeMode: value })}
+                onClick={() => updateSettings({ appTheme: value })}
                 className={cn(
-                  'flex flex-col items-center gap-1.5 py-3 rounded-lg border text-xs font-medium transition-colors',
-                  settings.themeMode === value
-                    ? 'border-brand bg-brand/8 text-brand'
-                    : 'border-border text-ink2 hover:bg-hover'
+                  'flex flex-col gap-2 p-3 rounded-lg border text-left transition-colors',
+                  settings.appTheme === value
+                    ? 'border-brand bg-brand/8'
+                    : 'border-border hover:bg-hover'
                 )}
               >
-                <Icon className="w-4 h-4" />
-                {label}
+                <div className={cn('h-8 rounded-md border border-black/10 overflow-hidden flex', bg)}>
+                  <div className={cn('w-2/3 h-full', surface)} />
+                  <div className={cn('w-1/3 h-full', accent)} />
+                </div>
+                <div>
+                  <p className={cn('text-sm font-medium', settings.appTheme === value ? 'text-brand' : 'text-ink')}>
+                    {label}
+                  </p>
+                  <p className="text-xs text-ink3">{description}</p>
+                </div>
               </button>
             ))}
           </div>
         </Section>
 
+        {/* Theme Mode */}
+        {settings.appTheme === 'default' ? (
+          <Section title="Appearance" icon={<Sun className="w-3.5 h-3.5" />}>
+            <div className="grid grid-cols-3 gap-2">
+              {themes.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  onClick={() => updateSettings({ themeMode: value })}
+                  className={cn(
+                    'flex flex-col items-center gap-1.5 py-3 rounded-lg border text-xs font-medium transition-colors',
+                    settings.themeMode === value
+                      ? 'border-brand bg-brand/8 text-brand'
+                      : 'border-border text-ink2 hover:bg-hover'
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </Section>
+        ) : (
+          <Section title="Appearance" icon={<Sun className="w-3.5 h-3.5" />}>
+            <p className="text-xs text-ink3">Parchment uses a fixed warm palette — light/dark mode doesn't apply.</p>
+          </Section>
+        )}
+
         {/* Color */}
-        <Section title="Accent color" icon={<Palette className="w-3.5 h-3.5" />}>
-          <div className="flex gap-3">
-            {colors.map(({ value, label, css }) => (
-              <button
-                key={value}
-                onClick={() => updateSettings({ themeColor: value })}
-                className="flex flex-col items-center gap-1.5 group"
-                title={label}
-              >
-                <div className={cn(
-                  'w-7 h-7 rounded-full transition-all ring-offset-2 ring-offset-surface',
-                  css,
-                  settings.themeColor === value ? 'ring-2 ring-offset-2' : 'group-hover:scale-110',
-                )} />
-                <span className="text-[10px] text-ink3">{label}</span>
-              </button>
-            ))}
-          </div>
-        </Section>
+        {settings.appTheme === 'default' && (
+          <Section title="Accent color" icon={<Palette className="w-3.5 h-3.5" />}>
+            <div className="flex gap-3">
+              {colors.map(({ value, label, css }) => (
+                <button
+                  key={value}
+                  onClick={() => updateSettings({ themeColor: value })}
+                  className="flex flex-col items-center gap-1.5 group"
+                  title={label}
+                >
+                  <div className={cn(
+                    'w-7 h-7 rounded-full transition-all ring-offset-2 ring-offset-surface',
+                    css,
+                    settings.themeColor === value ? 'ring-2 ring-offset-2' : 'group-hover:scale-110',
+                  )} />
+                  <span className="text-[10px] text-ink3">{label}</span>
+                </button>
+              ))}
+            </div>
+          </Section>
+        )}
 
         {/* Font */}
         <Section title="Body font" icon={<Type className="w-3.5 h-3.5" />}>
