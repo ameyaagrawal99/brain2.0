@@ -5,6 +5,7 @@ import { parseTags, cn } from '@/lib/utils'
 import { parsePeople } from '@/lib/contacts'
 import { aggregateSentiment, EMOTION_META, type SentimentFilter } from '@/lib/sentiment'
 import { addLocalDays, monthDay, toLocalISODate } from '@/lib/date'
+import { getMilestoneStyle } from '@/lib/milestones'
 import {
   CheckCircle2, Clock, AlertTriangle, CalendarDays, Star,
   Tag, Zap, RefreshCw, Plus, Smile, Meh, Frown,
@@ -25,6 +26,11 @@ function fmtDate(iso: string) {
   })
 }
 
+function dayMonthParts(iso: string) {
+  const d = new Date(iso + 'T12:00:00')
+  return { day: d.getDate(), month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase() }
+}
+
 function daysFromNow(iso: string) {
   const diff = Math.round(
     (new Date(iso + 'T00:00:00').getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000,
@@ -35,14 +41,6 @@ function daysFromNow(iso: string) {
   if (diff < 0)  return `${Math.abs(diff)}d ago`
   return `in ${diff}d`
 }
-
-const MILESTONE_COLORS = [
-  'from-rose-500 to-pink-500',
-  'from-violet-500 to-fuchsia-500',
-  'from-blue-500 to-cyan-500',
-  'from-amber-500 to-orange-500',
-  'from-emerald-500 to-teal-500',
-]
 
 const CAT_ACCENT_COLORS = [
   'bg-brand',
@@ -162,6 +160,7 @@ export function DashboardView() {
   const specialDays          = useBrainStore((s) => s.specialDays)
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
   const setShowNewMilestone  = useBrainStore((s) => s.setShowNewMilestone)
+  const isParchment          = useBrainStore((s) => s.settings.appTheme === 'parchment')
   const setShowNewRow        = useBrainStore((s) => s.setShowNewRow)
   const openModal            = useBrainStore((s) => s.openModal)
   const setViewMode          = useBrainStore((s) => s.setViewMode)
@@ -353,16 +352,16 @@ export function DashboardView() {
         {/* ── Today's milestones ─────────────────────────────── */}
         {todayMs.length > 0 && (
           <div className="mb-8">
-            {todayMs.map((ms, i) => {
+            {todayMs.map((ms) => {
               const isAnni = ms.date !== today && ms.date.slice(5) === todayMD
               return (
                 <button
                   key={ms.id}
                   onClick={() => setSelectedMilestone(ms)}
                   className={cn(
-                    'w-full relative overflow-hidden rounded-2xl p-5 text-left mb-3 last:mb-0',
+                    'w-full relative overflow-hidden rounded-3xl p-5 text-left mb-3 last:mb-0',
                     'bg-gradient-to-r text-white shadow-lg hover:opacity-95 transition-opacity',
-                    MILESTONE_COLORS[i % MILESTONE_COLORS.length],
+                    getMilestoneStyle(ms.date, true, isAnni, isParchment).gradient,
                   )}
                 >
                   <div className="milestone-shimmer absolute inset-0 pointer-events-none" />
@@ -417,39 +416,53 @@ export function DashboardView() {
                   {upcoming.length > 0 && (
                     <div>
                       <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider mb-1.5">Upcoming</p>
-                      {upcoming.map((ms, i) => (
-                        <button
-                          key={ms.id}
-                          onClick={() => setSelectedMilestone(ms)}
-                          className="w-full flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-xl hover:border-brand/30 hover:bg-brand/3 transition-all text-left mb-1.5 last:mb-0"
-                        >
-                          <div className={cn('w-2 h-8 rounded-full shrink-0 bg-gradient-to-b', MILESTONE_COLORS[i % MILESTONE_COLORS.length])} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-ink truncate">{ms.title}</p>
-                            <p className="text-xs text-ink3">{fmtDate(ms.date)}</p>
-                          </div>
-                          <span className="text-[11px] font-medium text-brand shrink-0">{daysFromNow(ms.date)}</span>
-                        </button>
-                      ))}
+                      {upcoming.map((ms) => {
+                        const style = getMilestoneStyle(ms.date, false, false, isParchment)
+                        const { day, month } = dayMonthParts(ms.date)
+                        return (
+                          <button
+                            key={ms.id}
+                            onClick={() => setSelectedMilestone(ms)}
+                            className="w-full flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-xl hover:border-brand/30 hover:bg-brand/3 transition-all text-left mb-1.5 last:mb-0"
+                          >
+                            <div className={cn('w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 border', style.badgeBg, style.badgeBorder)}>
+                              <span className={cn('text-sm font-bold leading-none', style.badgeText)}>{day}</span>
+                              <span className={cn('text-[9px] font-semibold uppercase leading-none mt-0.5 opacity-80', style.badgeText)}>{month}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-ink truncate">{ms.title}</p>
+                              <p className="text-xs text-ink3">{fmtDate(ms.date)}</p>
+                            </div>
+                            <span className="text-[11px] font-medium text-brand shrink-0">{daysFromNow(ms.date)}</span>
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                   {past.length > 0 && (
                     <div>
                       <p className="text-[10px] font-semibold text-ink3 uppercase tracking-wider mb-1.5 mt-3">Past</p>
-                      {past.map((ms, i) => (
-                        <button
-                          key={ms.id}
-                          onClick={() => setSelectedMilestone(ms)}
-                          className="w-full flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-xl hover:border-brand/30 hover:bg-brand/3 transition-all text-left mb-1.5 last:mb-0 opacity-60"
-                        >
-                          <div className={cn('w-2 h-8 rounded-full shrink-0 bg-gradient-to-b', MILESTONE_COLORS[i % MILESTONE_COLORS.length])} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-ink truncate">{ms.title}</p>
-                            <p className="text-xs text-ink3">{fmtDate(ms.date)}</p>
-                          </div>
-                          <span className="text-[11px] text-ink3 shrink-0">{daysFromNow(ms.date)}</span>
-                        </button>
-                      ))}
+                      {past.map((ms) => {
+                        const style = getMilestoneStyle(ms.date, false, false, isParchment)
+                        const { day, month } = dayMonthParts(ms.date)
+                        return (
+                          <button
+                            key={ms.id}
+                            onClick={() => setSelectedMilestone(ms)}
+                            className="w-full flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-xl hover:border-brand/30 hover:bg-brand/3 transition-all text-left mb-1.5 last:mb-0 opacity-60"
+                          >
+                            <div className={cn('w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 border', style.badgeBg, style.badgeBorder)}>
+                              <span className={cn('text-sm font-bold leading-none', style.badgeText)}>{day}</span>
+                              <span className={cn('text-[9px] font-semibold uppercase leading-none mt-0.5 opacity-80', style.badgeText)}>{month}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-ink truncate">{ms.title}</p>
+                              <p className="text-xs text-ink3">{fmtDate(ms.date)}</p>
+                            </div>
+                            <span className="text-[11px] text-ink3 shrink-0">{daysFromNow(ms.date)}</span>
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                   {specialDays.length > (upcoming.length + past.length + todayMs.length) && (
