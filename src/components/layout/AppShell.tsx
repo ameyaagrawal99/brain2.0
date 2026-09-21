@@ -14,6 +14,8 @@ import { useNotifications }   from '@/hooks/useNotifications'
 import { onTokenReady } from '@/lib/gsi'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
 import { monthDay, toLocalISODate } from '@/lib/date'
+import { getMilestoneStyle } from '@/lib/milestones'
+import { cn } from '@/lib/utils'
 
 const CardView = lazy(() => import('@/components/views/CardView').then((m) => ({ default: m.CardView })))
 const TableView = lazy(() => import('@/components/views/TableView').then((m) => ({ default: m.TableView })))
@@ -40,6 +42,7 @@ function ShellFallback() {
 function MilestoneBanner() {
   const specialDays          = useBrainStore((s) => s.specialDays)
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
+  const isParchment          = useBrainStore((s) => s.settings.appTheme === 'parchment')
   const [dismissed, setDismissed] = useState(false)
 
   const today   = toLocalISODate()
@@ -57,7 +60,7 @@ function MilestoneBanner() {
 
   return (
     <div className="relative overflow-hidden animate-slideDown sm:ml-14">
-      <div className="absolute inset-0 bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 opacity-90" />
+      <div className={cn('absolute inset-0 bg-gradient-to-r opacity-90', getMilestoneStyle(first.date, !isAnni, isAnni, isParchment).gradient)} />
       <div className="milestone-shimmer absolute inset-0" />
       <div className="relative z-10 px-3 sm:px-4 py-2.5 flex items-center gap-3">
         <span className="text-xl shrink-0 select-none drop-shadow">{isAnni ? '🎂' : '🎉'}</span>

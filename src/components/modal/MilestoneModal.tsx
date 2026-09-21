@@ -3,24 +3,17 @@ import {
   X, Edit3, Trash2, Save, Loader2, Link2, Image as ImageIcon,
   Calendar, Sparkles, ChevronLeft,
 } from 'lucide-react'
-import { formatDistance, differenceInYears, differenceInMonths } from 'date-fns'
+import { differenceInYears, differenceInMonths } from 'date-fns'
 import { useBrainStore } from '@/store/useBrainStore'
 import { useSheetSync } from '@/hooks/useSheetSync'
 import { renderMarkdown } from '@/lib/markdown'
 import { cn, isImageUrl } from '@/lib/utils'
 import { monthDay, toLocalISODate } from '@/lib/date'
+import { getMilestoneStyle } from '@/lib/milestones'
+import { MilestoneCalendarPicker } from '@/components/ui/MilestoneCalendarPicker'
 import type { SpecialDay } from '@/types/sheet'
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
-
-function getMilestoneGradient(dateStr: string, isToday: boolean, isAnniversary: boolean) {
-  if (isToday || isAnniversary) return 'from-rose-500 via-pink-500 to-fuchsia-500'
-  const years = differenceInYears(new Date(), new Date(dateStr + 'T12:00:00'))
-  if (years < 1) return 'from-violet-500 via-purple-500 to-indigo-500'
-  if (years < 2) return 'from-indigo-500 via-blue-500 to-cyan-500'
-  if (years < 5) return 'from-emerald-500 via-teal-500 to-green-500'
-  return 'from-amber-500 via-orange-500 to-yellow-500'
-}
 
 function getElapsedText(dateStr: string) {
   const dateObj = new Date(dateStr + 'T12:00:00')
@@ -44,6 +37,8 @@ export function MilestoneModal() {
   const setSelectedMilestone = useBrainStore((s) => s.setSelectedMilestone)
   const showNewMilestone    = useBrainStore((s) => s.showNewMilestone)
   const setShowNewMilestone = useBrainStore((s) => s.setShowNewMilestone)
+  const specialDays         = useBrainStore((s) => s.specialDays)
+  const isParchment         = useBrainStore((s) => s.settings.appTheme === 'parchment')
 
   const { createSpecialDay, updateSpecialDayEntry, removeSpecialDay } = useSheetSync()
 
@@ -161,7 +156,9 @@ export function MilestoneModal() {
   const isToday       = dayDate === today
   const isAnniversary = !!dayDate && dayDate !== today && dayDate.slice(5) === todayMD
 
-  const gradient  = dayDate ? getMilestoneGradient(dayDate, isToday, isAnniversary) : 'from-violet-500 via-purple-500 to-indigo-500'
+  const gradient  = dayDate
+    ? getMilestoneStyle(dayDate, isToday, isAnniversary, isParchment).gradient
+    : getMilestoneStyle(toLocalISODate(), false, false, isParchment).gradient
   const elapsed   = dayDate ? getElapsedText(dayDate) : ''
   const imgToShow = (imageUrl || selectedMilestone?.imageUrl || '')
   const showImg   = !imgError && !!imgToShow && isImageUrl(imgToShow)
@@ -181,7 +178,7 @@ export function MilestoneModal() {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
         <div
-          className="pointer-events-auto w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl animate-scaleIn bg-surface"
+          className="pointer-events-auto w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl overflow-hidden shadow-2xl animate-scaleIn bg-surface"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Gradient hero header ── */}
@@ -226,10 +223,13 @@ export function MilestoneModal() {
               </h2>
 
               {dayDate && (
-                <p className="mt-2 text-sm text-white/80 relative z-10">
-                  {new Date(dayDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  {elapsed && <span className="ml-2 opacity-70">· {elapsed}</span>}
-                </p>
+                <div className="mt-3 relative z-10 flex justify-center">
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-sm text-white text-xs font-medium">
+                    <Calendar className="w-3 h-3 opacity-80" />
+                    {new Date(dayDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                    {elapsed && <span className="opacity-70">· {elapsed}</span>}
+                  </span>
+                </div>
               )}
 
               {/* Badge */}
@@ -332,11 +332,10 @@ export function MilestoneModal() {
                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-ink3 mb-1.5 flex items-center gap-1">
                       <Calendar className="w-3 h-3" /> Date *
                     </label>
-                    <input
-                      type="date"
+                    <MilestoneCalendarPicker
                       value={date}
-                      onChange={e => setDate(e.target.value)}
-                      className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/40"
+                      onChange={setDate}
+                      markedDates={specialDays.filter((d) => d.id !== selectedMilestone?.id).map((d) => d.date)}
                     />
                   </div>
                   <div className="w-24">
