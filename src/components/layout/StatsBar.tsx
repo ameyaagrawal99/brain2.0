@@ -60,7 +60,7 @@ export function StatsBar() {
         <div className="hidden sm:flex items-center gap-2 shrink-0">
           <div className="w-20 h-1 bg-surface2 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-brand to-green-500 rounded-full transition-all duration-500"
+              className="h-full bg-emerald-500 rounded-full transition-[width] duration-500"
               style={{ width: `${stats.completion}%` }}
             />
           </div>

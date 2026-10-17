@@ -1,3 +1,5 @@
+import defaultColors from 'tailwindcss/colors'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -26,8 +28,18 @@ export default {
         warn:     'rgb(var(--color-yellow) / <alpha-value>)',
         danger:   'rgb(var(--color-red) / <alpha-value>)',
         info:     'rgb(var(--color-blue) / <alpha-value>)',
-        purple:   'rgb(var(--color-purple) / <alpha-value>)',
+        // Keep Tailwind's purple-50…950 scale; a bare string here would drop it
+        // and make classes like bg-purple-500 silently generate nothing.
+        purple:   { ...defaultColors.purple, DEFAULT: 'rgb(var(--color-purple) / <alpha-value>)' },
         accent:   'rgb(var(--color-orange) / <alpha-value>)',
+      },
+
+      // Steps used across components (bg-brand/8, bg-brand/12, hover:bg-brand/3)
+      // that Tailwind's default opacity scale does not include.
+      opacity: {
+        3:  '0.03',
+        8:  '0.08',
+        12: '0.12',
       },
 
       boxShadow: {

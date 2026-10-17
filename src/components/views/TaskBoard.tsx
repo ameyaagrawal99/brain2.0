@@ -12,18 +12,6 @@ import { AlertTriangle, Calendar, ChevronDown, Flag, GripVertical, ListChecks, R
 
 const COLUMNS = ['Pending', 'In Progress', 'In Review', 'Done', 'Blocked'] as const
 const DUE_COLUMNS = ['Overdue', 'Today', 'Upcoming', 'No due date', 'Done'] as const
-const COLUMN_ACCENT: Record<string, string> = {
-  'Pending':     'border-amber-300  dark:border-amber-700',
-  'In Progress': 'border-blue-300   dark:border-blue-700',
-  'In Review':   'border-purple-300 dark:border-purple-700',
-  'Done':        'border-green-300  dark:border-green-700',
-  'Blocked':     'border-red-300    dark:border-red-700',
-  'Unassigned':  'border-border',
-  'Overdue':     'border-red-300    dark:border-red-700',
-  'Today':       'border-brand/60',
-  'Upcoming':    'border-blue-300   dark:border-blue-700',
-  'No due date': 'border-border',
-}
 
 const STATUS_OPTIONS = ['Pending', 'In Progress', 'In Review', 'Done', 'Blocked']
 type BoardMode = 'status' | 'due'
@@ -110,7 +98,6 @@ export function TaskBoard() {
               key={col}
               title={col}
               rows={grouped[col] ?? []}
-              accentClass={COLUMN_ACCENT[col] ?? 'border-border'}
               draggable={mode === 'status' && col !== 'Unassigned'}
               droppable={mode === 'status' && col !== 'Unassigned'}
               onCardClick={openModal}
@@ -129,11 +116,10 @@ export function TaskBoard() {
 }
 
 function KanbanColumn({
-  title, rows, accentClass, draggable, droppable, onCardClick, onStatusChange,
+  title, rows, draggable, droppable, onCardClick, onStatusChange,
 }: {
   title: string
   rows: BrainRow[]
-  accentClass: string
   draggable: boolean
   droppable: boolean
   onCardClick: (row: BrainRow) => void
@@ -144,8 +130,7 @@ function KanbanColumn({
 
   return (
     <div ref={setNodeRef} className={cn(
-      'flex flex-col shrink-0 w-72 bg-surface2 rounded-xl border-t-2 border-x border-b border-border transition-colors',
-      accentClass,
+      'flex flex-col shrink-0 w-72 bg-surface2 rounded-xl border border-border transition-colors',
       isOver && 'bg-brand/5 ring-2 ring-brand/30',
     )}>
       {/* Column header */}

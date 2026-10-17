@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutGrid, Table2, Kanban, Plus, Sparkles, X, FileText, LayoutDashboard, LibraryBig, Network, BookOpen } from 'lucide-react'
+import { LayoutGrid, Table2, Kanban, Plus, CalendarHeart, X, FileText, LayoutDashboard, LibraryBig, Network, BookOpen } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
 import { cn } from '@/lib/utils'
 import { ViewMode } from '@/types/sheet'
@@ -42,7 +42,7 @@ export function BottomNav() {
           />
           {/* Menu sheet */}
           <div className="fixed bottom-16 left-0 right-0 z-50 sm:hidden px-4 pb-2 animate-slideUp">
-            <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-surface border border-border rounded-xl shadow-xl overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <span className="text-sm font-semibold text-ink">Create new</span>
                 <button
@@ -70,7 +70,7 @@ export function BottomNav() {
                 className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-hover transition-colors text-left"
               >
                 <div className="w-8 h-8 rounded-xl bg-rose-500/10 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4 h-4 text-rose-500" />
+                  <CalendarHeart className="w-4 h-4 text-rose-500" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-ink">New Milestone</p>

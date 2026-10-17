@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Sparkles, X, Star, ChevronDown, Plus, Sun, Moon, Wand2, RefreshCw, LogIn,
+  CalendarHeart, X, Star, ChevronDown, Plus, Sun, Moon, Wand2, RefreshCw, LogIn, Settings,
 } from 'lucide-react'
 import { differenceInYears, differenceInMonths } from 'date-fns'
 import { useBrainStore } from '@/store/useBrainStore'
@@ -86,19 +86,18 @@ export function Header() {
       <div className="h-12 px-3 sm:px-4 flex items-center gap-2">
 
         {/* Mobile brand */}
-        <div className="sm:hidden flex items-center gap-2 mr-1">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[rgb(var(--color-brand))] to-purple-500
-            flex items-center justify-center shadow-sm shrink-0">
+        <div className="sm:hidden flex items-center gap-2 mr-1 shrink-0 whitespace-nowrap">
+          <div className="w-7 h-7 rounded-lg bg-brand flex items-center justify-center shrink-0">
             <span className="text-white font-black text-xs">B</span>
           </div>
           <span className="font-bold text-sm text-ink tracking-tight">Brain</span>
-          {demoMode && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">Demo</span>}
+          {demoMode && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold">Demo</span>}
         </div>
 
         {/* Desktop: sidebar toggle hint */}
         <button
           onClick={() => setShowSidebar(!showSidebar)}
-          className={cn('hidden sm:flex', iconBtn,
+          className={cn(iconBtn, 'hidden sm:flex',
             showSidebar && 'text-brand bg-brand/10'
           )}
           title="Dashboard (stats, tasks, milestones)"
@@ -137,10 +136,10 @@ export function Header() {
                   : 'text-ink3 hover:bg-hover hover:text-ink',
             )}
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <CalendarHeart className="w-3.5 h-3.5" />
             <span className="hidden sm:block">Memories</span>
             {specialCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center leading-none animate-pulse">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
                 {specialCount}
               </span>
             )}
@@ -148,11 +147,11 @@ export function Header() {
 
           {showMemories && (
             <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-[3.25rem] sm:top-full sm:mt-1.5
-              w-auto sm:w-80 bg-surface border border-border rounded-2xl shadow-2xl z-50 animate-scaleIn overflow-hidden">
+              w-auto sm:w-80 bg-surface border border-border rounded-xl shadow-xl z-50 animate-scaleIn overflow-hidden">
               <div className="px-4 pt-3 pb-2 border-b border-border flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-ink">✨ Memories</p>
-                  <p className="text-[10px] text-ink3">Today's special moments</p>
+                  <p className="text-sm font-bold text-ink">Memories</p>
+                  <p className="text-[10px] text-ink3">Milestones that fall on today</p>
                 </div>
                 <button onClick={() => setShowMemories(false)} className={iconBtn} aria-label="Close memories">
                   <X className="w-3.5 h-3.5" />
@@ -160,23 +159,22 @@ export function Header() {
               </div>
               <div className="max-h-72 overflow-y-auto">
                 {specialCount === 0 ? (
-                  <div className="py-10 text-center">
-                    <div className="text-4xl mb-3">🌙</div>
-                    <p className="text-sm text-ink2 font-semibold">No memories today</p>
-                    <p className="text-xs text-ink3 mt-1">Check back on your milestone dates!</p>
+                  <div className="py-8 px-6 text-center">
+                    <p className="text-sm text-ink2 font-semibold">Nothing today</p>
+                    <p className="text-xs text-ink3 mt-1">Milestones and their anniversaries show up here on the day.</p>
                   </div>
                 ) : (
                   <div className="p-3 space-y-2">
                     {todayMs.length > 0 && (
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink3 px-1">🎉 Today</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink3 px-1">Today</p>
                     )}
                     {todayMs.map(day => (
                       <button key={day.id}
                         onClick={() => { setSelectedMilestone(day); setShowMemories(false) }}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl
-                          bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-900/20 dark:to-pink-900/20
+                        className="w-full flex items-center gap-3 p-3 rounded-lg
+                          bg-rose-50 dark:bg-rose-900/20
                           border border-rose-200 dark:border-rose-800
-                          hover:opacity-90 transition-opacity text-left"
+                          hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors text-left"
                       >
                         <span className="text-2xl">{day.emoji || '🎉'}</span>
                         <div className="min-w-0 flex-1">
@@ -186,15 +184,15 @@ export function Header() {
                       </button>
                     ))}
                     {anniversaryMs.length > 0 && (
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink3 px-1 pt-1">🎂 Anniversaries</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink3 px-1 pt-1">Anniversaries</p>
                     )}
                     {anniversaryMs.map(day => (
                       <button key={day.id}
                         onClick={() => { setSelectedMilestone(day); setShowMemories(false) }}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl
-                          bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20
+                        className="w-full flex items-center gap-3 p-3 rounded-lg
+                          bg-amber-50 dark:bg-amber-900/20
                           border border-amber-200 dark:border-amber-800
-                          hover:opacity-90 transition-opacity text-left"
+                          hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors text-left"
                       >
                         <span className="text-2xl">{day.emoji || '🎂'}</span>
                         <div className="min-w-0 flex-1">
@@ -237,15 +235,19 @@ export function Header() {
           </button>
         )}
 
+        {/* Mobile: the bottom nav owns "New", so settings sits here instead */}
+        <button onClick={() => setShowSettings(true)} className={cn(iconBtn, 'sm:hidden')} title="Settings" aria-label="Settings">
+          <Settings className="w-4 h-4" />
+        </button>
+
         {/* New — split button */}
-        <div className="flex items-center" ref={newMenuRef}>
+        <div className="hidden sm:flex items-center" ref={newMenuRef}>
           <button
             onClick={() => setShowNewRow(true)}
             aria-label="New entry"
-            className="flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-l-xl
-              bg-gradient-to-r from-[rgb(var(--color-brand))] to-purple-500
-              text-white text-xs font-semibold shadow-sm shadow-brand/30
-              hover:opacity-90 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-l-lg
+              bg-brand text-white text-xs font-semibold
+              hover:bg-brand/90 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">New</span>
@@ -253,10 +255,9 @@ export function Header() {
           <button
             onClick={() => setShowNewMenu(v => !v)}
             aria-label="More new options"
-            className="h-8 w-6 flex items-center justify-center rounded-r-xl
-              bg-purple-500 text-white hover:bg-purple-600
-              border-l border-white/20 shadow-sm shadow-brand/20
-              active:scale-95 transition-all"
+            className="h-8 w-6 flex items-center justify-center rounded-r-lg
+              bg-brand text-white hover:bg-brand/90
+              border-l border-white/25 transition-colors"
             title="More options"
           >
             <ChevronDown className="w-3 h-3" />
@@ -278,7 +279,7 @@ export function Header() {
               <button onClick={() => { setShowNewMilestone(true); setShowNewMenu(false) }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-ink hover:bg-hover rounded-lg transition-colors text-left">
                 <div className="w-7 h-7 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+                  <CalendarHeart className="w-3.5 h-3.5 text-rose-500" />
                 </div>
                 <div>
                   <p className="font-medium text-sm">New Milestone</p>
