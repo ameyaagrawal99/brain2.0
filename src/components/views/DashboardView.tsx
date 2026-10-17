@@ -7,9 +7,8 @@ import { aggregateSentiment, EMOTION_META, type SentimentFilter } from '@/lib/se
 import { addLocalDays, monthDay, toLocalISODate } from '@/lib/date'
 import { getMilestoneStyle } from '@/lib/milestones'
 import {
-  CheckCircle2, Clock, AlertTriangle, CalendarDays, Star,
+  AlertTriangle, CalendarDays, Star,
   Tag, Zap, RefreshCw, Plus, Smile, Meh, Frown,
-  ArrowRight, Target, Layers3,
 } from 'lucide-react'
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
@@ -53,86 +52,47 @@ const CAT_ACCENT_COLORS = [
   'bg-fuchsia-500',
 ]
 
-/* ── Stat card ───────────────────────────────────────────────────── */
-function StatCard({
-  label, value, sub, icon: Icon, accent,
-}: {
-  label: string; value: number | string; sub?: string
-  icon: typeof CheckCircle2; accent: string
-}) {
-  return (
-    <div className="premium-surface rounded-2xl px-4 py-4 flex items-start gap-3 hover:-translate-y-0.5 transition-transform">
-      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', accent)}>
-        <Icon className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-ink leading-none">{value}</p>
-        <p className="text-xs font-medium text-ink2 mt-0.5">{label}</p>
-        {sub && <p className="text-[10px] text-ink3 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  )
-}
+/* ── Metric strip ────────────────────────────────────────────────── */
+type FocusKind = 'overdue' | 'today' | 'week' | 'active'
 
-function FocusSummary({
-  overdueCount,
-  dueTodayCount,
-  dueSoonCount,
-  activeCount,
-  onOpenBoard,
-  onNewEntry,
-  onFocus,
+function MetricStrip({
+  overdueCount, dueTodayCount, dueSoonCount, activeCount, doneCount, completion, onFocus,
 }: {
   overdueCount: number
   dueTodayCount: number
   dueSoonCount: number
   activeCount: number
-  onOpenBoard: () => void
-  onNewEntry: () => void
-  onFocus: (kind: 'overdue' | 'today' | 'week' | 'active') => void
+  doneCount: number
+  completion: number
+  onFocus: (kind: FocusKind) => void
 }) {
-  const focusItems = [
-    { key: 'overdue' as const, label: 'Overdue', value: overdueCount, tone: overdueCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-ink2' },
-    { key: 'today' as const, label: 'Due today', value: dueTodayCount, tone: dueTodayCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-ink2' },
-    { key: 'week' as const, label: 'Next 7 days', value: dueSoonCount, tone: 'text-blue-600 dark:text-blue-400' },
-    { key: 'active' as const, label: 'Active', value: activeCount, tone: 'text-emerald-600 dark:text-emerald-400' },
+  const items: { key: FocusKind; label: string; value: number; tone: string }[] = [
+    { key: 'overdue', label: 'Overdue',     value: overdueCount,  tone: overdueCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-ink' },
+    { key: 'today',   label: 'Due today',   value: dueTodayCount, tone: dueTodayCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-ink' },
+    { key: 'week',    label: 'Next 7 days', value: dueSoonCount,  tone: 'text-ink' },
+    { key: 'active',  label: 'In progress', value: activeCount,   tone: 'text-ink' },
   ]
 
   return (
-    <div className="premium-surface rounded-3xl px-4 sm:px-5 py-4 mb-8">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex items-start gap-3 min-w-0 sm:w-64">
-          <div className="w-10 h-10 rounded-2xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
-            <Target className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-ink">Today’s focus</p>
-            <p className="text-xs text-ink3 mt-0.5">A compact command center for tasks and new captures.</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
-          {focusItems.map((item) => (
-            <button key={item.label} onClick={() => onFocus(item.key)} className="rounded-2xl bg-surface2 border border-border px-3 py-2.5 text-left hover:border-brand/30 hover:bg-hover transition-colors">
-              <p className={cn('text-xl font-bold tabular-nums leading-none', item.tone)}>{item.value}</p>
-              <p className="text-[11px] text-ink3 mt-1">{item.label}</p>
-            </button>
-          ))}
-        </div>
-
-        <div className="flex sm:flex-col gap-2 sm:w-36">
-          <button
-            onClick={onOpenBoard}
-            className="flex-1 sm:flex-none h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ink text-white text-xs font-semibold hover:opacity-90 transition-opacity"
-          >
-            Board <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onNewEntry}
-            className="flex-1 sm:flex-none h-9 inline-flex items-center justify-center gap-1.5 rounded-xl premium-control text-xs font-semibold text-ink"
-          >
-            Capture <Plus className="w-3.5 h-3.5" />
-          </button>
+    <div className="mb-8 grid grid-cols-2 sm:grid-cols-5 gap-px bg-border border border-border rounded-xl overflow-hidden shadow-sm">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          onClick={() => onFocus(item.key)}
+          className="bg-surface px-4 py-3.5 text-left hover:bg-hover transition-colors"
+        >
+          <p className={cn('text-2xl font-bold tabular-nums leading-none', item.tone)}>{item.value}</p>
+          <p className="text-xs text-ink3 mt-1.5">{item.label}</p>
+        </button>
+      ))}
+      <div className="bg-surface px-4 py-3.5 col-span-2 sm:col-span-1">
+        <p className="flex items-baseline gap-1.5 text-2xl font-bold tabular-nums leading-none text-ink">
+          {doneCount}
+          <span className="text-xs font-medium text-ink3">{completion}%</span>
+        </p>
+        <p className="text-xs text-ink3 mt-1.5">Done</p>
+        <div className="h-1 bg-surface2 rounded-full overflow-hidden mt-2">
+          <div className="h-full bg-emerald-500 rounded-full transition-[width] duration-500" style={{ width: `${completion}%` }} />
         </div>
       </div>
     </div>
@@ -173,7 +133,7 @@ export function DashboardView() {
     setViewMode('card')
   }
 
-  function applyFocusFilter(kind: 'overdue' | 'today' | 'week' | 'active') {
+  function applyFocusFilter(kind: FocusKind) {
     setSentimentFilter(null)
     if (kind === 'overdue') {
       setFilters({ search: '', statuses: ['pending', 'progress', 'blocked', 'review'], dateFrom: null, dateTo: null, dueDateFrom: null, dueDateTo: toLocalISODate(addLocalDays(new Date(), -1)), showToday: false })
@@ -201,10 +161,12 @@ export function DashboardView() {
     const pending  = rows.filter((r) => ts(r) === 'pending').length
     const overdue  = rows.filter((r) => r.dueDate && r.dueDate < today && !ts(r).includes('done') && !ts(r).includes('complete')).length
     const dueToday = rows.filter((r) => r.dueDate === today && !ts(r).includes('done') && !ts(r).includes('complete')).length
+    const in7      = toLocalISODate(addLocalDays(new Date(), 7))
+    const dueWeek  = rows.filter((r) => r.dueDate && r.dueDate >= today && r.dueDate <= in7 && !ts(r).includes('done') && !ts(r).includes('complete')).length
     const enhanced = rows.filter((r) => r.rewritten).length
     const withStatus = rows.filter(r => r.taskStatus).length
     const completion = withStatus > 0 ? Math.round((done / withStatus) * 100) : 0
-    return { total, done, active, pending, overdue, dueToday, enhanced, completion }
+    return { total, done, active, pending, overdue, dueToday, dueWeek, enhanced, completion }
   }, [rows, today])
 
   /* ── Due soon ────────────────────────────────────────────────── */
@@ -295,7 +257,7 @@ export function DashboardView() {
         <div className="flex items-start justify-between mb-7">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-ink">{greeting()}</h1>
-            <p className="text-sm text-ink3 mt-0.5">{fullDate}</p>
+            <p className="text-sm text-ink3 mt-0.5">{fullDate} · {stats.total} {stats.total === 1 ? 'entry' : 'entries'}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -315,39 +277,15 @@ export function DashboardView() {
           </div>
         </div>
 
-        {/* ── Stat cards ─────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-          <StatCard label="Total entries"  value={stats.total}   icon={Layers3}      accent="bg-brand" sub={`${stats.enhanced} enhanced`} />
-          <StatCard label="Done"           value={stats.done}    icon={CheckCircle2} accent="bg-emerald-500" sub={stats.completion > 0 ? `${stats.completion}% completion` : undefined} />
-          <StatCard label="In progress"    value={stats.active}  icon={Clock}        accent="bg-blue-500"   sub={stats.pending > 0 ? `${stats.pending} pending` : undefined} />
-          <StatCard label="Overdue"        value={stats.overdue} icon={AlertTriangle} accent={stats.overdue > 0 ? 'bg-rose-500' : 'bg-ink3'} />
-        </div>
-
-        <FocusSummary
+        <MetricStrip
           overdueCount={stats.overdue}
           dueTodayCount={stats.dueToday}
-          dueSoonCount={dueSoon.length}
+          dueSoonCount={stats.dueWeek}
           activeCount={stats.active}
-          onOpenBoard={() => setViewMode('board')}
-          onNewEntry={() => setShowNewRow(true)}
+          doneCount={stats.done}
+          completion={stats.completion}
           onFocus={applyFocusFilter}
         />
-
-        {/* ── Progress bar ───────────────────────────────────── */}
-        {stats.completion > 0 && (
-          <div className="mb-8 premium-surface rounded-2xl px-5 py-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-ink2">Overall completion</span>
-              <span className="text-sm font-bold text-brand">{stats.completion}%</span>
-            </div>
-            <div className="h-2 bg-surface2 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-brand to-emerald-500 rounded-full transition-all duration-700"
-                style={{ width: `${stats.completion}%` }}
-              />
-            </div>
-          </div>
-        )}
 
         {/* ── Today's milestones ─────────────────────────────── */}
         {todayMs.length > 0 && (

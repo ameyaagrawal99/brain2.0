@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  LayoutGrid, Table2, Kanban, GitBranch, Sparkles, Settings,
+  LayoutGrid, Table2, Kanban, GitBranch, Wand2, Settings,
   SlidersHorizontal, LayoutDashboard, Brain, LibraryBig, Network, BookOpen,
 } from 'lucide-react'
 import { useBrainStore } from '@/store/useBrainStore'
@@ -40,7 +40,7 @@ function Tooltip({ label, children }: TooltipProps) {
       {children}
       {show && (
         <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 z-50 pointer-events-none
-          bg-ink text-white text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg
+          bg-ink text-surface text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg
           animate-fadeIn"
         >
           {label}
@@ -78,8 +78,7 @@ export function NavRail() {
     >
       {/* Logo */}
       <div className="mb-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[rgb(var(--color-brand))] to-[rgb(var(--color-brand-l))]
-          flex items-center justify-center shadow-md">
+        <div className="w-9 h-9 rounded-lg bg-brand flex items-center justify-center">
           <Brain className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
         </div>
       </div>
@@ -96,7 +95,7 @@ export function NavRail() {
                 title={label}
                 className={cn(navBtnBase,
                   isActive
-                    ? 'bg-brand/12 text-brand shadow-sm'
+                    ? 'bg-brand/12 text-brand'
                     : 'text-ink3 hover:bg-hover hover:text-ink'
                 )}
               >
@@ -122,7 +121,7 @@ export function NavRail() {
             title="Open insight sidebar"
             className={cn(navBtnBase,
               showSidebar
-                ? 'bg-brand/12 text-brand shadow-sm'
+                ? 'bg-brand/12 text-brand'
                 : 'text-ink3 hover:bg-hover hover:text-ink'
             )}
           >
@@ -140,7 +139,7 @@ export function NavRail() {
             title="AI Assistant"
             className={cn(navBtnBase, 'text-ink3 hover:bg-hover hover:text-ink')}
           >
-            <Sparkles className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
+            <Wand2 className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
           </button>
         </Tooltip>
       </div>

@@ -210,7 +210,7 @@ export function AppShell() {
       {selectionMode && (
         <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50
           flex items-center gap-3
-          bg-ink text-white rounded-2xl px-4 py-3 shadow-2xl
+          bg-ink text-surface rounded-2xl px-4 py-3 shadow-2xl
           animate-slideUp">
           <span className="text-sm font-medium whitespace-nowrap">
             {selectedCardIndices.length} {selectedCardIndices.length === 1 ? 'card' : 'cards'} selected

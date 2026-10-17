@@ -439,14 +439,9 @@ export function WikiView() {
       <div className="pt-4 sm:pt-6 pb-4">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/10 dark:bg-brand/15 px-3 py-1 text-xs font-semibold text-brand mb-3">
-              <BookOpen className="w-3.5 h-3.5" />
-              Connected Intelligence
-            </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink">Knowledge Wiki</h1>
             <p className="mt-2 text-sm text-ink2 max-w-2xl leading-relaxed">
-              All your entries, tags, categories, people, and themes automatically connected into navigable intelligence.
-              Click any page to explore its connections.
+              A page for every category, tag, person and theme in your entries, listing the entries and pages connected to it.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-ink3">

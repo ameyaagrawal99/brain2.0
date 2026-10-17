@@ -209,18 +209,12 @@ export const BrainCard = memo(function BrainCard({ row, dragHandle }: BrainCardP
     <div
       onClick={handleClick}
       className={cn(
-        'brain-card group relative h-full bg-surface border border-border rounded-2xl overflow-hidden cursor-pointer',
-        'shadow-[var(--shadow-xs)] transition-[border-color,box-shadow,transform,opacity] duration-200 hover:-translate-y-0.5 hover:border-brand/25 hover:shadow-md',
+        'brain-card group relative h-full bg-surface border border-border rounded-xl overflow-hidden cursor-pointer',
+        'shadow-[var(--shadow-xs)] transition-[border-color,box-shadow,opacity] duration-150 hover:border-border2 hover:shadow-sm',
         isSelected && 'ring-2 ring-brand',
         selectionMode && !isSelected && 'opacity-60',
-        isOverdue && 'border-red-200 dark:border-red-800',
       )}
     >
-      {/* Category color bar — top */}
-      {theme && (
-        <div className={cn('h-1 w-full', theme.bar)} />
-      )}
-
       {/* Selection checkbox */}
       {selectionMode && (
         <div

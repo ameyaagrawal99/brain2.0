@@ -736,7 +736,7 @@ export function Sidebar() {
                       )}
                       style={{ height: `${(count / maxActivity) * 100}%`, minHeight: count > 0 ? '3px' : '2px' }}
                     />
-                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-ink text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity">
+                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-ink text-surface text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity">
                       {count}
                     </div>
                   </div>

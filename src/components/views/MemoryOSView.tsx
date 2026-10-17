@@ -144,19 +144,15 @@ export function MemoryOSView() {
       <div className="pt-4 sm:pt-6 pb-4">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1 text-xs font-semibold text-brand mb-3">
-              <Brain className="w-3.5 h-3.5" />
-              Separate layer, same memories
-            </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink">Memory OS</h1>
             <p className="mt-2 text-sm text-ink2 max-w-2xl leading-relaxed">
-              A quiet workspace for turning lived experience into themes, writing source packets, decisions, lessons, and book/article raw material.
+              Your entries sorted into themes, lessons, decisions and article or book material. Export a source packet when you sit down to write.
             </p>
           </div>
           <button
             type="button"
             onClick={exportCurrentPacket}
-            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-ink text-white text-xs font-semibold shadow-sm hover:bg-brand transition-colors"
+            className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl bg-ink text-surface text-xs font-semibold shadow-sm hover:bg-brand transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
             Export source packet
